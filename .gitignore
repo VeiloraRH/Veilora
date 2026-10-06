@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.output/
+.vercel/
+
+# Smart contract artifacts
+contracts/out/
+contracts/cache/
+contracts/lib/
+contracts/broadcast/
+
+# OS / Editor artifacts
+.DS_Store
+*.pem
+*.log
+.idea/
+.vscode/
