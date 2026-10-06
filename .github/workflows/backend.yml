@@ -49,6 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-backend" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -59,8 +61,8 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ghcr.io/notadeveloper7/veilora-backend:latest
-            ghcr.io/notadeveloper7/veilora-backend:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
 
   release:
     needs: build-push
@@ -76,7 +78,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "${{ steps.tag.outputs.value }}"
-          git push origin "${{ steps.tag.outputs.value }}"
+          git push origin "${{ steps.tag.outputs.value }}" || echo "Tag push skipped or already exists"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.value }}
@@ -89,10 +91,10 @@ jobs:
     steps:
       - name: Trigger Render deployment when configured
         env:
-          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || secrets.DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL is not configured; skipping deployment."
+            echo "DEPLOY_HOOK_URL is not configured; skipping deployment."
             exit 0
           fi
           curl --fail --silent --show-error --request POST "$DEPLOY_HOOK_URL" || echo "Render deploy hook was unreachable; continuing."

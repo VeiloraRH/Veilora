@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "test": "cd backend && bun test",
-    "backend:dev": "cd backend && bun run dev"
+    "backend:dev": "cd backend && bun run dev",
+    "push:origin": "git push origin main",
+    "push:public": "python3 scripts/sync-public.py",
+    "push:all": "bun run push:origin && bun run push:public"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
