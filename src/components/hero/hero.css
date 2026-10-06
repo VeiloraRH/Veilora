@@ -1,0 +1,218 @@
+/* Veilora glass-cube hero (from the "Design World" spec), recoloured to the logo palette. */
+
+.hero {
+  --bg: #0c142b;
+  --fg: #f4ead8;
+  --gold: #eaba65;
+  --pad-x: clamp(20px, 6.95vw, 120px);
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  min-height: 520px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Poppins", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hero #scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+@media (pointer: coarse) {
+  .hero #scene { touch-action: pan-y; }
+}
+.hero #scene.dragging { cursor: grabbing; }
+
+/* Drags pass through to the canvas. */
+.hero .ui { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.hero .ui a,
+.hero .ui button { pointer-events: auto; }
+
+.hero .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* NAV */
+.hero .nav {
+  position: absolute;
+  top: clamp(24px, 4.7vh, 40px);
+  left: var(--pad-x);
+  right: var(--pad-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hero .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.hero .logo-mark { width: 40px; height: 40px; display: block; }
+.hero .logo span {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.hero .nav-links { display: flex; gap: clamp(20px, 4.1vw, 60px); list-style: none; margin: 0; padding: 0; }
+.hero .nav-links a { color: var(--fg); text-decoration: none; font-size: 15px; font-weight: 500; position: relative; cursor: pointer; }
+.hero .nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s ease;
+}
+.hero .nav-links a:hover { color: var(--gold); }
+.hero .nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
+
+/* ARROWS (top-right, left of the dots column) */
+.hero .arrows { position: absolute; top: 18.9%; left: 76.7%; display: flex; gap: 32px; transform: translate(-19px, -50%); }
+.hero .arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2.5px solid var(--fg);
+  background: transparent;
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+.hero .arrow svg { width: 18px; height: 18px; }
+.hero .arrow:hover { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+
+/* PAGINATION DOTS (vertical, right edge) */
+.hero .dots {
+  position: absolute;
+  right: calc(var(--pad-x) - 7px);
+  top: 49.4%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 33px;
+}
+.hero .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--fg);
+  background: var(--fg);
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.25s;
+}
+.hero .dot.active { background: transparent; border-color: var(--gold); }
+
+/* TAGLINE (bottom-left) */
+.hero .tagline {
+  position: absolute;
+  left: var(--pad-x);
+  bottom: clamp(40px, 7.5vh, 70px);
+  margin: 0;
+  font-size: clamp(24px, 2.65vw, 44px);
+  line-height: 1.2;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+.hero .tagline strong { font-weight: 700; display: block; }
+
+/* CTA ROW (button → line → giant outlined "07" bleeding off the right edge) */
+.hero .cta-row {
+  position: absolute;
+  left: 45.6%;
+  right: -1vw;
+  top: 88.7%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+.hero .cta {
+  flex: none;
+  padding: 0 15px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  border: 1.5px solid rgba(244, 234, 216, 0.85);
+  border-radius: 6px;
+  background: rgba(12, 20, 43, 0.25);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+.hero .cta:hover { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+.hero .cta-line { flex: 1; height: 1.5px; background: rgba(234, 186, 101, 0.75); min-width: 40px; }
+.hero .count {
+  flex: none;
+  font-size: clamp(140px, 19.8vw, 360px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(234, 186, 101, 0.85);
+  transform: translateY(6%);
+  user-select: none;
+}
+
+/* LOADER */
+.hero .loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  transition: opacity 0.6s;
+}
+.hero .loader.done { opacity: 0; }
+
+/* RESPONSIVE */
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  .hero .arrows { left: auto; right: var(--pad-x); top: 15%; transform: translateY(-50%); gap: 14px; }
+  .hero .tagline { bottom: clamp(150px, 20vh, 220px); }
+  .hero .cta-row { left: var(--pad-x); right: -3vw; top: auto; bottom: 24px; transform: none; }
+  .hero .count { font-size: clamp(120px, 22vw, 200px); }
+}
+@media (max-width: 640px) {
+  .hero .nav-links { gap: 16px; }
+  .hero .nav-links a { font-size: 13px; }
+  .hero .logo span { font-size: 20px; }
+  .hero .logo-mark { width: 32px; height: 32px; }
+  .hero .dots { gap: 20px; right: 16px; }
+  .hero .dot { width: 10px; height: 10px; }
+  .hero .cta-row { right: -8vw; }
+  .hero .count { font-size: 120px; }
+}
+/* Hide "Portfolio". */
+@media (max-width: 420px) {
+  .hero .nav-links li:nth-child(2) { display: none; }
+}

@@ -10,33 +10,180 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as AppActivityRouteImport } from './routes/app/activity'
+import { Route as AppDisclosureRouteImport } from './routes/app/disclosure'
+import { Route as AppIntentRouteImport } from './routes/app/intent'
+import { Route as AppMoveRouteImport } from './routes/app/move'
+import { Route as AppNetworkRouteImport } from './routes/app/network'
+import { Route as AppOutboxRouteImport } from './routes/app/outbox'
+import { Route as AppPoliciesRouteImport } from './routes/app/policies'
+import { Route as AppPrivacyRouteImport } from './routes/app/privacy'
+import { Route as AppRecipesRouteImport } from './routes/app/recipes'
+import { Route as AppSecurityRouteImport } from './routes/app/security'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRouteRoute = AppRouteRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppDisclosureRoute = AppDisclosureRouteImport.update({
+  id: '/disclosure',
+  path: '/disclosure',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppIntentRoute = AppIntentRouteImport.update({
+  id: '/intent',
+  path: '/intent',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppMoveRoute = AppMoveRouteImport.update({
+  id: '/move',
+  path: '/move',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppNetworkRoute = AppNetworkRouteImport.update({
+  id: '/network',
+  path: '/network',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppOutboxRoute = AppOutboxRouteImport.update({
+  id: '/outbox',
+  path: '/outbox',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppPoliciesRoute = AppPoliciesRouteImport.update({
+  id: '/policies',
+  path: '/policies',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppPrivacyRoute = AppPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppRecipesRoute = AppRecipesRouteImport.update({
+  id: '/recipes',
+  path: '/recipes',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppSecurityRoute = AppSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteRouteWithChildren
+  '/app/activity': typeof AppActivityRoute
+  '/app/disclosure': typeof AppDisclosureRoute
+  '/app/intent': typeof AppIntentRoute
+  '/app/move': typeof AppMoveRoute
+  '/app/network': typeof AppNetworkRoute
+  '/app/outbox': typeof AppOutboxRoute
+  '/app/policies': typeof AppPoliciesRoute
+  '/app/privacy': typeof AppPrivacyRoute
+  '/app/recipes': typeof AppRecipesRoute
+  '/app/security': typeof AppSecurityRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app/activity': typeof AppActivityRoute
+  '/app/disclosure': typeof AppDisclosureRoute
+  '/app/intent': typeof AppIntentRoute
+  '/app/move': typeof AppMoveRoute
+  '/app/network': typeof AppNetworkRoute
+  '/app/outbox': typeof AppOutboxRoute
+  '/app/policies': typeof AppPoliciesRoute
+  '/app/privacy': typeof AppPrivacyRoute
+  '/app/recipes': typeof AppRecipesRoute
+  '/app/security': typeof AppSecurityRoute
+  '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteRouteWithChildren
+  '/app/activity': typeof AppActivityRoute
+  '/app/disclosure': typeof AppDisclosureRoute
+  '/app/intent': typeof AppIntentRoute
+  '/app/move': typeof AppMoveRoute
+  '/app/network': typeof AppNetworkRoute
+  '/app/outbox': typeof AppOutboxRoute
+  '/app/policies': typeof AppPoliciesRoute
+  '/app/privacy': typeof AppPrivacyRoute
+  '/app/recipes': typeof AppRecipesRoute
+  '/app/security': typeof AppSecurityRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/app/activity'
+    | '/app/disclosure'
+    | '/app/intent'
+    | '/app/move'
+    | '/app/network'
+    | '/app/outbox'
+    | '/app/policies'
+    | '/app/privacy'
+    | '/app/recipes'
+    | '/app/security'
+    | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/app/activity'
+    | '/app/disclosure'
+    | '/app/intent'
+    | '/app/move'
+    | '/app/network'
+    | '/app/outbox'
+    | '/app/policies'
+    | '/app/privacy'
+    | '/app/recipes'
+    | '/app/security'
+    | '/app'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/app/activity'
+    | '/app/disclosure'
+    | '/app/intent'
+    | '/app/move'
+    | '/app/network'
+    | '/app/outbox'
+    | '/app/policies'
+    | '/app/privacy'
+    | '/app/recipes'
+    | '/app/security'
+    | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRouteRoute: typeof AppRouteRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +195,128 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/activity': {
+      id: '/app/activity'
+      path: '/activity'
+      fullPath: '/app/activity'
+      preLoaderRoute: typeof AppActivityRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/disclosure': {
+      id: '/app/disclosure'
+      path: '/disclosure'
+      fullPath: '/app/disclosure'
+      preLoaderRoute: typeof AppDisclosureRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/intent': {
+      id: '/app/intent'
+      path: '/intent'
+      fullPath: '/app/intent'
+      preLoaderRoute: typeof AppIntentRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/move': {
+      id: '/app/move'
+      path: '/move'
+      fullPath: '/app/move'
+      preLoaderRoute: typeof AppMoveRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/network': {
+      id: '/app/network'
+      path: '/network'
+      fullPath: '/app/network'
+      preLoaderRoute: typeof AppNetworkRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/outbox': {
+      id: '/app/outbox'
+      path: '/outbox'
+      fullPath: '/app/outbox'
+      preLoaderRoute: typeof AppOutboxRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/policies': {
+      id: '/app/policies'
+      path: '/policies'
+      fullPath: '/app/policies'
+      preLoaderRoute: typeof AppPoliciesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/privacy': {
+      id: '/app/privacy'
+      path: '/privacy'
+      fullPath: '/app/privacy'
+      preLoaderRoute: typeof AppPrivacyRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/recipes': {
+      id: '/app/recipes'
+      path: '/recipes'
+      fullPath: '/app/recipes'
+      preLoaderRoute: typeof AppRecipesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/app/security': {
+      id: '/app/security'
+      path: '/security'
+      fullPath: '/app/security'
+      preLoaderRoute: typeof AppSecurityRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
+interface AppRouteRouteChildren {
+  AppActivityRoute: typeof AppActivityRoute
+  AppDisclosureRoute: typeof AppDisclosureRoute
+  AppIntentRoute: typeof AppIntentRoute
+  AppMoveRoute: typeof AppMoveRoute
+  AppNetworkRoute: typeof AppNetworkRoute
+  AppOutboxRoute: typeof AppOutboxRoute
+  AppPoliciesRoute: typeof AppPoliciesRoute
+  AppPrivacyRoute: typeof AppPrivacyRoute
+  AppRecipesRoute: typeof AppRecipesRoute
+  AppSecurityRoute: typeof AppSecurityRoute
+  AppIndexRoute: typeof AppIndexRoute
+}
+
+const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppActivityRoute: AppActivityRoute,
+  AppDisclosureRoute: AppDisclosureRoute,
+  AppIntentRoute: AppIntentRoute,
+  AppMoveRoute: AppMoveRoute,
+  AppNetworkRoute: AppNetworkRoute,
+  AppOutboxRoute: AppOutboxRoute,
+  AppPoliciesRoute: AppPoliciesRoute,
+  AppPrivacyRoute: AppPrivacyRoute,
+  AppRecipesRoute: AppRecipesRoute,
+  AppSecurityRoute: AppSecurityRoute,
+  AppIndexRoute: AppIndexRoute,
+}
+
+const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
+  AppRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRouteRoute: AppRouteRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
