@@ -12,8 +12,9 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { useWallet } from "@/lib/walletContext";
+import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { Button, Field, StatusModal, inputClass } from "@/components/ui";
+import { KeyBackupModal } from "./KeyBackupModal";
 import { cn } from "@/lib/utils";
 
 interface OnboardingModalProps {
@@ -27,6 +28,8 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [existingMode, setExistingMode] = useState(false);
   const [existingAddr, setExistingAddr] = useState("");
+  const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
+  const [showBackupModal, setShowBackupModal] = useState(false);
 
   const [statusModal, setStatusModal] = useState<{
     open: boolean;
@@ -59,16 +62,8 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     setSubmitting(true);
     try {
       const res = await createAccount();
-      localStorage.setItem("veilora:onboarded", "true");
-      onClose();
-      setStatusModal({
-        open: true,
-        type: "success",
-        title: "Smart Account Deployed",
-        message:
-          "Your 2-of-3 threshold account is ready on Robinhood Chain. Your device key is stored securely in this browser.",
-        details: `Smart Account: ${res.address}\nDevice Key (Shard A): ${res.shardA}\nCo-Signer (Shard B): ${res.shardB}\nRecovery Key (Shard C): ${res.shardC}`,
-      });
+      setCreatedAccount(res);
+      setShowBackupModal(true);
     } catch (err: any) {
       setStatusModal({
         open: true,
@@ -79,6 +74,12 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleBackupConfirm = () => {
+    localStorage.setItem("veilora:onboarded", "true");
+    setShowBackupModal(false);
+    onClose();
   };
 
   const handleConnectExisting = () => {
@@ -341,6 +342,12 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             </p>
           ) : undefined
         }
+      />
+
+      <KeyBackupModal
+        open={showBackupModal}
+        accountDetails={createdAccount}
+        onConfirm={handleBackupConfirm}
       />
     </>
   );

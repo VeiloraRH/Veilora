@@ -12,7 +12,8 @@ import {
   PlusCircle,
   Copy,
 } from "lucide-react";
-import { useWallet } from "@/lib/walletContext";
+import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
+import { KeyBackupModal } from "@/components/app/KeyBackupModal";
 import {
   Badge,
   Button,
@@ -33,6 +34,8 @@ export function SecurityScreen() {
   const {
     wallet,
     loading,
+    deviceKeyPresent,
+    getStoredDeviceKey,
     freezeAccount,
     unfreezeAccount,
     createAccount,
@@ -50,6 +53,12 @@ export function SecurityScreen() {
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+
+  const [viewKeyModalOpen, setViewKeyModalOpen] = useState(false);
+  const [importKeyModalOpen, setImportKeyModalOpen] = useState(false);
+  const [importKeyInput, setImportKeyInput] = useState("");
 
   // Status Modals for success / error notifications
   const [statusModal, setStatusModal] = useState<{
@@ -127,14 +136,8 @@ export function SecurityScreen() {
     try {
       const newAcc = await createAccount();
       setCreateModalOpen(false);
-      setStatusModal({
-        open: true,
-        type: "success",
-        title: "New Smart Account Created",
-        message:
-          "Your new 2-of-3 threshold account was generated on Robinhood Chain using CREATE2 deterministic factory.",
-        details: `Address: ${newAcc.address}`,
-      });
+      setCreatedAccount(newAcc);
+      setShowBackupModal(true);
     } catch (err: any) {
       setStatusModal({
         open: true,
@@ -147,15 +150,37 @@ export function SecurityScreen() {
     }
   };
 
+  const handleImportKeySubmit = () => {
+    const clean = importKeyInput.trim();
+    if (!clean.startsWith("0x") || clean.length < 64) {
+      setStatusModal({
+        open: true,
+        type: "error",
+        title: "Invalid Private Key",
+        message: "Device Key must be a valid 64-character hex string starting with 0x.",
+      });
+      return;
+    }
+    localStorage.setItem("veilora:shardA:privateKey", clean);
+    setImportKeyModalOpen(false);
+    setImportKeyInput("");
+    setStatusModal({
+      open: true,
+      type: "success",
+      title: "Device Key Imported",
+      message: "Shard A is now saved in this browser and ready to sign intents.",
+    });
+  };
+
   const shards = [
     {
       id: "A",
       name: "Device Shard",
-      holder: "Stored securely on this local browser / device",
+      holder: deviceKeyPresent ? "Stored locally on this browser" : "Key missing on this browser",
       address: wallet?.shardA || "0xe961…A7b3",
       icon: Laptop,
-      status: "Active",
-      tone: "teal" as const,
+      status: deviceKeyPresent ? "Active" : "Key Missing",
+      tone: deviceKeyPresent ? ("teal" as const) : ("coral" as const),
     },
     {
       id: "B",
@@ -164,16 +189,16 @@ export function SecurityScreen() {
       address: wallet?.shardB || "0xF1d2…895d",
       icon: Server,
       status: "Active",
-      tone: "teal" as const,
+      tone: "gold" as const,
     },
     {
       id: "C",
       name: "Recovery Shard",
-      holder: "Offline recovery key or passkey shard",
+      holder: "Offline passkey / cold backup shard (not stored on servers)",
       address: wallet?.shardC || "0xC2Ae…a6e1",
       icon: Fingerprint,
       status: "Standby",
-      tone: "gold" as const,
+      tone: "mist" as const,
     },
   ];
 
@@ -280,6 +305,27 @@ export function SecurityScreen() {
                   )}
                 </button>
               </div>
+              {s.id === "A" && (
+                <div className="mt-3">
+                  {deviceKeyPresent ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setViewKeyModalOpen(true)}
+                      className="w-full text-xs py-1.5 border-ink-600 hover:border-gold-400"
+                    >
+                      View Local Device Key
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setImportKeyModalOpen(true)}
+                      className="w-full text-xs py-1.5 border-coral-500/50 text-coral-400 hover:bg-coral-500/10"
+                    >
+                      Import Shard A Key
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -468,7 +514,80 @@ export function SecurityScreen() {
         </div>
       </Modal>
 
-      {/* MODAL 4: Global Status Modal for Success / Error */}
+      {/* MODAL 5: Key Backup Modal for newly created accounts */}
+      <KeyBackupModal
+        open={showBackupModal}
+        accountDetails={createdAccount}
+        onConfirm={() => setShowBackupModal(false)}
+      />
+
+      {/* MODAL 6: View Local Device Key */}
+      <Modal
+        open={viewKeyModalOpen}
+        onClose={() => setViewKeyModalOpen(false)}
+        title="Local Device Key (Shard A)"
+        description="Stored securely in your local browser storage to sign daily intents."
+        actions={
+          <Button variant="outline" onClick={() => setViewKeyModalOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-mist leading-relaxed">
+            This private key is held locally on this device. Never share it with anyone.
+          </p>
+          <div className="rounded-lg border border-ink-600 bg-ink-950/80 p-3 font-mono text-gold-200 break-all select-all">
+            {getStoredDeviceKey() || "No key found in storage."}
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const k = getStoredDeviceKey();
+                if (k) navigator.clipboard.writeText(k);
+              }}
+              className="text-xs"
+            >
+              Copy to Clipboard
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL 7: Import Device Key */}
+      <Modal
+        open={importKeyModalOpen}
+        onClose={() => setImportKeyModalOpen(false)}
+        title="Import Device Key (Shard A)"
+        description="Paste your Shard A private key to authorize transactions on this browser."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setImportKeyModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleImportKeySubmit}>
+              Save Key
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="Private Key (64-character hex starting with 0x)">
+            <input
+              className={inputClass}
+              placeholder="0x…"
+              value={importKeyInput}
+              onChange={(e) => setImportKeyInput(e.target.value)}
+            />
+          </Field>
+          <p className="text-xs text-mist">
+            The key will be stored securely in this browser's local storage.
+          </p>
+        </div>
+      </Modal>
+
+      {/* MODAL 8: Global Status Modal */}
       <StatusModal
         open={statusModal.open}
         onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
