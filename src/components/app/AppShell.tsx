@@ -19,7 +19,6 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMode } from "@/lib/mode";
 import { useTheme } from "@/lib/theme";
 import { useWallet } from "@/lib/walletContext";
 import { NETWORK } from "@/demo/data";
@@ -78,29 +77,9 @@ function ThemeToggle() {
   );
 }
 
-function ModeToggle() {
-  const { mode, setMode } = useMode();
-  return (
-    <div className="inline-flex rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-100 dark:bg-ink-850 p-0.5 text-xs" role="group" aria-label="Visibility mode">
-      {(["standard", "control"] as const).map((m) => (
-        <button
-          key={m}
-          onClick={() => setMode(m)}
-          aria-pressed={mode === m}
-          className={cn(
-            "rounded-lg px-2.5 py-1 capitalize transition-colors font-medium",
-            mode === m ? "bg-white dark:bg-ink-700 text-slate-900 dark:text-cream shadow-sm" : "text-slate-500 dark:text-mist hover:text-slate-900 dark:hover:text-cream",
-          )}
-        >
-          {m}
-        </button>
-      ))}
-    </div>
-  );
-}
+import { QuorumIndicator } from "./QuorumIndicator";
 
 function SideNav({ onNavigate }: { onNavigate?: () => void }) {
-  const { mode } = useMode();
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav className="flex flex-col gap-6">
@@ -108,10 +87,8 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
         <div key={g.group}>
           <p className="mb-2 px-3 text-[11px] font-semibold tracking-wider text-slate-400 dark:text-mist/70 uppercase">{g.group}</p>
           <ul className="space-y-0.5">
-            {g.items
-              .filter((i) => !i.control || mode === "control")
-              .map((i) => {
-                const active = i.to === "/app" ? path === "/app" || path === "/app/" : path.startsWith(i.to);
+            {g.items.map((i) => {
+              const active = i.to === "/app" ? path === "/app" || path === "/app/" : path.startsWith(i.to);
                 return (
                   <li key={i.to}>
                     <Link
@@ -179,9 +156,12 @@ function VaultCard({
         </div>
       </div>
       <p className="mt-0.5 font-mono text-slate-500 dark:text-mist">{short}</p>
-      <div className="mt-2.5 flex items-center gap-1.5 text-slate-500 dark:text-mist text-[11px]">
-        <Dot tone={wallet?.isFrozen ? "coral" : "teal"} />
-        <span>{wallet?.isFrozen ? "Account frozen" : "2-of-3 threshold active"}</span>
+      <div className="mt-2.5 flex items-center justify-between text-slate-500 dark:text-mist text-[11px]">
+        <div className="flex items-center gap-1.5">
+          <Dot tone={wallet?.isFrozen ? "coral" : "teal"} />
+          <span>{wallet?.isFrozen ? "Frozen" : "Robinhood Chain"}</span>
+        </div>
+        <QuorumIndicator deviceKeyPresent={Boolean(wallet?.address)} />
       </div>
     </div>
   );
@@ -260,6 +240,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="font-mono">{blockDisplay}</span>
             </div>
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <QuorumIndicator deviceKeyPresent={Boolean(wallet?.address)} />
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -269,7 +250,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 {theme === "dark" ? <Sun className="h-4 w-4 text-[#eaba65]" /> : <Moon className="h-4 w-4 text-slate-600" />}
               </button>
-              <ModeToggle />
             </div>
           </div>
         </header>

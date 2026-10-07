@@ -13,13 +13,13 @@ import { VaultCards } from "@/components/dashboard/VaultCards";
 import { HoldingsList } from "@/components/dashboard/HoldingsList";
 import { ActivityQueue } from "@/components/dashboard/ActivityQueue";
 import { NetworkStats } from "@/components/dashboard/NetworkStats";
+import { OnboardingScreen } from "@/components/dashboard/OnboardingScreen";
 
 // Interaction Modals (Zero inline forms)
 import { DepositModal } from "@/components/app/DepositModal";
 import { ShieldModal } from "@/components/dashboard/ShieldModal";
 import { SendModal } from "@/components/dashboard/SendModal";
 import { SwapModal } from "@/components/dashboard/SwapModal";
-import { IntentModal } from "@/components/dashboard/IntentModal";
 import { RemoveWalletModal } from "@/components/app/RemoveWalletModal";
 
 export const Route = createFileRoute("/app/")({
@@ -40,7 +40,6 @@ export function CommandCenter() {
   const [shieldOpen, setShieldOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
-  const [intentOpen, setIntentOpen] = useState(false);
   const [removeWalletOpen, setRemoveWalletOpen] = useState(false);
 
   // Global Status Feedback Modal
@@ -147,16 +146,20 @@ export function CommandCenter() {
     }
   };
 
+  if (!wallet?.address) {
+    return <OnboardingScreen />;
+  }
+
   return (
     <div className="space-y-6">
-      {/* 1. Header Bar matching FinUi */}
+      {/* 1. Header Bar matching FinUi / Solflare */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-cream">
-            My Wallet
+            Portfolio
           </h1>
-          <p className="text-xs text-slate-500 dark:text-mist mt-0.5">
-            2-of-3 threshold self-custody on Robinhood Chain
+          <p className="text-xs text-slate-400 dark:text-mist mt-0.5">
+            Robinhood Chain
           </p>
         </div>
 
@@ -164,9 +167,7 @@ export function CommandCenter() {
           {/* Account Address Pill */}
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-3 py-1.5 shadow-sm text-xs">
             <span className="font-mono text-slate-800 dark:text-cream font-medium">
-              {wallet?.address
-                ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
-                : "No wallet connected"}
+              {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
             </span>
             <button
               type="button"
@@ -205,7 +206,6 @@ export function CommandCenter() {
             totalValue={totalValue}
             loading={loadingBalances}
             onOpenDeposit={() => setDepositOpen(true)}
-            onOpenIntent={() => setIntentOpen(true)}
           />
         </div>
 
@@ -215,7 +215,6 @@ export function CommandCenter() {
             onOpenShield={() => setShieldOpen(true)}
             onOpenSend={() => setSendOpen(true)}
             onOpenSwap={() => setSwapOpen(true)}
-            onOpenIntent={() => setIntentOpen(true)}
           />
         </div>
       </div>
@@ -304,11 +303,6 @@ export function CommandCenter() {
             message: msg,
           });
         }}
-      />
-
-      <IntentModal
-        open={intentOpen}
-        onClose={() => setIntentOpen(false)}
       />
 
       <RemoveWalletModal

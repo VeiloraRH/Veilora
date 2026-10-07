@@ -109,7 +109,7 @@ export function VaultCards({
           className="w-full text-xs py-2 rounded-xl border-slate-200 dark:border-ink-700 text-slate-700 dark:text-cream flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-ink-850"
         >
           <KeyRound className="h-3.5 w-3.5 text-[#eaba65]" />
-          <span>Manage 2-of-3 Custody Keys</span>
+          <span>Manage Custody Keys</span>
         </Button>
       </Link>
     </div>

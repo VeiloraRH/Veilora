@@ -1,11 +1,10 @@
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, EyeOff, Sparkles } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, EyeOff } from "lucide-react";
 
 interface QuickLinksProps {
   onOpenDeposit: () => void;
   onOpenShield: () => void;
   onOpenSend: () => void;
   onOpenSwap: () => void;
-  onOpenIntent: () => void;
 }
 
 export function QuickLinks({
@@ -13,7 +12,6 @@ export function QuickLinks({
   onOpenShield,
   onOpenSend,
   onOpenSwap,
-  onOpenIntent,
 }: QuickLinksProps) {
   const links = [
     {
@@ -44,23 +42,16 @@ export function QuickLinks({
       iconColor: "text-indigo-500",
       bgColor: "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-100 dark:border-indigo-900/40",
     },
-    {
-      label: "Intent",
-      icon: Sparkles,
-      onClick: onOpenIntent,
-      iconColor: "text-[#eaba65]",
-      bgColor: "bg-amber-50/60 dark:bg-amber-950/20 border-[#eaba65]/20",
-    },
   ];
 
   return (
-    <div className="panel p-6 sm:p-7 bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-sm flex flex-col justify-between h-full">
+    <div className="panel p-6 sm:p-7 bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-sm flex flex-col justify-between h-full rounded-2xl">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-cream">Quick Actions</h3>
-        <span className="text-xs text-slate-400 dark:text-mist">Threshold-guarded</span>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-cream">Actions</h3>
+        <span className="text-xs text-slate-400 dark:text-mist">Self-Custody</span>
       </div>
 
-      <div className="mt-4 grid grid-cols-5 gap-2 sm:gap-3">
+      <div className="mt-4 grid grid-cols-4 gap-2 sm:gap-3">
         {links.map((link) => {
           const Icon = link.icon;
           return (

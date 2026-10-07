@@ -16,7 +16,7 @@ export function ActivityQueue({ auditTrail }: ActivityQueueProps) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-cream">Signing Queue</h3>
-          <p className="text-xs text-slate-500 dark:text-mist">2-of-3 threshold approval status</p>
+          <p className="text-xs text-slate-500 dark:text-mist">Threshold approvals</p>
         </div>
         <Link to="/app/outbox" className="text-xs text-[#eaba65] hover:underline font-medium flex items-center gap-1">
           <span>Open Outbox</span>
