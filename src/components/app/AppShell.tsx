@@ -169,9 +169,7 @@ function VaultCard({
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [onboardingOpen, setOnboardingOpen] = useState(() => {
-    return typeof window !== "undefined" && localStorage.getItem("veilora:onboarded") !== "true";
-  });
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const { network, wallet, removeWallet } = useWallet();

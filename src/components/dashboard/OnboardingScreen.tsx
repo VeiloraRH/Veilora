@@ -5,7 +5,6 @@ import {
   Loader2,
   Shield,
   PiggyBank,
-  Star,
   CheckCircle2,
   KeyRound,
   Download,
@@ -21,26 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useWallet, downloadRecoveryBackup, type CreatedAccountDetails } from "@/lib/walletContext";
-
-function LaurelWreath({ flip = false }: { flip?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 32 64"
-      className={`h-11 w-6 text-slate-500/60 ${flip ? "-scale-x-100" : ""}`}
-      fill="currentColor"
-    >
-      <path d="M16 2 C15 7, 10 12, 5 15 C1 18, 0 23, 0 30 C0 38, 2 44, 7 48 C12 52, 15 58, 16 62 C16 62, 13 55, 9 51 C5 47, 3 41, 3 33 C3 25, 5 19, 9 14 C13 10, 16 2, 16 2 Z" />
-      <path
-        d="M23 8 C21 13, 17 17, 13 19 C10 21, 9 24, 9 29 C9 34, 11 38, 14 41 C18 44, 21 49, 23 54 C23 54, 20 48, 16 44 C13 41, 12 36, 12 30 C12 24, 14 20, 17 16 C20 12, 23 8, 23 8 Z"
-        opacity="0.8"
-      />
-      <path
-        d="M29 16 C27 20, 24 23, 21 25 C19 27, 18 30, 18 33 C18 37, 19 40, 22 43 C25 46, 27 50, 29 53 C29 53, 26 49, 23 45 C21 42, 20 38, 20 34 C20 30, 21 27, 23 24 C26 20, 29 16, 29 16 Z"
-        opacity="0.6"
-      />
-    </svg>
-  );
-}
 
 function CoinUSDG({ className }: { className?: string }) {
   return (
@@ -154,11 +133,11 @@ export function OnboardingScreen() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#070c18] flex items-center justify-center p-3 sm:p-6 lg:p-8">
+    <div className="min-h-screen w-full bg-[#f8f9fc] dark:bg-[#070c18] flex items-center justify-center p-3 sm:p-6 lg:p-8 transition-colors">
       {/* 2-Column Split Container */}
-      <div className="w-full max-w-7xl min-h-[640px] lg:min-h-[720px] grid grid-cols-1 lg:grid-cols-2 rounded-[32px] overflow-hidden bg-[#091021] border border-white/5 shadow-2xl">
-        {/* ================= LEFT COLUMN: HERO & ACTIONS ================= */}
-        <div className="flex flex-col justify-between p-8 sm:p-12 lg:p-16 text-white bg-[#091021]">
+      <div className="w-full max-w-7xl min-h-[600px] lg:min-h-[680px] grid grid-cols-1 lg:grid-cols-2 rounded-[32px] overflow-hidden bg-white dark:bg-[#091021] border border-slate-200 dark:border-white/5 shadow-2xl transition-colors">
+        {/* ================= LEFT COLUMN: HERO & ACTIONS (Crisp White Skin Tone) ================= */}
+        <div className="flex flex-col justify-between p-8 sm:p-12 lg:p-16 text-slate-900 dark:text-white bg-white dark:bg-[#091021] transition-colors">
           {/* Top Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -167,12 +146,12 @@ export function OnboardingScreen() {
                 alt="Veilora"
                 className="h-9 w-9 object-contain"
               />
-              <span className="font-brand text-3xl font-semibold tracking-wide text-white">
+              <span className="font-brand text-3xl font-semibold tracking-wide text-slate-900 dark:text-white">
                 Veilora
               </span>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300">
               <Globe className="h-3.5 w-3.5 text-[#eaba65]" />
               <span>Robinhood Chain</span>
             </div>
@@ -180,11 +159,11 @@ export function OnboardingScreen() {
 
           {/* Central Content */}
           <div className="my-auto py-12 max-w-md mx-auto w-full text-center flex flex-col items-center">
-            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold tracking-tight text-white leading-[1.12]">
+            <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.12]">
               All-in-one Robinhood smart wallet
             </h1>
 
-            <p className="mt-4 text-base sm:text-lg text-slate-400 font-normal">
+            <p className="mt-4 text-base sm:text-lg text-slate-500 dark:text-slate-400 font-normal">
               Safe. Simple. Yours.
             </p>
 
@@ -209,42 +188,21 @@ export function OnboardingScreen() {
                 variant="outline"
                 onClick={() => setImportOpen(true)}
                 disabled={loading}
-                className="w-full h-14 rounded-full bg-[#142039]/90 hover:bg-[#1a2b4d] text-white border-white/10 font-medium text-lg transition-colors"
+                className="w-full h-14 rounded-full bg-slate-100 dark:bg-[#142039]/90 hover:bg-slate-200 dark:hover:bg-[#1a2b4d] text-slate-900 dark:text-white border-slate-200 dark:border-white/10 font-medium text-lg transition-colors"
               >
                 Import existing wallet
               </Button>
             </div>
 
             {/* Subtext with Clock */}
-            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-4">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-4">
               <Clock className="h-3.5 w-3.5" />
               <span>It takes less than a minute</span>
             </div>
           </div>
 
-          {/* Bottom Social Proof / Trust Bar */}
-          <div className="pt-8 border-t border-white/5 flex items-center justify-around text-center">
-            <div className="flex items-center gap-3">
-              <LaurelWreath />
-              <div className="text-left">
-                <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                  $20B+
-                </div>
-                <div className="text-xs text-slate-400">Held in assets by 4M users</div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-left">
-                <div className="flex items-center gap-1.5 text-xl sm:text-2xl font-bold text-white tracking-tight">
-                  <Star className="h-4 w-4 fill-[#eaba65] text-[#eaba65]" />
-                  <span>4.84</span>
-                </div>
-                <div className="text-xs text-slate-400">Best rated wallet in stores</div>
-              </div>
-              <LaurelWreath flip />
-            </div>
-          </div>
+          {/* Bottom padding spacer */}
+          <div className="h-4" />
         </div>
 
         {/* ================= RIGHT COLUMN: VIBRANT SHOWCASE ================= */}
@@ -365,19 +323,19 @@ export function OnboardingScreen() {
 
       {/* ================= IMPORT WALLET DIALOG (shadcn) ================= */}
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="sm:max-w-md bg-[#0c142b] border-[#263a5e] text-white">
+        <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white">
+            <DialogTitle className="text-xl font-bold text-foreground">
               Import Existing Smart Account
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-sm">
+            <DialogDescription className="text-muted-foreground text-sm">
               Enter your counterfactual smart account address on Robinhood Chain.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleImportSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-300">
+              <label className="text-xs font-medium text-foreground">
                 Account Address (0x...)
               </label>
               <Input
@@ -385,10 +343,10 @@ export function OnboardingScreen() {
                 placeholder="0x9412...5a45"
                 value={importAddr}
                 onChange={(e) => setImportAddr(e.target.value)}
-                className="bg-[#101a33] border-[#263a5e] text-white placeholder:text-slate-500 font-mono text-sm"
+                className="bg-muted/50 border-border text-foreground placeholder:text-muted-foreground font-mono text-sm"
               />
               {importError && (
-                <p className="text-xs text-rose-400 font-medium">{importError}</p>
+                <p className="text-xs text-rose-500 font-medium">{importError}</p>
               )}
             </div>
 
@@ -397,7 +355,7 @@ export function OnboardingScreen() {
                 type="button"
                 variant="outline"
                 onClick={() => setImportOpen(false)}
-                className="border-[#263a5e] bg-transparent text-white hover:bg-white/5"
+                className="border-border bg-transparent text-foreground hover:bg-muted"
               >
                 Cancel
               </Button>
@@ -414,41 +372,41 @@ export function OnboardingScreen() {
 
       {/* ================= RECOVERY BACKUP DIALOG (shadcn) ================= */}
       <Dialog open={backupOpen} onOpenChange={setBackupOpen}>
-        <DialogContent className="sm:max-w-lg bg-[#0c142b] border-[#263a5e] text-white">
+        <DialogContent className="sm:max-w-lg bg-card border-border text-foreground">
           <DialogHeader>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaba65]/10 text-[#eaba65] border border-[#eaba65]/20 mb-2">
               <KeyRound className="h-6 w-6" />
             </div>
-            <DialogTitle className="text-xl font-bold text-white">
+            <DialogTitle className="text-xl font-bold text-foreground">
               Smart Account Created Successfully
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-sm">
+            <DialogDescription className="text-muted-foreground text-sm">
               Your 2-of-3 threshold smart account is ready on Robinhood Chain.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-sm">
-            <div className="rounded-xl bg-[#101a33] border border-[#263a5e] p-4 space-y-2">
-              <div className="text-xs text-slate-400 font-medium">Smart Account Address</div>
+            <div className="rounded-xl bg-muted/60 border border-border p-4 space-y-2">
+              <div className="text-xs text-muted-foreground font-medium">Smart Account Address</div>
               <div className="font-mono text-xs text-[#eaba65] break-all select-all">
                 {createdDetails?.address}
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#142039]/60 border border-white/5 p-4 space-y-2 text-xs text-slate-300 leading-relaxed">
-              <div className="flex items-center gap-2 font-semibold text-white">
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <div className="rounded-xl bg-muted/40 border border-border/50 p-4 space-y-2 text-xs text-foreground leading-relaxed">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 Shard A (Device Key)
               </div>
-              <p className="text-slate-400">
+              <p className="text-muted-foreground">
                 Encrypted and saved directly in this browser's local storage.
               </p>
 
-              <div className="flex items-center gap-2 font-semibold text-white pt-2">
+              <div className="flex items-center gap-2 font-semibold text-foreground pt-2">
                 <Download className="h-4 w-4 text-[#eaba65]" />
                 Shard C (Recovery Key JSON)
               </div>
-              <p className="text-slate-400">
+              <p className="text-muted-foreground">
                 {hasDownloaded
                   ? "Your recovery JSON backup file was automatically saved to your Downloads folder."
                   : "Keep your recovery file safe in an offline vault."}

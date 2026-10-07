@@ -2,12 +2,6 @@ import { useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  ShieldCheck,
-  EyeOff,
-  Sparkles,
-  Laptop,
-  Server,
-  Fingerprint,
   CheckCircle2,
   Loader2,
   X,
@@ -131,9 +125,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
           <div className="p-6">
             {slide === 0 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-amber-600 dark:text-gold-300">
-                  <ShieldCheck className="h-6 w-6" />
-                </div>
                 <div>
                   <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     No Single Key Can Move Your Funds
@@ -144,24 +135,21 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                 </div>
 
                 <div className="space-y-2.5 pt-2">
-                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
-                    <Laptop className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
+                  <div className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-cream">Shard A · Device Key</p>
                       <p className="text-slate-500 dark:text-mist">Saved securely in your local browser storage.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
-                    <Server className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
+                  <div className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-cream">Shard B · Veilora Co-Signer</p>
                       <p className="text-slate-500 dark:text-mist">Automatically evaluates your safety rules before adding its signature.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
-                    <Fingerprint className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
+                  <div className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-cream">Shard C · Recovery Key</p>
                       <p className="text-slate-500 dark:text-mist">Restores your account seamlessly if you ever lose access to this device.</p>
@@ -177,9 +165,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
             {slide === 1 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-300">
-                  <EyeOff className="h-6 w-6" />
-                </div>
                 <div>
                   <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     Zero-Knowledge Privacy on Robinhood Chain
@@ -225,9 +210,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
             {slide === 2 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-amber-600 dark:text-gold-300">
-                  <Sparkles className="h-6 w-6" />
-                </div>
                 <div>
                   <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     Ready to Get Started?
