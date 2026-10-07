@@ -20,6 +20,7 @@ import { useMode } from "@/lib/mode";
 import { useWallet } from "@/lib/walletContext";
 import { NETWORK } from "@/demo/data";
 import { Dot, Logo } from "@/components/ui";
+import { OnboardingModal } from "./OnboardingModal";
 
 type NavItem = { to: NonNullable<LinkProps["to"]>; label: string; icon: typeof Inbox; control?: boolean; count?: number };
 
@@ -112,7 +113,7 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function VaultCard() {
+function VaultCard({ onOpenOnboarding }: { onOpenOnboarding?: () => void }) {
   const { wallet, loading } = useWallet();
   const short = wallet?.address
     ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
@@ -122,7 +123,17 @@ function VaultCard() {
 
   return (
     <div className="panel p-3.5 text-xs">
-      <p className="font-medium text-cream">Veilora Smart Account</p>
+      <div className="flex items-center justify-between">
+        <p className="font-medium text-cream">Veilora Smart Account</p>
+        {onOpenOnboarding && (
+          <button
+            onClick={onOpenOnboarding}
+            className="text-[11px] text-gold-300 hover:text-gold-200 transition-colors"
+          >
+            Setup
+          </button>
+        )}
+      </div>
       <p className="mt-0.5 font-mono text-mist">{short}</p>
       <div className="mt-3 flex items-center gap-2 text-mist">
         <Dot tone={wallet?.isFrozen ? "coral" : "teal"} />
@@ -134,6 +145,9 @@ function VaultCard() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => {
+    return typeof window !== "undefined" && localStorage.getItem("veilora:onboarded") !== "true";
+  });
   const { network } = useWallet();
   const blockDisplay = network?.blockNumber
     ? `#${Number(network.blockNumber).toLocaleString("en-US")}`
@@ -149,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex-1 overflow-y-auto">
           <SideNav />
         </div>
-        <VaultCard />
+        <VaultCard onOpenOnboarding={() => setOnboardingOpen(true)} />
       </aside>
 
       {/* Mobile drawer */}
@@ -166,7 +180,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex-1">
               <SideNav onNavigate={() => setOpen(false)} />
             </div>
-            <VaultCard />
+            <VaultCard onOpenOnboarding={() => setOnboardingOpen(true)} />
           </aside>
         </div>
       )}
@@ -193,6 +207,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="mx-auto max-w-[1240px] px-4 py-8 sm:px-8 sm:py-10">{children}</main>
       </div>
+
+      <OnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+      />
     </div>
   );
 }
