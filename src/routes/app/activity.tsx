@@ -63,19 +63,19 @@ function ActivityScreen() {
         {rows.map((r) => {
           const isOpen = open === r.id;
           return (
-            <li key={r.id} className="panel overflow-hidden">
+            <li key={r.id} className="panel overflow-hidden bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-sm">
               <button onClick={() => setOpen(isOpen ? null : r.id)} className="flex w-full items-center gap-4 px-5 py-4 text-left">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-cream">{r.title}</p>
-                  <p className="text-xs text-mist">
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-cream">{r.title}</p>
+                  <p className="text-xs text-slate-500 dark:text-mist">
                     {r.time} · {r.route}
                   </p>
                 </div>
                 <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
-                <ChevronDown className={cn("h-4 w-4 shrink-0 text-mist transition-transform", isOpen && "rotate-180")} />
+                <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 dark:text-mist transition-transform", isOpen && "rotate-180")} />
               </button>
               {isOpen && (
-                <div className="grid gap-x-8 border-t border-ink-600/60 px-5 py-3 sm:grid-cols-2">
+                <div className="grid gap-x-8 border-t border-slate-100 dark:border-ink-700/60 px-5 py-3 sm:grid-cols-2">
                   <div>
                     <KV k="Receipt" v={r.id} mono />
                     <KV k="Type" v={r.kind} />

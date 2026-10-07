@@ -126,17 +126,21 @@ function Stepper({ steps, at }: { steps: string[]; at: number }) {
           key={s}
           className={cn(
             "flex items-center gap-2 text-xs",
-            i < at ? "text-teal-300" : i === at ? "text-gold-300" : "text-mist"
+            i < at
+              ? "text-teal-600 dark:text-teal-300 font-medium"
+              : i === at
+              ? "text-amber-600 dark:text-gold-300 font-semibold"
+              : "text-slate-400 dark:text-mist"
           )}
         >
           <span
             className={cn(
               "grid h-5 w-5 place-items-center rounded-full border text-[10px]",
               i < at
-                ? "border-teal-400 bg-teal-400/15"
+                ? "border-teal-500 bg-teal-500/15 text-teal-600 dark:text-teal-300"
                 : i === at
-                ? "border-gold-400"
-                : "border-ink-500"
+                ? "border-[#eaba65] text-amber-700 dark:text-[#eaba65] bg-amber-50 dark:bg-transparent"
+                : "border-slate-300 dark:border-ink-600 text-slate-400 dark:text-mist"
             )}
           >
             {i < at ? <Check className="h-3 w-3" /> : i + 1}
@@ -268,9 +272,9 @@ function ShieldFlow({
               sees: "Nothing. Note ownership and transfers remain zero-knowledge.",
             },
           ].map((item, idx) => (
-            <li key={idx} className="rounded-lg border border-ink-600/60 p-3 text-xs">
-              <p className="font-semibold text-cream mb-1">{item.party}</p>
-              <p className="text-mist">{item.sees}</p>
+            <li key={idx} className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-3 text-xs">
+              <p className="font-semibold text-slate-900 dark:text-cream mb-1">{item.party}</p>
+              <p className="text-slate-500 dark:text-mist">{item.sees}</p>
             </li>
           ))}
         </ul>
@@ -279,33 +283,33 @@ function ShieldFlow({
       {step === 3 && (
         <div className="space-y-3 text-sm">
           <div className="flex items-center gap-3">
-            <Check className="h-4 w-4 text-teal-300 shrink-0" />
-            <span className="text-cream-dim">Clean Provenance: Input source verified against Association Set</span>
+            <Check className="h-4 w-4 text-teal-500 dark:text-teal-300 shrink-0" />
+            <span className="text-slate-700 dark:text-cream-dim">Clean Provenance: Input source verified against Association Set</span>
           </div>
           <div className="flex items-center gap-3">
-            <Check className="h-4 w-4 text-teal-300 shrink-0" />
-            <span className="text-cream-dim">Daily Velocity: {n.toLocaleString("en-US")} USDG within policy limit</span>
+            <Check className="h-4 w-4 text-teal-500 dark:text-teal-300 shrink-0" />
+            <span className="text-slate-700 dark:text-cream-dim">Daily Velocity: {n.toLocaleString("en-US")} USDG within policy limit</span>
           </div>
           <div className="flex items-center gap-3">
-            <Check className="h-4 w-4 text-teal-300 shrink-0" />
-            <span className="text-cream-dim">Gas Reserve: Maintained above 0.05 ETH floor</span>
+            <Check className="h-4 w-4 text-teal-500 dark:text-teal-300 shrink-0" />
+            <span className="text-slate-700 dark:text-cream-dim">Gas Reserve: Maintained above 0.05 ETH floor</span>
           </div>
         </div>
       )}
 
       {step === 4 && (
         <div className="space-y-4">
-          <p className="text-sm text-cream-dim leading-relaxed">
+          <p className="text-sm text-slate-700 dark:text-cream-dim leading-relaxed">
             Ready to generate note commitment and deposit {n.toLocaleString("en-US")} USDG.
             Your device will compute the cryptographic nullifier and blinding secret locally.
           </p>
-          <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-4 text-xs text-teal-200">
+          <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 text-xs text-teal-800 dark:text-teal-200">
             Cryptographic SHA-256 commitment will be added to the Robinhood Chain shielded tree.
           </div>
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between gap-3 border-t border-ink-600/60 pt-5">
+      <div className="mt-6 flex items-center justify-between gap-3 border-t border-slate-100 dark:border-ink-700/60 pt-5">
         {step > 0 ? (
           <Button variant="ghost" onClick={() => setStep((s) => s - 1)}>
             <ArrowLeft className="h-4 w-4" /> Back
@@ -341,7 +345,7 @@ function ShieldFlow({
         message={statusModal.message}
         details={
           statusModal.details ? (
-            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+            <p className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-3 font-mono text-xs text-amber-800 dark:text-gold-200 whitespace-pre-wrap">
               {statusModal.details}
             </p>
           ) : undefined
@@ -526,7 +530,7 @@ function UnshieldFlow({
               onChange={(e) => setDestinationAddress(e.target.value.trim())}
             />
           </Field>
-          <div className="rounded-lg border border-gold-400/30 bg-gold-400/5 p-3 text-xs text-cream-dim">
+          <div className="rounded-xl border border-amber-300 dark:border-gold-400/30 bg-amber-50 dark:bg-gold-400/5 p-3 text-xs text-slate-700 dark:text-cream-dim">
             Ensure this is a valid EVM address on Robinhood Chain. Funds unshield directly to this recipient.
           </div>
         </div>
@@ -540,7 +544,7 @@ function UnshieldFlow({
         message={statusModal.message}
         details={
           statusModal.details ? (
-            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+            <p className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-3 font-mono text-xs text-amber-800 dark:text-gold-200 whitespace-pre-wrap">
               {statusModal.details}
             </p>
           ) : undefined
@@ -556,7 +560,7 @@ function ReceiveCard({ walletAddress }: { walletAddress?: string }) {
 
   return (
     <Card title="Shielded Deposit Address" eyebrow="Receive Privately">
-      <p className="break-all rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200">
+      <p className="break-all rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-3 font-mono text-xs text-amber-800 dark:text-gold-200">
         {addr}
       </p>
       <Button
@@ -571,7 +575,7 @@ function ReceiveCard({ walletAddress }: { walletAddress?: string }) {
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         {copied ? "Copied" : "Copy Smart Account Address"}
       </Button>
-      <p className="mt-3 text-xs text-mist">
+      <p className="mt-3 text-xs text-slate-500 dark:text-mist">
         Deposits to this smart account can be shielded into private notes on Robinhood Chain.
       </p>
     </Card>
@@ -582,19 +586,19 @@ function NotesCard({ notes }: { notes: LocalNote[] }) {
   return (
     <Card title="Shielded Notes" eyebrow="Your Shielded Balances" bodyClassName="p-0">
       {notes.length === 0 ? (
-        <div className="p-5 text-center text-xs text-mist">No shielded notes found.</div>
+        <div className="p-5 text-center text-xs text-slate-400 dark:text-mist">No shielded notes found.</div>
       ) : (
         <ul>
           {notes.map((n) => (
-            <li key={n.id} className="border-t border-ink-600/50 px-5 py-3 first:border-0">
+            <li key={n.id} className="border-t border-slate-100 dark:border-ink-700/50 px-5 py-3 first:border-0">
               <div className="flex items-center justify-between gap-2 text-sm">
-                <span className={n.status === "spent" ? "text-mist line-through" : "text-cream font-medium"}>
+                <span className={n.status === "spent" ? "text-slate-400 dark:text-mist line-through" : "text-slate-900 dark:text-cream font-medium"}>
                   {n.amount.toLocaleString("en-US")} {n.asset}
                 </span>
                 <Badge tone={n.status === "spendable" ? "teal" : "mist"}>{n.status}</Badge>
               </div>
-              <p className="mt-0.5 text-xs text-mist">{n.created}</p>
-              <p className="mt-1 font-mono text-[11px] text-mist/80 truncate">
+              <p className="mt-0.5 text-xs text-slate-400 dark:text-mist">{n.created}</p>
+              <p className="mt-1 font-mono text-[11px] text-slate-400 dark:text-mist/80 truncate">
                 Commitment: {n.commitment}
               </p>
             </li>

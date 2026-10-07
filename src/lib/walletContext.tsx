@@ -100,6 +100,7 @@ interface WalletContextType {
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
   unfreezeAccount: () => Promise<void>;
+  removeWallet: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -144,6 +145,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadWallet = useCallback(async (addr: string) => {
+    if (!addr) {
+      setWallet(null);
+      setAuditTrail([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -221,6 +228,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await loadWallet(walletAddress);
   };
 
+  const removeWallet = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("veilora:shardA:privateKey");
+    localStorage.removeItem("veilora:shardA:address");
+    localStorage.removeItem("veilora:onboarded");
+    localStorage.removeItem("veilora:notes");
+    setWalletAddressState("");
+    setWallet(null);
+    setDeviceKeyPresent(false);
+    setLatestRecoveryKey(null);
+    setAuditTrail([]);
+  };
+
   return (
     <WalletContext.Provider
       value={{
@@ -239,6 +259,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         getStoredDeviceKey,
         freezeAccount,
         unfreezeAccount,
+        removeWallet,
       }}
     >
       {children}

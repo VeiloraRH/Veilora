@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+:root {
+  --bg-app: #f8f9fc;
+  --bg-card: #ffffff;
+  --bg-card-subtle: #f1f4f9;
+  --border-card: #e5e9f2;
+  --border-subtle: #edf0f7;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-sub: #334155;
+  --panel-bg: #ffffff;
+  --panel-border: #e2e8f0;
+}
+
+.dark {
+  --bg-app: #0c142b;
+  --bg-card: #101a33;
+  --bg-card-subtle: #142039;
+  --border-card: #263a5e;
+  --border-subtle: #1b2b4a;
+  --text-main: #f4ead8;
+  --text-muted: #8e98ad;
+  --text-sub: #c9c2b4;
+  --panel-bg: #101a33;
+  --panel-border: #263a5e;
+}
+
 /* Veilora palette, sampled from the logo in /media. */
 @theme {
   --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
@@ -32,19 +58,19 @@
 
 @layer base {
   html {
-    color-scheme: dark;
     scroll-behavior: smooth;
   }
   body {
     margin: 0;
-    background-color: var(--color-ink-900);
-    color: var(--color-cream);
+    background-color: var(--bg-app);
+    color: var(--text-main);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
   ::selection {
     background: color-mix(in srgb, var(--color-gold-400) 30%, transparent);
-    color: var(--color-cream);
+    color: var(--color-gold-400);
   }
 }
 
@@ -62,14 +88,16 @@
 /* Wide-tracked small caps label, as in "MOVE QUIETLY / STAY IN CONTROL". */
 @utility eyebrow {
   font-size: 0.72rem;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--color-gold-400);
   font-weight: 500;
 }
 
 @utility panel {
-  background: color-mix(in srgb, var(--color-ink-850) 82%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-ink-600) 70%, transparent);
-  border-radius: 14px;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
 }
+

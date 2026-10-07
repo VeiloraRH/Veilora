@@ -105,22 +105,22 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-ink-950/85 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-slate-900/60 dark:bg-ink-950/85 backdrop-blur-sm transition-opacity"
           onClick={onClose}
         />
 
         {/* Modal Carousel Window */}
-        <div className="panel relative z-10 w-full max-w-lg overflow-hidden border border-ink-600/80 bg-ink-900 shadow-2xl transition-all">
+        <div className="panel relative z-10 w-full max-w-lg overflow-hidden border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-2xl transition-all">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-ink-600/60 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-ink-800 px-6 py-4">
             <div className="flex items-center gap-2">
-              <span className="text-xs uppercase tracking-[0.16em] text-mist">
+              <span className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-mist">
                 Step {slide + 1} of {totalSlides}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg p-1 text-mist hover:bg-ink-700 hover:text-cream transition-colors"
+              className="rounded-lg p-1 text-slate-400 hover:text-slate-700 dark:text-mist dark:hover:text-cream transition-colors"
               aria-label="Close onboarding"
             >
               <X className="h-5 w-5" />
@@ -131,45 +131,45 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
           <div className="p-6">
             {slide === 0 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-gold-300">
+                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-amber-600 dark:text-gold-300">
                   <ShieldCheck className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-display text-2xl font-semibold text-cream">
+                  <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     No Single Key Can Move Your Funds
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-cream-dim">
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-cream-dim">
                     Veilora replaces risky seed phrases with a modern 2-of-3 threshold smart account on Robinhood Chain.
                   </p>
                 </div>
 
                 <div className="space-y-2.5 pt-2">
-                  <div className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3 text-xs">
-                    <Laptop className="h-4 w-4 text-gold-300 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
+                    <Laptop className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Shard A · Device Key</p>
-                      <p className="text-mist">Saved securely in your local browser storage.</p>
+                      <p className="font-semibold text-slate-900 dark:text-cream">Shard A · Device Key</p>
+                      <p className="text-slate-500 dark:text-mist">Saved securely in your local browser storage.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3 text-xs">
-                    <Server className="h-4 w-4 text-gold-300 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
+                    <Server className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Shard B · Veilora Co-Signer</p>
-                      <p className="text-mist">Automatically evaluates your safety rules before adding its signature.</p>
+                      <p className="font-semibold text-slate-900 dark:text-cream">Shard B · Veilora Co-Signer</p>
+                      <p className="text-slate-500 dark:text-mist">Automatically evaluates your safety rules before adding its signature.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3 text-xs">
-                    <Fingerprint className="h-4 w-4 text-gold-300 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
+                    <Fingerprint className="h-4 w-4 text-[#eaba65] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Shard C · Recovery Key</p>
-                      <p className="text-mist">Restores your account seamlessly if you ever lose access to this device.</p>
+                      <p className="font-semibold text-slate-900 dark:text-cream">Shard C · Recovery Key</p>
+                      <p className="text-slate-500 dark:text-mist">Restores your account seamlessly if you ever lose access to this device.</p>
                     </div>
                   </div>
                 </div>
 
-                <p className="text-xs text-mist pt-1">
+                <p className="text-xs text-slate-500 dark:text-mist pt-1">
                   Any two keys can authorize a move; one alone cannot touch funds.
                 </p>
               </div>
@@ -177,44 +177,44 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
             {slide === 1 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-teal-400/40 bg-teal-400/10 text-teal-300">
+                <div className="grid h-12 w-12 place-items-center rounded-xl border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-300">
                   <EyeOff className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-display text-2xl font-semibold text-cream">
+                  <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     Zero-Knowledge Privacy on Robinhood Chain
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-cream-dim">
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-cream-dim">
                     Standard blockchain transfers expose your full balance and transaction history to everyone. Veilora keeps your finances private.
                   </p>
                 </div>
 
                 <ul className="space-y-3 pt-2 text-xs">
-                  <li className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3">
-                    <CheckCircle2 className="h-4 w-4 text-teal-300 shrink-0 mt-0.5" />
+                  <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3">
+                    <CheckCircle2 className="h-4 w-4 text-teal-600 dark:text-teal-300 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Shielded Balances</p>
-                      <p className="text-mist">
+                      <p className="font-semibold text-slate-900 dark:text-cream">Shielded Balances</p>
+                      <p className="text-slate-500 dark:text-mist">
                         Transform public USDG into private zero-knowledge notes inside the Veilora shielded pool.
                       </p>
                     </div>
                   </li>
 
-                  <li className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3">
-                    <CheckCircle2 className="h-4 w-4 text-teal-300 shrink-0 mt-0.5" />
+                  <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3">
+                    <CheckCircle2 className="h-4 w-4 text-teal-600 dark:text-teal-300 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Clean Provenance Proofs</p>
-                      <p className="text-mist">
+                      <p className="font-semibold text-slate-900 dark:text-cream">Clean Provenance Proofs</p>
+                      <p className="text-slate-500 dark:text-mist">
                         Prove your funds come from untainted sources using cryptographic association sets without revealing your deposit history.
                       </p>
                     </div>
                   </li>
 
-                  <li className="flex items-start gap-3 rounded-lg border border-ink-600/60 bg-ink-950/40 p-3">
-                    <CheckCircle2 className="h-4 w-4 text-teal-300 shrink-0 mt-0.5" />
+                  <li className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3">
+                    <CheckCircle2 className="h-4 w-4 text-teal-600 dark:text-teal-300 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-cream">Selective Disclosure</p>
-                      <p className="text-mist">
+                      <p className="font-semibold text-slate-900 dark:text-cream">Selective Disclosure</p>
+                      <p className="text-slate-500 dark:text-mist">
                         Share read-only view keys with tax accountants or auditors on your terms.
                       </p>
                     </div>
@@ -225,14 +225,14 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
             {slide === 2 && (
               <div className="space-y-4">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-gold-300">
+                <div className="grid h-12 w-12 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/10 text-amber-600 dark:text-gold-300">
                   <Sparkles className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-display text-2xl font-semibold text-cream">
+                  <h3 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-cream">
                     Ready to Get Started?
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-cream-dim">
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-cream-dim">
                     Deploy your smart account in one click. No extensions or external downloads required.
                   </p>
                 </div>
@@ -241,7 +241,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                   <div className="space-y-3 pt-2">
                     <Button
                       variant="primary"
-                      className="w-full py-3 text-base"
+                      className="w-full py-3 text-base bg-[#eaba65] text-slate-950 hover:bg-[#d8a855] font-semibold"
                       disabled={submitting}
                       onClick={handleCreateNew}
                     >
@@ -256,7 +256,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
                     <button
                       onClick={() => setExistingMode(true)}
-                      className="w-full text-center text-xs text-gold-300 hover:text-gold-200 transition-colors pt-2"
+                      className="w-full text-center text-xs text-[#eaba65] hover:underline transition-colors pt-2 font-medium"
                     >
                       I already have an account address
                     </button>
@@ -274,7 +274,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
                     <Button
                       variant="primary"
-                      className="w-full"
+                      className="w-full bg-[#eaba65] text-slate-950 hover:bg-[#d8a855] font-semibold"
                       disabled={!/^0x[0-9a-fA-F]{40}$/.test(existingAddr.trim())}
                       onClick={handleConnectExisting}
                     >
@@ -283,7 +283,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
 
                     <button
                       onClick={() => setExistingMode(false)}
-                      className="w-full text-center text-xs text-mist hover:text-cream transition-colors"
+                      className="w-full text-center text-xs text-slate-500 dark:text-mist hover:text-slate-900 dark:hover:text-cream transition-colors"
                     >
                       Back to One-Click Account Creation
                     </button>
@@ -294,7 +294,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
           </div>
 
           {/* Carousel Footer Navigation */}
-          <div className="flex items-center justify-between border-t border-ink-600/60 bg-ink-950/40 px-6 py-4">
+          <div className="flex items-center justify-between border-t border-slate-100 dark:border-ink-800 bg-slate-50/60 dark:bg-ink-950/40 px-6 py-4">
             <Button
               variant="ghost"
               disabled={slide === 0}
@@ -311,7 +311,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                   onClick={() => setSlide(idx)}
                   className={cn(
                     "h-2 rounded-full transition-all",
-                    slide === idx ? "w-6 bg-gold-400" : "w-2 bg-ink-600 hover:bg-ink-500"
+                    slide === idx ? "w-6 bg-[#eaba65]" : "w-2 bg-slate-300 dark:bg-ink-700 hover:bg-slate-400 dark:hover:bg-ink-600"
                   )}
                   aria-label={`Go to slide ${idx + 1}`}
                 />
@@ -319,7 +319,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
             </div>
 
             {slide < totalSlides - 1 ? (
-              <Button variant="primary" onClick={handleNext}>
+              <Button variant="primary" onClick={handleNext} className="bg-[#eaba65] text-slate-950 hover:bg-[#d8a855] font-semibold">
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
@@ -337,7 +337,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         message={statusModal.message}
         details={
           statusModal.details ? (
-            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+            <p className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-3 font-mono text-xs text-amber-800 dark:text-gold-200 whitespace-pre-wrap">
               {statusModal.details}
             </p>
           ) : undefined
