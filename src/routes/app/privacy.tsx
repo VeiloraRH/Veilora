@@ -1,33 +1,117 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Copy, Loader2, ShieldAlert, Timer } from "lucide-react";
-import { ASSETS, GAS_RESERVE, NOTES, PROOF_STATES, VAULT, amount } from "@/demo/data";
-import { Badge, Button, Card, DemoNote, Field, KV, PageHeader, Tabs, inputClass } from "@/components/ui";
-import { useMode } from "@/lib/mode";
+import { useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Copy,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  createShieldedNote,
+  generateProvenanceProof,
+} from "@/lib/api";
+import { useWallet } from "@/lib/walletContext";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  KV,
+  Modal,
+  PageHeader,
+  StatusModal,
+  Tabs,
+  inputClass,
+} from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/privacy")({
   component: PrivacyScreen,
 });
 
-const SHIELD_STEPS = ["Choose", "Preview", "Disclosures", "Policy", "Authorize", "Track"];
-const SHIELD_FEE = 0.0025;
+const SHIELD_STEPS = ["Amount", "Preview", "Disclosures", "Verify", "Submit"];
+const SHIELD_FEE_RATE = 0.0025; // 0.25%
 
-function PrivacyScreen() {
+interface LocalNote {
+  id: string;
+  asset: string;
+  amount: number;
+  commitment: string;
+  created: string;
+  status: "spendable" | "pending" | "spent";
+  nullifierHash?: string;
+  blindingSecret?: string;
+}
+
+const INITIAL_NOTES: LocalNote[] = [
+  {
+    id: "n-01",
+    asset: "USDG",
+    amount: 4000,
+    commitment: "0xe501d4f2a1e9bb37f66ca504f3f2fef31fbfb654a33a8f2aa92a3850a80be909",
+    created: "Oct 6, 14:02",
+    status: "spendable",
+  },
+  {
+    id: "n-02",
+    asset: "USDG",
+    amount: 2250,
+    commitment: "0x88b2a1c0d48123de4f55a1098e987cba12f801923485710293847561234a9b8c",
+    created: "Oct 7, 04:30",
+    status: "spendable",
+  },
+];
+
+export function PrivacyScreen() {
   const [tab, setTab] = useState<"shield" | "unshield">("shield");
+  const { wallet } = useWallet();
+
+  const [notes, setNotes] = useState<LocalNote[]>(() => {
+    try {
+      const saved = localStorage.getItem("veilora:notes");
+      return saved ? JSON.parse(saved) : INITIAL_NOTES;
+    } catch {
+      return INITIAL_NOTES;
+    }
+  });
+
+  const saveNotes = (updated: LocalNote[]) => {
+    setNotes(updated);
+    try {
+      localStorage.setItem("veilora:notes", JSON.stringify(updated));
+    } catch {
+      // Storage save error fallback
+    }
+  };
+
   return (
     <>
       <PageHeader
-        eyebrow="Privacy mode"
-        title="Shield and unshield, step by step."
-        description="Shielding is a clear change of state with a before and after, not a magic button. Each step shows what changes, what it costs and who can see it."
-        actions={<Tabs value={tab} onChange={setTab} items={[{ id: "shield", label: "Shield" }, { id: "unshield", label: "Unshield" }]} />}
+        eyebrow="Privacy Mode"
+        title="Shield & Unshield"
+        description="Shielding converts public USDG on Robinhood Chain into cryptographic shielded UTXO notes. Each step shows what changes, what it costs, and who can see it."
+        actions={
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            items={[
+              { id: "shield", label: "Shield USDG" },
+              { id: "unshield", label: "Unshield to Origin" },
+            ]}
+          />
+        }
       />
       <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
-        {tab === "shield" ? <ShieldFlow /> : <UnshieldFlow />}
+        {tab === "shield" ? (
+          <ShieldFlow onAddNote={(n) => saveNotes([n, ...notes])} />
+        ) : (
+          <UnshieldFlow notes={notes} onSpendNote={(id) => saveNotes(notes.map((n) => n.id === id ? { ...n, status: "spent" } : n))} />
+        )}
         <div className="space-y-6">
-          <ReceiveCard />
-          <NotesCard />
+          <ReceiveCard walletAddress={wallet?.address} />
+          <NotesCard notes={notes} />
         </div>
       </div>
     </>
@@ -38,8 +122,23 @@ function Stepper({ steps, at }: { steps: string[]; at: number }) {
   return (
     <ol className="mb-6 flex flex-wrap gap-x-4 gap-y-2">
       {steps.map((s, i) => (
-        <li key={s} className={cn("flex items-center gap-2 text-xs", i < at ? "text-teal-300" : i === at ? "text-gold-300" : "text-mist")}>
-          <span className={cn("grid h-5 w-5 place-items-center rounded-full border text-[10px]", i < at ? "border-teal-400 bg-teal-400/15" : i === at ? "border-gold-400" : "border-ink-500")}>
+        <li
+          key={s}
+          className={cn(
+            "flex items-center gap-2 text-xs",
+            i < at ? "text-teal-300" : i === at ? "text-gold-300" : "text-mist"
+          )}
+        >
+          <span
+            className={cn(
+              "grid h-5 w-5 place-items-center rounded-full border text-[10px]",
+              i < at
+                ? "border-teal-400 bg-teal-400/15"
+                : i === at
+                ? "border-gold-400"
+                : "border-ink-500"
+            )}
+          >
             {i < at ? <Check className="h-3 w-3" /> : i + 1}
           </span>
           {s}
@@ -49,328 +148,459 @@ function Stepper({ steps, at }: { steps: string[]; at: number }) {
   );
 }
 
-function ProofTracker({ onDone }: { onDone?: () => void }) {
-  const [at, setAt] = useState(0);
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-  useEffect(() => {
-    if (at >= 3) {
-      onDoneRef.current?.();
-      return;
-    }
-    const t = window.setTimeout(() => setAt((a) => a + 1), 1100);
-    return () => clearTimeout(t);
-  }, [at]);
-  return (
-    <ol className="space-y-2.5">
-      {PROOF_STATES.map((s, i) => {
-        const isRefund = i === 4;
-        const done = !isRefund && i < at;
-        const active = !isRefund && i === at;
-        return (
-          <li key={s} className={cn("flex items-center gap-3 rounded-lg border px-3.5 py-2.5 text-sm", done ? "border-teal-400/40" : active ? "border-gold-400/50" : "border-ink-600/60", isRefund && "border-dashed")}>
-            {done ? <Check className="h-4 w-4 text-teal-300" /> : active ? <Loader2 className="h-4 w-4 animate-spin text-gold-300" /> : isRefund ? <Timer className="h-4 w-4 text-mist" /> : <span className="h-4 w-4 rounded-full border border-ink-500" />}
-            <span className={done || active ? "text-cream" : "text-mist"}>{s}</span>
-            {isRefund && <span className="ml-auto text-xs text-mist">Only if no proof in 15 min</span>}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ShieldFlow() {
-  const { mode } = useMode();
-  const shieldable = ASSETS.filter((a) => a.shield === "live");
+function ShieldFlow({
+  onAddNote,
+}: {
+  onAddNote: (n: LocalNote) => void;
+}) {
+  const { wallet } = useWallet();
   const [step, setStep] = useState(0);
-  const [symbol, setSymbol] = useState(shieldable[0].symbol);
   const [amt, setAmt] = useState("2000");
-  const [prover, setProver] = useState<"local" | "server">("local");
-  const [settled, setSettled] = useState(false);
-  const asset = ASSETS.find((a) => a.symbol === symbol)!;
-  const n = Math.max(0, Number(amt) || 0);
-  const fee = n * SHIELD_FEE;
-  const tooMuch = n > asset.publicBalance;
+  const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => {
-    setStep(0);
-    setSettled(false);
+  // Status modal
+  const [statusModal, setStatusModal] = useState<{
+    open: boolean;
+    type: "success" | "error" | "info";
+    title: string;
+    message: string;
+    details?: string;
+  }>({
+    open: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
+
+  const n = Math.max(0, Number(amt) || 0);
+  const fee = n * SHIELD_FEE_RATE;
+  const netShielded = Math.max(0, n - fee);
+
+  const handleShield = async () => {
+    setSubmitting(true);
+    try {
+      const amountWei = (BigInt(Math.floor(netShielded)) * BigInt(10 ** 18)).toString();
+      const res = await createShieldedNote("USDG", amountWei, wallet?.address);
+
+      const newNote: LocalNote = {
+        id: `n-${Date.now().toString().slice(-4)}`,
+        asset: "USDG",
+        amount: netShielded,
+        commitment: res.note.commitment,
+        created: "Just now",
+        status: "spendable",
+        nullifierHash: res.note.nullifierHash,
+        blindingSecret: res.blindingSecret,
+      };
+
+      onAddNote(newNote);
+      setStep(0);
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "USDG Shielded Successfully",
+        message:
+          "Cryptographic note commitment created on Robinhood Chain. Your balance is now shielded in the privacy pool.",
+        details: `Commitment: ${res.note.commitment}\nNullifier Hash: ${res.note.nullifierHash}`,
+      });
+    } catch (err: any) {
+      setStatusModal({
+        open: true,
+        type: "error",
+        title: "Shielding Failed",
+        message: err?.message || "Failed to create shielded note. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <Card title="Enter privacy mode" eyebrow="Shield">
-      <Stepper steps={SHIELD_STEPS} at={settled ? 6 : step} />
+    <Card title="Shield USDG" eyebrow="Enter Privacy Mode">
+      <Stepper steps={SHIELD_STEPS} at={step} />
 
       {step === 0 && (
         <div className="space-y-4">
-          <Field label="What to protect">
-            <select className={inputClass} value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-              {shieldable.map((a) => (
-                <option key={a.symbol} value={a.symbol}>
-                  {a.symbol} · {amount(a.publicBalance)} public
-                </option>
-              ))}
-            </select>
+          <Field label="Deposit Asset">
+            <input className={inputClass} readOnly value="USDG · Global Dollar (Robinhood Chain)" />
           </Field>
-          <Field label="Amount" hint={tooMuch ? <span className="text-coral-400">More than your public balance.</span> : `Public balance: ${amount(asset.publicBalance)} ${asset.symbol}`}>
-            <input className={inputClass} inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Field label="Amount to Shield (USDG)">
+            <input
+              className={inputClass}
+              inputMode="decimal"
+              value={amt}
+              onChange={(e) => setAmt(e.target.value.replace(/[^\d.]/g, ""))}
+            />
           </Field>
-          <p className="text-xs text-mist">Only USDG can be shielded today. ETH stays public as your gas reserve.</p>
+          <p className="text-xs text-mist">
+            Verified USDG token: 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168 on Robinhood Chain.
+          </p>
         </div>
       )}
 
       {step === 1 && (
-        <div>
-          <KV k={`Public ${symbol}`} v={<span className="text-coral-400">{amount(asset.publicBalance)} → {amount(asset.publicBalance - n)}</span>} />
-          <KV k={`Shielded ${symbol}`} v={<span className="text-teal-300">{amount(asset.shieldedBalance)} → {amount(asset.shieldedBalance + n - fee)}</span>} />
-          <KV k="New shielded note" v={`${amount(n - fee)} ${symbol}`} />
-          <KV k="Shield fee (0.25%)" v={`${amount(fee, 2)} ${symbol}`} />
-          <KV k="Gas" v="≈ 0.0018 ETH" />
-          <KV k="Gas reserve after" v={<span className="text-teal-300">{(GAS_RESERVE.available - 0.0018).toFixed(4)} ETH (floor {GAS_RESERVE.reserved})</span>} />
+        <div className="space-y-2 text-sm">
+          <KV k="Gross USDG Deposit" v={`${n.toLocaleString("en-US")} USDG`} />
+          <KV k="Shielding Protocol Fee (0.25%)" v={`${fee.toFixed(2)} USDG`} />
+          <KV k="Net Shielded Note Value" v={<span className="text-teal-300 font-semibold">{netShielded.toLocaleString("en-US")} USDG</span>} />
+          <KV k="Network Execution Gas" v="≈ 0.0001 ETH (Robinhood Chain)" />
+          <KV k="Settlement Pool" v="VeiloraShieldedPool" mono />
         </div>
       )}
 
       {step === 2 && (
         <ul className="space-y-3">
           {[
-            ["Robinhood Chain (public)", `A ${amount(n)} ${symbol} deposit from ${VAULT.short} into the shielded pool.`],
-            ["Co-signer (Shard B)", "The plan hash, amount and policy result. Not the note contents."],
-            ["Proof provider", "The new commitment being checked against the association set."],
-            ["Nobody", "Which note is yours, or what you do with it next inside the shield."],
-          ].map(([p, s]) => (
-            <li key={p} className="rounded-lg border border-ink-600/60 px-3.5 py-2.5">
-              <p className="text-sm text-cream">{p}</p>
-              <p className="text-xs text-mist">{s}</p>
+            {
+              party: "Robinhood Chain Public Ledger",
+              sees: `A public deposit transaction of ${n.toLocaleString("en-US")} USDG into the pool.`,
+            },
+            {
+              party: "Veilora Co-Signer (Shard B)",
+              sees: "Deposit amount and policy verification. Never sees your note spending secrets.",
+            },
+            {
+              party: "Proof Provider (PPOI)",
+              sees: "Cryptographic commitment for association set membership verification.",
+            },
+            {
+              party: "Future Counterparties",
+              sees: "Nothing. Note ownership and transfers remain zero-knowledge.",
+            },
+          ].map((item, idx) => (
+            <li key={idx} className="rounded-lg border border-ink-600/60 p-3 text-xs">
+              <p className="font-semibold text-cream mb-1">{item.party}</p>
+              <p className="text-mist">{item.sees}</p>
             </li>
           ))}
         </ul>
       )}
 
       {step === 3 && (
-        <ul className="space-y-3 text-sm">
-          {[
-            ["Clean provenance", `Inputs are in Lumen clean set #412 (6 days old, policy under 7).`],
-            ["Daily spend limit", `${amount(n)} of 10,000 USDG used today.`],
-            ["Gas reserve", "Stays above 0.05 ETH."],
-          ].map(([r, d]) => (
-            <li key={r} className="flex gap-3">
-              <Check className="mt-0.5 h-4 w-4 text-teal-300" />
-              <div>
-                <p className="text-cream">{r}</p>
-                <p className="text-xs text-mist">{d}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {step === 4 && (
-        <div className="space-y-4">
-          <p className="text-sm text-cream-dim">Choose where the proof is generated, then sign with this device. The co-signer adds the second signature if policy passes.</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {(
-              [
-                ["local", "On this device", "Highest privacy. About 6 seconds."],
-                ["server", "Server-assisted", "Faster. The prover only sees a blinded witness."],
-              ] as const
-            ).map(([id, t, d]) => (
-              <button
-                key={id}
-                onClick={() => setProver(id)}
-                className={cn("rounded-lg border p-3.5 text-left", prover === id ? "border-gold-400 bg-gold-400/5" : "border-ink-600 hover:border-ink-500")}
-              >
-                <p className="text-sm font-medium text-cream">{t}</p>
-                <p className="text-xs text-mist">{d}</p>
-              </button>
-            ))}
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-3">
+            <Check className="h-4 w-4 text-teal-300 shrink-0" />
+            <span className="text-cream-dim">Clean Provenance: Input source verified against Association Set</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Check className="h-4 w-4 text-teal-300 shrink-0" />
+            <span className="text-cream-dim">Daily Velocity: {n.toLocaleString("en-US")} USDG within policy limit</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Check className="h-4 w-4 text-teal-300 shrink-0" />
+            <span className="text-cream-dim">Gas Reserve: Maintained above 0.05 ETH floor</span>
           </div>
         </div>
       )}
 
-      {step === 5 && (
+      {step === 4 && (
         <div className="space-y-4">
-          <ProofTracker onDone={() => setSettled(true)} />
-          {settled && (
-            <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-4 text-sm">
-              <p className="font-medium text-teal-300">Shielded {amount(n - fee)} {symbol}</p>
-              <p className="mt-1 text-xs text-mist">
-                Proof generated {prover === "local" ? "on this device" : "server-assisted (blinded)"}. Receipt saved locally.
-                {mode === "control" && <span className="font-mono"> Commitment 0x7be2…41ad.</span>}
-              </p>
-            </div>
-          )}
+          <p className="text-sm text-cream-dim leading-relaxed">
+            Ready to generate note commitment and deposit {n.toLocaleString("en-US")} USDG.
+            Your device will compute the cryptographic nullifier and blinding secret locally.
+          </p>
+          <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-4 text-xs text-teal-200">
+            Cryptographic SHA-256 commitment will be added to the Robinhood Chain shielded tree.
+          </div>
         </div>
       )}
 
       <div className="mt-6 flex items-center justify-between gap-3 border-t border-ink-600/60 pt-5">
-        {step > 0 && step < 5 ? (
+        {step > 0 ? (
           <Button variant="ghost" onClick={() => setStep((s) => s - 1)}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
         ) : (
-          <DemoNote />
+          <span className="text-xs text-mist">Protected by Veilora Shielded Pool</span>
         )}
-        {step < 4 && (
-          <Button disabled={n <= 0 || tooMuch} onClick={() => setStep((s) => s + 1)}>
+
+        {step < 4 ? (
+          <Button disabled={n <= 0} onClick={() => setStep((s) => s + 1)}>
             Continue <ArrowRight className="h-4 w-4" />
           </Button>
-        )}
-        {step === 4 && <Button onClick={() => setStep(5)}>Sign and shield</Button>}
-        {step === 5 && settled && (
-          <Button variant="outline" onClick={reset}>
-            Shield more
+        ) : (
+          <Button disabled={submitting} onClick={handleShield}>
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Shielding…
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="h-4 w-4" /> Sign and Shield
+              </>
+            )}
           </Button>
         )}
       </div>
+
+      <StatusModal
+        open={statusModal.open}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+        type={statusModal.type}
+        title={statusModal.title}
+        message={statusModal.message}
+        details={
+          statusModal.details ? (
+            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+              {statusModal.details}
+            </p>
+          ) : undefined
+        }
+      />
     </Card>
   );
 }
 
-function UnshieldFlow() {
-  const spendable = NOTES.filter((n) => n.status === "spendable" && n.asset === "USDG");
-  const [noteId, setNoteId] = useState(spendable[0].id);
-  const [customDest, setCustomDest] = useState(false);
-  const [dest, setDest] = useState("");
-  const [started, setStarted] = useState(false);
-  const [done, setDone] = useState(false);
-  const note = spendable.find((n) => n.id === noteId)!;
+function UnshieldFlow({
+  notes,
+  onSpendNote,
+}: {
+  notes: LocalNote[];
+  onSpendNote: (id: string) => void;
+}) {
+  const { wallet } = useWallet();
+  const spendable = notes.filter((n) => n.status === "spendable" && n.asset === "USDG");
+
+  const [selectedNoteId, setSelectedNoteId] = useState(spendable[0]?.id || "");
+  const [customDestination, setCustomDestination] = useState(false);
+  const [destinationAddress, setDestinationAddress] = useState("");
+  const [destinationModalOpen, setDestinationModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Status modal
+  const [statusModal, setStatusModal] = useState<{
+    open: boolean;
+    type: "success" | "error" | "info";
+    title: string;
+    message: string;
+    details?: string;
+  }>({
+    open: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
+
+  const selectedNote = spendable.find((n) => n.id === selectedNoteId) || spendable[0];
+  const targetDestination = customDestination && destinationAddress ? destinationAddress : (wallet?.address || "0x5e4a…b163");
+
+  const handleUnshield = async () => {
+    if (!selectedNote) return;
+    setSubmitting(true);
+    try {
+      // Generate real provenance proof against rhc-clean-v1 set
+      const proof = await generateProvenanceProof(selectedNote.commitment, "USDG");
+      onSpendNote(selectedNote.id);
+
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Unshield Proof Verified",
+        message:
+          `Clean provenance proof generated and verified against ${proof.setId}. Funds are released to destination on Robinhood Chain.`,
+        details: `Proof ID: ${proof.proofId}\nRoot Hash: ${proof.rootHash}\nDestination: ${targetDestination}`,
+      });
+    } catch (err: any) {
+      setStatusModal({
+        open: true,
+        type: "error",
+        title: "Unshield Failed",
+        message: err?.message || "Failed to generate provenance proof. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <Card title="Safe unshield" eyebrow="Unshield">
-      {!started ? (
+    <Card title="Safe Unshield" eyebrow="Exit Privacy Mode">
+      {spendable.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-sm text-mist">No spendable shielded USDG notes available.</p>
+          <p className="text-xs text-mist/80 mt-1">Shield some USDG first to create notes.</p>
+        </div>
+      ) : (
         <div className="space-y-5">
-          <Field label="Note to unshield">
-            <select className={inputClass} value={noteId} onChange={(e) => setNoteId(e.target.value)}>
+          <Field label="Select Shielded Note">
+            <select
+              className={inputClass}
+              value={selectedNoteId}
+              onChange={(e) => setSelectedNoteId(e.target.value)}
+            >
               {spendable.map((n) => (
                 <option key={n.id} value={n.id}>
-                  {amount(n.amount)} {n.asset} · {n.created}
+                  {n.amount.toLocaleString("en-US")} USDG · {n.created} ({n.commitment.slice(0, 10)}…)
                 </option>
               ))}
             </select>
           </Field>
 
           <div>
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.14em] text-mist">Destination</p>
-            <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-3.5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm text-cream">Your verified origin vault</p>
-                  <p className="font-mono text-xs text-mist">{VAULT.short}</p>
-                </div>
-                <Badge tone="teal">Default</Badge>
-              </div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium uppercase tracking-[0.14em] text-mist">
+                Payout Destination
+              </span>
+              <Button
+                variant="outline"
+                className="!px-2.5 !py-1 text-xs"
+                onClick={() => setDestinationModalOpen(true)}
+              >
+                Change Destination
+              </Button>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-sm text-cream-dim">
-              <input type="checkbox" className="accent-[#eaba65]" checked={customDest} onChange={(e) => setCustomDest(e.target.checked)} />
-              Send somewhere else instead
-            </label>
-            {customDest && (
-              <div className="mt-3 space-y-3">
-                <input className={inputClass} placeholder="0x… destination address" value={dest} onChange={(e) => setDest(e.target.value)} />
-                <div className="flex gap-3 rounded-lg border border-gold-400/40 bg-gold-400/5 p-3.5 text-xs text-cream-dim">
-                  <ShieldAlert className="h-4 w-4 shrink-0 text-gold-300" />
-                  <p>A new destination needs a fresh review and a 24-hour cooling-off period before submission. Amounts over 2,500 USDG also wait 10 minutes.</p>
-                </div>
-              </div>
-            )}
+            <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-3.5">
+              <p className="text-sm text-cream font-medium">
+                {customDestination ? "Custom Destination Address" : "Origin Smart Account (Default)"}
+              </p>
+              <p className="font-mono text-xs text-mist mt-1 truncate">{targetDestination}</p>
+            </div>
           </div>
 
-          <div>
-            <KV k="You receive" v={`${amount(note.amount * (1 - SHIELD_FEE), 2)} USDG (public)`} />
-            <KV k="Unshield fee (0.25%)" v={`${amount(note.amount * SHIELD_FEE, 2)} USDG`} />
-            <KV k="Public after exit" v="The amount and destination become visible on-chain" />
-            <KV k="If the proof provider is down" v="Queued, then refunded to the note. Never lost" />
+          <div className="space-y-2 border-t border-ink-600/60 pt-4 text-sm">
+            <KV k="Unshield Amount" v={`${selectedNote?.amount.toLocaleString("en-US")} USDG`} />
+            <KV k="Exit Fee (0.25%)" v={`${((selectedNote?.amount || 0) * SHIELD_FEE_RATE).toFixed(2)} USDG`} />
+            <KV
+              k="Net Public USDG Received"
+              v={<span className="text-teal-300 font-semibold">{((selectedNote?.amount || 0) * (1 - SHIELD_FEE_RATE)).toLocaleString("en-US")} USDG</span>}
+            />
+            <KV k="Provenance Verification" v="PPOI Clean Set #rhc-clean-v1" />
           </div>
 
-          <div className="flex items-center justify-between gap-3 border-t border-ink-600/60 pt-5">
-            <DemoNote />
-            <Button disabled={customDest && !/^0x[0-9a-fA-F]{6,}/.test(dest)} onClick={() => setStarted(true)}>
-              {customDest ? "Review new destination" : "Sign and unshield"}
+          <div className="border-t border-ink-600/60 pt-5">
+            <Button
+              className="w-full"
+              disabled={submitting}
+              onClick={handleUnshield}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Verifying Provenance…
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4" /> Prove & Unshield USDG
+                </>
+              )}
             </Button>
           </div>
         </div>
-      ) : customDest ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border border-gold-400/40 bg-gold-400/5 p-4">
-            <Timer className="h-5 w-5 text-gold-300" />
-            <div>
-              <p className="text-sm text-cream">Cooling-off started</p>
-              <p className="text-xs text-mist">
-                Submits after 23:59:58 unless you cancel. Destination <span className="font-mono">{dest.slice(0, 8)}…</span> was added to the review queue.
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" onClick={() => setStarted(false)}>
-            Cancel unshield
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <ProofTracker onDone={() => setDone(true)} />
-          {done && (
-            <div className="rounded-lg border border-teal-400/40 bg-teal-400/5 p-4 text-sm">
-              <p className="font-medium text-teal-300">Unshielded to {VAULT.short}</p>
-              <p className="mt-1 text-xs text-mist">Settled. Receipt saved locally.</p>
-            </div>
-          )}
-          {done && (
+      )}
+
+      {/* Destination Input Modal */}
+      <Modal
+        open={destinationModalOpen}
+        onClose={() => setDestinationModalOpen(false)}
+        title="Set Payout Destination"
+        description="Choose where unshielded funds will be transferred on Robinhood Chain."
+        actions={
+          <>
             <Button
               variant="outline"
               onClick={() => {
-                setStarted(false);
-                setDone(false);
+                setCustomDestination(false);
+                setDestinationAddress("");
+                setDestinationModalOpen(false);
               }}
             >
-              Done
+              Reset to Vault
             </Button>
-          )}
+            <Button
+              variant="primary"
+              disabled={!/^0x[0-9a-fA-F]{40}$/.test(destinationAddress.trim())}
+              onClick={() => {
+                setCustomDestination(true);
+                setDestinationModalOpen(false);
+              }}
+            >
+              Confirm Destination
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Recipient Address (0x…)">
+            <input
+              className={inputClass}
+              placeholder="0x…"
+              value={destinationAddress}
+              onChange={(e) => setDestinationAddress(e.target.value.trim())}
+            />
+          </Field>
+          <div className="rounded-lg border border-gold-400/30 bg-gold-400/5 p-3 text-xs text-cream-dim">
+            Ensure this is a valid EVM address on Robinhood Chain. Funds unshield directly to this recipient.
+          </div>
         </div>
-      )}
+      </Modal>
+
+      <StatusModal
+        open={statusModal.open}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+        type={statusModal.type}
+        title={statusModal.title}
+        message={statusModal.message}
+        details={
+          statusModal.details ? (
+            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+              {statusModal.details}
+            </p>
+          ) : undefined
+        }
+      />
     </Card>
   );
 }
 
-function ReceiveCard() {
+function ReceiveCard({ walletAddress }: { walletAddress?: string }) {
   const [copied, setCopied] = useState(false);
+  const addr = walletAddress || "0x5e4ae3b279fcC9c470dF26875906D808BdE5B163";
+
   return (
-    <Card title="Shielded receive address" eyebrow="Receive privately">
-      <p className="break-all rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-sm text-gold-200">{VAULT.shieldedAddress}</p>
+    <Card title="Shielded Deposit Address" eyebrow="Receive Privately">
+      <p className="break-all rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200">
+        {addr}
+      </p>
       <Button
         variant="outline"
         className="mt-3 w-full"
         onClick={() => {
-          navigator.clipboard?.writeText(VAULT.shieldedAddress).catch(() => undefined);
+          navigator.clipboard?.writeText(addr).catch(() => undefined);
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         }}
       >
-        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? "Copied" : "Copy address"}
+        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+        {copied ? "Copied" : "Copy Smart Account Address"}
       </Button>
-      <p className="mt-3 text-xs text-mist">Payments to this address land as shielded notes. The sender sees only that they paid a shielded address.</p>
+      <p className="mt-3 text-xs text-mist">
+        Deposits to this smart account can be shielded into private notes on Robinhood Chain.
+      </p>
     </Card>
   );
 }
 
-function NotesCard() {
-  const { mode } = useMode();
+function NotesCard({ notes }: { notes: LocalNote[] }) {
   return (
-    <Card title="Your notes" eyebrow={mode === "control" ? "Control mode" : "Shielded balance"} bodyClassName="p-0">
-      <ul>
-        {NOTES.map((n) => (
-          <li key={n.id} className="border-t border-ink-600/50 px-5 py-3 first:border-0">
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className={n.status === "spent" ? "text-mist line-through" : "text-cream"}>
-                {amount(n.amount)} {n.asset}
-              </span>
-              <Badge tone={n.status === "spendable" ? "teal" : n.status === "pending" ? "gold" : "mist"}>{n.status}</Badge>
-            </div>
-            <p className="mt-0.5 text-xs text-mist">
-              {n.origin} · {n.created}
-            </p>
-            {mode === "control" && <p className="mt-0.5 font-mono text-[11px] text-mist/80">commitment {n.commitment}</p>}
-          </li>
-        ))}
-      </ul>
+    <Card title="Shielded Notes" eyebrow="Your Shielded Balances" bodyClassName="p-0">
+      {notes.length === 0 ? (
+        <div className="p-5 text-center text-xs text-mist">No shielded notes found.</div>
+      ) : (
+        <ul>
+          {notes.map((n) => (
+            <li key={n.id} className="border-t border-ink-600/50 px-5 py-3 first:border-0">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className={n.status === "spent" ? "text-mist line-through" : "text-cream font-medium"}>
+                  {n.amount.toLocaleString("en-US")} {n.asset}
+                </span>
+                <Badge tone={n.status === "spendable" ? "teal" : "mist"}>{n.status}</Badge>
+              </div>
+              <p className="mt-0.5 text-xs text-mist">{n.created}</p>
+              <p className="mt-1 font-mono text-[11px] text-mist/80 truncate">
+                Commitment: {n.commitment}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

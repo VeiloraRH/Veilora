@@ -1,10 +1,13 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
+import { WalletProvider } from "@/lib/walletContext";
 
 export const Route = createFileRoute("/app")({
   component: () => (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <WalletProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </WalletProvider>
   ),
 });

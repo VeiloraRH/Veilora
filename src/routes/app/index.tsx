@@ -10,7 +10,6 @@ import {
   OUTBOX_STATUS,
   PROOFS,
   RECEIPTS,
-  SHARDS,
   BROADCASTERS,
   TOTALS,
   amount,
@@ -18,6 +17,7 @@ import {
 } from "@/demo/data";
 import { Badge, Button, Card, Dot, PageHeader, Stat, inputClass } from "@/components/ui";
 import { useMode } from "@/lib/mode";
+import { useWallet } from "@/lib/walletContext";
 
 export const Route = createFileRoute("/app/")({
   component: CommandCenter,
@@ -27,10 +27,21 @@ const SHIELD_LABEL = { live: { label: "Shieldable", tone: "teal" }, pilot: { lab
 
 function CommandCenter() {
   const { mode } = useMode();
+  const { wallet } = useWallet();
   const navigate = useNavigate();
   const [goal, setGoal] = useState("");
   const shieldedPct = Math.round((TOTALS.shielded / TOTALS.total) * 100);
   const proof = PROOFS[0];
+
+  const userTitle = wallet?.address
+    ? `Account ${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
+    : "Veilora Account";
+
+  const liveShards = [
+    { id: "A", name: "Device Key", where: wallet?.shardA || "Local Device", status: "Active" },
+    { id: "B", name: "Policy Co-Signer", where: wallet?.shardB || "Veilora HSM", status: "Active" },
+    { id: "C", name: "Recovery Shard", where: wallet?.shardC || "Passkey Standby", status: "Standby" },
+  ];
 
   const plan = (g: string) => navigate({ to: "/app/intent", search: { goal: g || undefined } });
 
@@ -38,8 +49,8 @@ function CommandCenter() {
     <>
       <PageHeader
         eyebrow="Command Center"
-        title="Good afternoon, Northwind."
-        description="Everything you hold, everything waiting for a signature, and what each party can see."
+        title={`Overview · ${userTitle}`}
+        description="Everything you hold, everything waiting for a signature, and what each party can see on Robinhood Chain."
         actions={
           <>
             <Link to="/app/privacy">
@@ -143,7 +154,7 @@ function CommandCenter() {
           <ul>
             {OUTBOX.map((o) => (
               <li key={o.id} className="flex items-center gap-3 border-t border-ink-600/50 px-5 py-3.5 first:border-0">
-                <Dot tone={OUTBOX_STATUS[o.status].tone} pulse={o.status === "awaiting-approval"} />
+                <Dot tone={OUTBOX_STATUS[o.status].tone} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-cream">{o.title}</p>
                   <p className="text-xs text-mist">
@@ -159,14 +170,14 @@ function CommandCenter() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card title="Signing quorum" eyebrow="2-of-3">
           <ul className="space-y-3">
-            {SHARDS.map((s) => (
+            {liveShards.map((s) => (
               <li key={s.id} className="flex items-center gap-3 text-sm">
                 <span className="grid h-8 w-8 place-items-center rounded-full border border-gold-400/40 font-display text-base text-gold-300">{s.id}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-cream">{s.name}</p>
-                  <p className="truncate text-xs text-mist">{s.where}</p>
+                  <p className="truncate font-mono text-xs text-mist">{s.where}</p>
                 </div>
-                <Badge tone={s.status === "healthy" ? "teal" : "mist"}>{s.status}</Badge>
+                <Badge tone={s.status === "Active" ? "teal" : "mist"}>{s.status}</Badge>
               </li>
             ))}
           </ul>

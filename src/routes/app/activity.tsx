@@ -22,7 +22,7 @@ function exportCsv() {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = "veilora-receipts-demo.csv";
+  a.download = "veilora-receipts.csv";
   a.click();
   URL.revokeObjectURL(url);
 }

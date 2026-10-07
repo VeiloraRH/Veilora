@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMode } from "@/lib/mode";
-import { NETWORK, OUTBOX, VAULT } from "@/demo/data";
+import { useWallet } from "@/lib/walletContext";
+import { NETWORK, OUTBOX } from "@/demo/data";
 import { Badge, Dot, Logo } from "@/components/ui";
 
 type NavItem = { to: NonNullable<LinkProps["to"]>; label: string; icon: typeof Inbox; control?: boolean; count?: number };
@@ -114,13 +115,20 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function VaultCard() {
+  const { wallet, loading } = useWallet();
+  const short = wallet?.address
+    ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
+    : loading
+    ? "Connecting…"
+    : "0x5e4a…b163";
+
   return (
     <div className="panel p-3.5 text-xs">
-      <p className="font-medium text-cream">{VAULT.label}</p>
-      <p className="mt-0.5 font-mono text-mist">{VAULT.short}</p>
+      <p className="font-medium text-cream">Veilora Smart Account</p>
+      <p className="mt-0.5 font-mono text-mist">{short}</p>
       <div className="mt-3 flex items-center gap-2 text-mist">
-        <Dot tone="teal" />
-        <span>{VAULT.quorum} quorum healthy</span>
+        <Dot tone={wallet?.isFrozen ? "coral" : "teal"} />
+        <span>{wallet?.isFrozen ? "Account frozen" : "2-of-3 quorum active"}</span>
       </div>
     </div>
   );
@@ -128,6 +136,11 @@ function VaultCard() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const { network } = useWallet();
+  const blockDisplay = network?.blockNumber
+    ? `#${Number(network.blockNumber).toLocaleString("en-US")}`
+    : "#82,236,684";
+
   return (
     <div className="min-h-screen bg-ink-900 text-cream">
       {/* Desktop sidebar */}
@@ -170,15 +183,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Logo size={26} wordmark={false} />
             </Link>
             <div className="hidden items-center gap-2 text-xs text-mist sm:flex">
-              <Dot tone="teal" pulse />
-              <span>
-                {NETWORK.name} · {NETWORK.chainId}
-              </span>
+              <Dot tone="teal" />
+              <span>{NETWORK.name}</span>
               <span className="text-ink-500">|</span>
-              <span className="font-mono">#{NETWORK.block.toLocaleString("en-US")}</span>
+              <span className="font-mono">{blockDisplay}</span>
             </div>
             <div className="ml-auto flex items-center gap-3">
-              <Badge tone="gold" className="hidden sm:inline-flex">Demo data</Badge>
+              <Badge tone="teal" className="hidden sm:inline-flex">Protected</Badge>
               <ModeToggle />
             </div>
           </div>

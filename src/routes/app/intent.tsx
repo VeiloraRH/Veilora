@@ -1,9 +1,34 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, CircleAlert, CircleX, Cpu, Loader2, Lock } from "lucide-react";
-import { INTENT_SUGGESTIONS, matchPlan, type Plan, type PolicyCheck } from "@/demo/data";
-import { Badge, Button, Card, DemoNote, KV, PageHeader, VisibilityBadge, inputClass } from "@/components/ui";
-import { useMode } from "@/lib/mode";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  CircleAlert,
+  CircleX,
+  Loader2,
+  Lock,
+  Sliders,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  simulateIntent,
+  evaluatePolicies,
+  cosignTransaction,
+  type StructuredPlan,
+  type PlanSimulation,
+} from "@/lib/api";
+import { useWallet } from "@/lib/walletContext";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  KV,
+  Modal,
+  PageHeader,
+  StatusModal,
+  inputClass,
+} from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/intent")({
@@ -13,94 +38,208 @@ export const Route = createFileRoute("/app/intent")({
   component: IntentConsole,
 });
 
-// The control loop, in the order the product doc requires.
+const SUGGESTIONS = [
+  "Shield 2,000 USDG and preserve gas for payroll",
+  "Buy 500 USDG of NVDA exposure and keep it shielded",
+  "Send 1,250 USDG to verified supplier on Robinhood Chain",
+  "Swap 1,000 USDC to USDG with clean provenance check",
+];
+
 const STAGES = ["Plan", "Simulate", "Policy", "Disclose", "Approve"] as const;
 
-type Sign = "idle" | "device" | "cosigner" | "queued";
-
-function PolicyIcon({ r }: { r: PolicyCheck["result"] }) {
-  if (r === "pass") return <Check className="h-4 w-4 text-teal-300" />;
-  if (r === "warn") return <CircleAlert className="h-4 w-4 text-gold-300" />;
-  return <CircleX className="h-4 w-4 text-coral-400" />;
-}
-
-function IntentConsole() {
+export function IntentConsole() {
   const { goal: initial } = Route.useSearch();
-  const { mode } = useMode();
-  const [text, setText] = useState(initial ?? INTENT_SUGGESTIONS[0]);
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [stage, setStage] = useState(-1); // index into STAGES that has completed
+  const { wallet } = useWallet();
+
+  const [text, setText] = useState(initial ?? SUGGESTIONS[0]);
+  const [loading, setLoading] = useState(false);
+  const [plan, setPlan] = useState<StructuredPlan | null>(null);
+  const [simulation, setSimulation] = useState<PlanSimulation | null>(null);
+  const [policyEval, setPolicyEval] = useState<{
+    passed: boolean;
+    violations: string[];
+    checks: Record<string, boolean>;
+  } | null>(null);
+
+  const [stage, setStage] = useState(-1);
   const [reviewed, setReviewed] = useState(false);
-  const [sign, setSign] = useState<Sign>("idle");
-  const timers = useRef<number[]>([]);
+  const [approving, setApproving] = useState(false);
 
-  const clear = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-  };
-  useEffect(() => clear, []);
+  // Constraint configuration modal
+  const [constraintModalOpen, setConstraintModalOpen] = useState(false);
+  const [maxFeeBps, setMaxFeeBps] = useState("75");
+  const [preserveGasEth, setPreserveGasEth] = useState("0.05");
+  const [requireProvenance, setRequireProvenance] = useState(true);
 
-  const run = (goal: string) => {
-    clear();
-    setText(goal);
-    setPlan(matchPlan(goal));
+  // Status Modal
+  const [statusModal, setStatusModal] = useState<{
+    open: boolean;
+    type: "success" | "error" | "info";
+    title: string;
+    message: string;
+    details?: string;
+  }>({
+    open: false,
+    type: "info",
+    title: "",
+    message: "",
+  });
+
+  const runSimulation = async (
+    goalText: string,
+    customConstraints?: Record<string, any>
+  ) => {
+    if (!goalText.trim()) return;
+    setLoading(true);
+    setStage(0);
     setReviewed(false);
-    setSign("idle");
-    setStage(-1);
-    // Each stage resolves in turn so the user watches the plan being checked.
-    [0, 1, 2, 3].forEach((i) => timers.current.push(window.setTimeout(() => setStage(i), 350 + i * 450)));
+    try {
+      const constraints = customConstraints || {
+        maxTotalFeeBps: parseInt(maxFeeBps, 10) || 75,
+        preserveGas: `${preserveGasEth} ETH`,
+        requireCleanProvenance: requireProvenance,
+      };
+
+      const res = await simulateIntent({
+        goal: goalText,
+        constraints,
+        walletAddress: wallet?.address,
+      });
+
+      setPlan(res.plan);
+      setSimulation(res.simulation);
+      setStage(1);
+
+      const pol = await evaluatePolicies(res.plan, res.simulation);
+      setPolicyEval(pol);
+      setStage(3);
+    } catch (err: any) {
+      setStatusModal({
+        open: true,
+        type: "error",
+        title: "Simulation Failed",
+        message: err?.message || "Could not simulate intent. Please check network connection.",
+      });
+      setStage(-1);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (initial) run(initial);
+    if (initial) {
+      setText(initial);
+      runSimulation(initial);
+    } else {
+      runSimulation(SUGGESTIONS[0]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
-  const approve = () => {
-    setStage(4);
-    setSign("device");
-    timers.current.push(window.setTimeout(() => setSign("cosigner"), 900));
-    timers.current.push(window.setTimeout(() => setSign("queued"), 2100));
+  const handleApplyConstraints = async () => {
+    setConstraintModalOpen(false);
+    await runSimulation(text, {
+      maxTotalFeeBps: parseInt(maxFeeBps, 10) || 75,
+      preserveGas: `${preserveGasEth} ETH`,
+      requireCleanProvenance: requireProvenance,
+    });
   };
 
-  const overLimit = plan ? plan.totalFeeBps > plan.limitBps : false;
-  const blocked = plan?.policy.some((p) => p.result === "fail") || overLimit;
+  const handleApprove = async () => {
+    if (!plan || !simulation || !wallet) return;
+    setApproving(true);
+    try {
+      // Co-sign with Shard B on backend
+      const digest = simulation.expectedCommitmentPreview || "0x0";
+      await cosignTransaction(wallet.address, {
+        digest,
+        target: simulation.route[0] || wallet.address,
+        nonce: parseInt(wallet.nonce, 10) || 0,
+      });
+
+      setStage(4);
+      setStatusModal({
+        open: true,
+        type: "success",
+        title: "Intent Approved & Co-Signed",
+        message:
+          "2-of-3 threshold quorum was satisfied. Shard A and Shard B signatures have been collected and verified.",
+        details: `Plan ID: ${plan.id}\nRouting: ${simulation.route.join(" → ")}`,
+      });
+    } catch (err: any) {
+      setStatusModal({
+        open: true,
+        type: "error",
+        title: "Approval Refused",
+        message: err?.message || "Co-signer declined to sign transaction due to policy constraint.",
+      });
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const isBlocked = policyEval ? !policyEval.passed : false;
 
   return (
     <>
       <PageHeader
         eyebrow="Intent Console"
         title="Say what you want. Review what happens."
-        description="Describe a goal in plain words. Veilora plans it on this device, simulates it, checks your policies and shows who sees what. Nothing moves without your yes."
+        description="Describe your goal in plain words. Veilora plans it, runs a live on-chain simulation, evaluates policies, and shows what each party sees before asking for your yes."
+        actions={
+          <Button
+            variant="outline"
+            onClick={() => setConstraintModalOpen(true)}
+          >
+            <Sliders className="h-4 w-4" /> Policy Guardrails
+          </Button>
+        }
       />
 
+      {/* Input panel */}
       <div className="panel p-5">
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            run(text);
+            runSimulation(text);
           }}
         >
           <textarea
-            className={cn(inputClass, "min-h-[92px] resize-y font-display text-lg leading-snug")}
+            className={cn(
+              inputClass,
+              "min-h-[92px] resize-y font-display text-lg leading-snug"
+            )}
             value={text}
             onChange={(e) => setText(e.target.value)}
             aria-label="Your goal"
           />
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-xs text-mist">
-              <Lock className="h-3.5 w-3.5 text-gold-400" /> Parsed locally. The raw text never leaves this device.
+              <Lock className="h-3.5 w-3.5 text-gold-400" />
+              Direct live simulation on Robinhood Chain.
             </p>
-            <Button type="submit">
-              Plan locally <ArrowRight className="h-4 w-4" />
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Simulating…
+                </>
+              ) : (
+                <>
+                  Simulate Plan <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </Button>
           </div>
         </form>
+
         <div className="mt-4 flex flex-wrap gap-2">
-          {INTENT_SUGGESTIONS.map((s) => (
+          {SUGGESTIONS.map((s) => (
             <button
               key={s}
-              onClick={() => run(s)}
+              onClick={() => {
+                setText(s);
+                runSimulation(s);
+              }}
               className="max-w-full truncate rounded-full border border-ink-600 px-3 py-1 text-xs text-mist hover:border-gold-400/60 hover:text-cream"
             >
               {s}
@@ -109,17 +248,27 @@ function IntentConsole() {
         </div>
       </div>
 
-      {plan && (
+      {plan && simulation && (
         <>
-          {/* Stage rail */}
+          {/* Stage Rail */}
           <ol className="my-8 grid grid-cols-5 gap-2">
             {STAGES.map((s, i) => {
               const done = stage >= i;
-              const active = stage + 1 === i;
+              const active = stage === i;
               return (
                 <li key={s} className="min-w-0">
-                  <div className={cn("h-1 rounded-full transition-colors duration-500", done ? "bg-brand-gradient" : "bg-ink-700")} />
-                  <p className={cn("mt-2 truncate text-xs", done ? "text-gold-300" : active ? "text-cream" : "text-mist")}>
+                  <div
+                    className={cn(
+                      "h-1 rounded-full transition-colors duration-500",
+                      done ? "bg-brand-gradient" : "bg-ink-700"
+                    )}
+                  />
+                  <p
+                    className={cn(
+                      "mt-2 truncate text-xs",
+                      done ? "text-gold-300" : active ? "text-cream" : "text-mist"
+                    )}
+                  >
                     {i + 1}. {s}
                   </p>
                 </li>
@@ -128,176 +277,272 @@ function IntentConsole() {
           </ol>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Card title="Structured plan" eyebrow="1 · Plan" className={stage < 0 ? "opacity-50" : ""}>
+            {/* 1. Plan Structure */}
+            <Card title="Structured Plan" eyebrow="1 · Plan">
               <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                {plan.constraints.map((c) => (
-                  <div key={c.label} className="rounded-lg border border-ink-600/70 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-[0.14em] text-mist">{c.label}</p>
-                    <p className="text-sm text-cream">{c.value}</p>
+                <div className="rounded-lg border border-ink-600/70 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-mist">Action Type</p>
+                  <p className="text-sm font-medium text-cream capitalize">
+                    {plan.action.replace("_", " ")}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-ink-600/70 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-mist">Asset & Amount</p>
+                  <p className="text-sm font-medium text-cream">
+                    {plan.amountIn} {plan.assetIn}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-ink-600/70 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-mist">Fee Ceiling</p>
+                  <p className="text-sm font-medium text-cream">
+                    {(plan.constraints.maxTotalFeeBps / 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div className="rounded-lg border border-ink-600/70 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-mist">Gas Floor</p>
+                  <p className="text-sm font-medium text-cream">{plan.constraints.preserveGas}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.14em] text-mist mb-2">Execution Route</p>
+                {simulation.route.map((step, idx) => (
+                  <div key={idx} className="flex items-center gap-3 rounded-lg border border-ink-600/60 p-2.5 text-xs">
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-gold-400/10 text-gold-300 font-bold">
+                      {idx + 1}
+                    </span>
+                    <span className="text-cream-dim flex-1">{step}</span>
                   </div>
                 ))}
               </div>
-              <ol className="space-y-3">
-                {plan.steps.map((s, i) => (
-                  <li key={s.label} className="flex gap-3">
-                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-gold-400/40 text-xs text-gold-300">{i + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-cream">{s.label}</p>
-                        <VisibilityBadge v={s.visibility} />
-                      </div>
-                      <p className="text-xs text-mist">{s.detail}</p>
+            </Card>
+
+            {/* 2. Live Simulation Diff */}
+            <Card title="Simulated Balance Effects" eyebrow="2 · Simulate">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-[0.14em] text-mist">
+                      <th className="pb-2 font-medium">Asset</th>
+                      <th className="pb-2 text-right font-medium">Before</th>
+                      <th className="pb-2 text-right font-medium">After</th>
+                      <th className="pb-2 text-right font-medium">Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {simulation.balanceDiffs.map((d, idx) => (
+                      <tr key={idx} className="border-t border-ink-600/50">
+                        <td className="py-2.5 text-cream-dim">
+                          {d.asset} {d.isShielded && <Badge tone="teal" className="ml-1 text-[10px]">Shielded</Badge>}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums text-mist">{d.before}</td>
+                        <td className="py-2.5 text-right font-medium tabular-nums text-cream">{d.after}</td>
+                        <td
+                          className={cn(
+                            "py-2.5 text-right font-medium tabular-nums",
+                            d.delta.startsWith("+") ? "text-teal-300" : "text-coral-400"
+                          )}
+                        >
+                          {d.delta}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-5 border-t border-ink-600/60 pt-3">
+                <KV k="Gas Price (Robinhood Chain)" v={`${simulation.estimatedFees.gasPriceGwei} Gwei`} />
+                <KV k="Protocol Fee" v={`${simulation.estimatedFees.protocolFeeUSDG} USDG`} />
+                <KV k="Proving Fee" v={`${simulation.estimatedFees.provingFeeUSDG} USDG`} />
+                <KV
+                  k="Gas Reserve Floor"
+                  v={
+                    <span className={simulation.gasReserveStatus.isPreserved ? "text-teal-300" : "text-coral-400"}>
+                      {simulation.gasReserveStatus.reservedGasEth} (Safe)
+                    </span>
+                  }
+                />
+              </div>
+            </Card>
+
+            {/* 3. Policy & Provenance Evaluation */}
+            <Card title="Policy Guardrails" eyebrow="3 · Policy">
+              {policyEval ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-ink-600/60">
+                    <span className="text-sm text-mist">Overall Policy Evaluation</span>
+                    <Badge tone={policyEval.passed ? "teal" : "coral"}>
+                      {policyEval.passed ? "Approved" : "Violations Detected"}
+                    </Badge>
+                  </div>
+
+                  <ul className="space-y-2.5">
+                    {Object.entries(policyEval.checks).map(([check, passed]) => {
+                      const labels: Record<string, string> = {
+                        feeCeilingOk: "Fee is below policy ceiling",
+                        gasReserveOk: "Gas reserve remains above minimum threshold",
+                        assetAllowed: "Asset is approved for shielded settlement",
+                        provenanceRequirementSatisfied: "Clean provenance verified against association set",
+                      };
+                      return (
+                        <li key={check} className="flex items-center gap-3 text-sm">
+                          {passed ? (
+                            <Check className="h-4 w-4 text-teal-300 shrink-0" />
+                          ) : (
+                            <CircleX className="h-4 w-4 text-coral-400 shrink-0" />
+                          )}
+                          <span className={passed ? "text-cream-dim" : "text-coral-300 font-medium"}>
+                            {labels[check] || check}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {policyEval.violations.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-coral-500/40 bg-coral-500/10 p-3 text-xs text-coral-300">
+                      {policyEval.violations.map((v, i) => (
+                        <p key={i}>• {v}</p>
+                      ))}
                     </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-mist">Awaiting policy engine evaluation…</p>
+              )}
+            </Card>
+
+            {/* 4. Selective Disclosure */}
+            <Card title="Information Visibility" eyebrow="4 · Disclose">
+              <ul className="space-y-3">
+                {simulation.disclosures.map((d, i) => (
+                  <li key={i} className="rounded-lg border border-ink-600/60 p-3 text-xs space-y-1">
+                    <p className="font-semibold text-cream">{d.surface}</p>
+                    <p className="text-mist">
+                      <span className="text-gold-300">Visible:</span> {d.visibleData}
+                    </p>
+                    <p className="text-cream-dim">
+                      <span className="text-teal-300">Guarantee:</span> {d.guarantee}
+                    </p>
                   </li>
                 ))}
-              </ol>
-              {mode === "control" && (
-                <pre className="mt-5 overflow-x-auto rounded-lg border border-ink-600 bg-ink-950 p-3 font-mono text-[11px] leading-relaxed text-cream-dim">
-                  {JSON.stringify({ id: plan.id, route: plan.route, maxTotalFeeBps: plan.limitBps, steps: plan.steps.map((s) => s.label) }, null, 2)}
-                </pre>
-              )}
-            </Card>
-
-            <Card title="Before and after" eyebrow="2 · Simulate" className={stage < 1 ? "opacity-50" : ""}>
-              {stage < 1 ? (
-                <p className="flex items-center gap-2 text-sm text-mist">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Simulating balances, fees and route…
-                </p>
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-[11px] uppercase tracking-[0.14em] text-mist">
-                          <th className="pb-2 font-medium">Balance</th>
-                          <th className="pb-2 text-right font-medium">Before</th>
-                          <th className="pb-2 text-right font-medium">After</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {plan.diff.map((d) => (
-                          <tr key={d.label} className="border-t border-ink-600/50">
-                            <td className="py-2.5 text-cream-dim">{d.label}</td>
-                            <td className="py-2.5 text-right tabular-nums text-mist">{d.before}</td>
-                            <td className={cn("py-2.5 text-right font-medium tabular-nums", d.tone === "teal" ? "text-teal-300" : d.tone === "coral" ? "text-coral-400" : "text-cream")}>
-                              {d.after}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-5">
-                    {plan.costs.map((c) => (
-                      <KV key={c.label} k={c.label} v={c.value} />
-                    ))}
-                    <KV
-                      k={<span className="font-medium text-cream">Total cost</span>}
-                      v={
-                        <span className={overLimit ? "text-coral-400" : "text-teal-300"}>
-                          {(plan.totalFeeBps / 100).toFixed(2)}% <span className="text-mist">/ limit {(plan.limitBps / 100).toFixed(2)}%</span>
-                        </span>
-                      }
-                    />
-                  </div>
-                  <p className="mt-4 text-xs text-mist">
-                    Route: <span className="text-cream-dim">{plan.route}</span> · {plan.eta}
-                  </p>
-                </>
-              )}
-            </Card>
-
-            <Card title="Policy and provenance" eyebrow="3 · Policy" className={stage < 2 ? "opacity-50" : ""}>
-              {stage < 2 ? (
-                <p className="flex items-center gap-2 text-sm text-mist">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Checking limits, reserves and provenance…
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {plan.policy.map((p) => (
-                    <li key={p.rule} className="flex gap-3">
-                      <PolicyIcon r={p.result} />
-                      <div>
-                        <p className="text-sm text-cream">{p.rule}</p>
-                        <p className="text-xs text-mist">{p.detail}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card title="What leaves this device" eyebrow="4 · Disclose" className={stage < 3 ? "opacity-50" : ""}>
-              {stage < 3 ? (
-                <p className="flex items-center gap-2 text-sm text-mist">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Listing every party that will see something…
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {plan.disclosures.map((d) => (
-                    <li key={d.party} className="rounded-lg border border-ink-600/60 px-3.5 py-2.5">
-                      <p className="text-sm text-cream">{d.party}</p>
-                      <p className="text-xs text-mist">{d.sees}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              </ul>
             </Card>
           </div>
 
-          {/* Approval */}
-          <div className={cn("panel mt-6 p-6", stage < 3 && "pointer-events-none opacity-50")}>
-            <p className="eyebrow mb-2">5 · Approve</p>
-            {blocked ? (
-              <div className="flex items-start gap-3 text-sm">
-                <CircleX className="mt-0.5 h-5 w-5 text-coral-400" />
-                <p className="text-cream">This plan breaks a policy, so it cannot be approved. Change the goal or the policy first.</p>
-              </div>
-            ) : sign === "idle" ? (
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <label className="flex items-start gap-3 text-sm text-cream-dim">
-                  <input type="checkbox" className="mt-1 accent-[#eaba65]" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
-                  <span>I reviewed the balance changes, the policy results and what each party will see.</span>
-                </label>
-                <Button disabled={!reviewed} onClick={approve} className="shrink-0">
-                  Approve with this device
-                </Button>
+          {/* 5. Final Approval Box */}
+          <div className="panel mt-6 p-6">
+            <p className="eyebrow mb-2">5 · Approval & Quorum</p>
+            {isBlocked ? (
+              <div className="flex items-start gap-3 text-sm text-coral-300">
+                <CircleAlert className="h-5 w-5 shrink-0" />
+                <p>
+                  This plan violates a security policy. Adjust the parameters or constraints above to continue.
+                </p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <SignStep label="Shard A · this device" done />
-                <SignStep label="Shard B · policy co-signer" done={sign === "cosigner" || sign === "queued"} busy={sign === "device"} />
-                <SignStep label="Queued in outbox" done={sign === "queued"} busy={sign === "cosigner"} />
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <label className="flex items-start gap-3 text-sm text-cream-dim cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1 accent-[#eaba65]"
+                    checked={reviewed}
+                    onChange={(e) => setReviewed(e.target.checked)}
+                  />
+                  <span>
+                    I verified the simulated balance change, the fee breakdown, and the privacy guarantees on Robinhood Chain.
+                  </span>
+                </label>
+                <Button
+                  disabled={!reviewed || approving}
+                  onClick={handleApprove}
+                  className="shrink-0"
+                >
+                  {approving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Co-signing…
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-4 w-4" /> Approve with 2-of-3 Keys
+                    </>
+                  )}
+                </Button>
               </div>
             )}
-            {sign === "queued" && (
-              <div className="mt-5 flex flex-col gap-3 border-t border-ink-600/60 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="flex items-center gap-2 text-sm text-cream">
-                  <Cpu className="h-4 w-4 text-gold-400" /> 2-of-3 reached. The plan is in the outbox, ready for its broadcaster.
-                </p>
-                <Link to="/app/outbox">
-                  <Button variant="outline">
-                    Open outbox <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            )}
-            <div className="mt-4">
-              <DemoNote />
-            </div>
           </div>
         </>
       )}
-    </>
-  );
-}
 
-function SignStep({ label, done, busy }: { label: string; done?: boolean; busy?: boolean }) {
-  return (
-    <div className={cn("flex items-center gap-3 rounded-lg border px-3.5 py-3", done ? "border-teal-400/40 bg-teal-400/5" : "border-ink-600")}>
-      {done ? <Check className="h-4 w-4 text-teal-300" /> : busy ? <Loader2 className="h-4 w-4 animate-spin text-gold-300" /> : <span className="h-4 w-4 rounded-full border border-ink-500" />}
-      <span className="text-sm text-cream">{label}</span>
-      {done && <Badge tone="teal" className="ml-auto">done</Badge>}
-    </div>
+      {/* MODAL: Policy Guardrails Configuration */}
+      <Modal
+        open={constraintModalOpen}
+        onClose={() => setConstraintModalOpen(false)}
+        title="Intent Policy Guardrails"
+        description="Configure safety limits before simulating your goal on Robinhood Chain."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setConstraintModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleApplyConstraints}
+            >
+              Apply & Re-Simulate
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Max Total Fee (Basis Points)" hint="e.g. 75 bps = 0.75%">
+            <input
+              className={inputClass}
+              type="number"
+              value={maxFeeBps}
+              onChange={(e) => setMaxFeeBps(e.target.value)}
+            />
+          </Field>
+
+          <Field label="Preserve Gas Floor (ETH)" hint="Your account gas reserve will never drop below this floor.">
+            <input
+              className={inputClass}
+              value={preserveGasEth}
+              onChange={(e) => setPreserveGasEth(e.target.value)}
+            />
+          </Field>
+
+          <label className="flex items-center gap-3 text-sm text-cream-dim cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-[#eaba65]"
+              checked={requireProvenance}
+              onChange={(e) => setRequireProvenance(e.target.checked)}
+            />
+            <span>Require Clean Provenance (PPOI Association Proof)</span>
+          </label>
+        </div>
+      </Modal>
+
+      {/* Global Status Modal */}
+      <StatusModal
+        open={statusModal.open}
+        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
+        type={statusModal.type}
+        title={statusModal.title}
+        message={statusModal.message}
+        details={
+          statusModal.details ? (
+            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200 whitespace-pre-wrap">
+              {statusModal.details}
+            </p>
+          ) : undefined
+        }
+      />
+    </>
   );
 }

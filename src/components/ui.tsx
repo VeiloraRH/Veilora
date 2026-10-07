@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { CheckCircle2, AlertCircle, X, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tone, Visibility } from "@/demo/data";
 
@@ -39,7 +40,7 @@ export function VisibilityBadge({ v }: { v: Visibility }) {
   return <Badge tone={VIS[v].tone}>{VIS[v].label}</Badge>;
 }
 
-export function Dot({ tone = "mist", pulse }: { tone?: Tone; pulse?: boolean }) {
+export function Dot({ tone = "mist" }: { tone?: Tone }) {
   const c: Record<Tone, string> = {
     gold: "bg-gold-400",
     teal: "bg-teal-400",
@@ -48,7 +49,7 @@ export function Dot({ tone = "mist", pulse }: { tone?: Tone; pulse?: boolean }) 
     mist: "bg-mist",
     cream: "bg-cream",
   };
-  return <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", c[tone], pulse && "animate-pulse")} />;
+  return <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", c[tone])} />;
 }
 
 export function Card({
@@ -179,3 +180,138 @@ export function DemoNote({ children }: { children?: ReactNode }) {
     </p>
   );
 }
+
+export interface ModalProps {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  actions?: ReactNode;
+  maxWidth?: "sm" | "md" | "lg" | "xl";
+}
+
+export function Modal({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  actions,
+  maxWidth = "md",
+}: ModalProps) {
+  if (!open) return null;
+
+  const maxWidthClass = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-lg",
+    xl: "max-w-xl",
+  }[maxWidth];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-ink-950/80 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Modal Dialog */}
+      <div
+        className={cn(
+          "panel relative z-10 w-full overflow-hidden border border-ink-600/80 bg-ink-900 shadow-2xl transition-all",
+          maxWidthClass
+        )}
+      >
+        <div className="flex items-start justify-between border-b border-ink-600/60 px-6 py-4">
+          <div>
+            <h3 className="font-display text-lg font-semibold text-cream">{title}</h3>
+            {description && <p className="mt-1 text-xs text-mist">{description}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-mist hover:bg-ink-700 hover:text-cream transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6">{children}</div>
+
+        {actions && (
+          <div className="flex items-center justify-end gap-3 border-t border-ink-600/60 bg-ink-950/40 px-6 py-3.5">
+            {actions}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export interface StatusModalProps {
+  open: boolean;
+  onClose: () => void;
+  type: "success" | "error" | "info";
+  title: string;
+  message: string;
+  details?: ReactNode;
+  actionText?: string;
+  onAction?: () => void;
+}
+
+export function StatusModal({
+  open,
+  onClose,
+  type,
+  title,
+  message,
+  details,
+  actionText = "Close",
+  onAction,
+}: StatusModalProps) {
+  if (!open) return null;
+
+  const iconConfig = {
+    success: { icon: CheckCircle2, color: "text-teal-300", bg: "bg-teal-400/10 border-teal-400/30" },
+    error: { icon: AlertCircle, color: "text-coral-400", bg: "bg-coral-500/10 border-coral-500/30" },
+    info: { icon: Info, color: "text-gold-300", bg: "bg-gold-400/10 border-gold-400/30" },
+  }[type];
+
+  const Icon = iconConfig.icon;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title=""
+      maxWidth="sm"
+      actions={
+        <Button
+          variant={type === "error" ? "outline" : "primary"}
+          onClick={() => {
+            if (onAction) onAction();
+            onClose();
+          }}
+        >
+          {actionText}
+        </Button>
+      }
+    >
+      <div className="text-center">
+        <div
+          className={cn(
+            "mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full border",
+            iconConfig.bg
+          )}
+        >
+          <Icon className={cn("h-6 w-6", iconConfig.color)} />
+        </div>
+        <h4 className="font-display text-xl font-semibold text-cream">{title}</h4>
+        <p className="mt-2 text-sm leading-relaxed text-cream-dim">{message}</p>
+        {details && <div className="mt-4 text-left">{details}</div>}
+      </div>
+    </Modal>
+  );
+}
+
