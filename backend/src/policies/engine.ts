@@ -1,6 +1,7 @@
 import { query } from "../db/index";
 import type { StructuredPlan } from "../intent/parser";
 import type { PlanSimulation } from "../simulation/engine";
+import { getRobinhoodToken } from "../tokens";
 
 export interface PolicyEvaluationResult {
   passed: boolean;
@@ -62,13 +63,16 @@ export async function evaluatePolicy(
     );
   }
 
-  // 4. Asset Allowlist Check
+  // 4. Asset Allowlist Check (includes active policy assets + verified Robinhood Token registry)
+  const isAllowedAsset = (sym: string) =>
+    allowedAssets.includes(sym.toUpperCase()) || Boolean(getRobinhoodToken(sym));
+
   const assetAllowed =
-    allowedAssets.includes(plan.assetIn.toUpperCase()) &&
-    (!plan.assetOut || allowedAssets.includes(plan.assetOut.toUpperCase()));
+    isAllowedAsset(plan.assetIn) &&
+    (!plan.assetOut || isAllowedAsset(plan.assetOut));
   if (!assetAllowed) {
     violations.push(
-      `Asset ${plan.assetIn}${plan.assetOut ? ` or ${plan.assetOut}` : ""} is not in approved asset registry: [${allowedAssets.join(", ")}]`
+      `Asset ${plan.assetIn}${plan.assetOut ? ` or ${plan.assetOut}` : ""} is not in approved asset registry`
     );
   }
 

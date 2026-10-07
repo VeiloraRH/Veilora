@@ -52,10 +52,11 @@ intentRouter.post("/simulate", async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const currentPublicUSDG = Number(req.body.currentPublicUSDG) || 2500;
-    const currentGasEth = Number(req.body.currentGasEth) || 0.15;
+    const currentPublicUSDG = req.body.currentPublicUSDG !== undefined ? Number(req.body.currentPublicUSDG) : undefined;
+    const currentGasEth = req.body.currentGasEth !== undefined ? Number(req.body.currentGasEth) : undefined;
+    const walletAddress = req.body.walletAddress || plan.constraints?.destinationAddress;
 
-    const simulation = await simulatePlan(plan, currentPublicUSDG, currentGasEth);
+    const simulation = await simulatePlan(plan, currentPublicUSDG, currentGasEth, walletAddress);
 
     // Save simulation in database if plan exists
     if (plan.id) {

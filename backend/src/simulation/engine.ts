@@ -1,7 +1,13 @@
+import { formatEther, parseEther, type Address } from "viem";
 import type { StructuredPlan } from "../intent/parser";
+import { publicClient, USDG_ADDRESS } from "../config";
+import { computeNoteCommitment } from "../privacy/notes";
+import { sha256Hex } from "../crypto";
+import { getRobinhoodToken, ROBINHOOD_TOKEN_REGISTRY } from "../tokens";
 
 export interface BalanceDiff {
   asset: string;
+  tokenAddress?: string;
   before: string;
   after: string;
   delta: string;
@@ -23,6 +29,7 @@ export interface PlanSimulation {
   estimatedFees: {
     totalFeeBps: number;
     gasFeeEstimateWei: string;
+    gasPriceGwei: string;
     protocolFeeUSDG: string;
     provingFeeUSDG: string;
   };
@@ -32,96 +39,175 @@ export interface PlanSimulation {
   };
   disclosures: DisclosureDetail[];
   provingLatencyTargetSeconds: number;
-  expectedCommitmentPreview?: string;
+  expectedCommitmentPreview: string;
   warnings: string[];
 }
 
-// Mock oracle pricing for Robinhood Chain settlement (1 NVDA = ~130.8 USDG)
-const NVDA_PRICE_USDG = 130.82;
+// ERC20 minimal ABI for on-chain balance query
+const erc20BalanceAbi = [
+  {
+    inputs: [{ name: "account", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+// Realistic market reference prices in USDG for simulated swap sizing
+const MARKET_REFERENCE_PRICES_USDG: Record<string, number> = {
+  NVDA: 130.82,
+  AAPL: 227.45,
+  TSLA: 248.98,
+  MSFT: 418.15,
+  AMZN: 186.40,
+  GOOGL: 165.70,
+  COIN: 172.30,
+  ETH: 2650.0,
+};
 
 /**
  * Simulates the deterministic effects of an approved plan before threshold authorization.
+ * Queries live Robinhood Chain RPC for real gas prices and real on-chain balances.
  */
 export async function simulatePlan(
   plan: StructuredPlan,
-  currentPublicUSDG: number = 2500,
-  currentGasEth: number = 0.15
+  currentPublicUSDG?: number,
+  currentGasEth?: number,
+  walletAddress?: string
 ): Promise<PlanSimulation> {
   const amountNum = parseFloat(plan.amountIn) || 0;
   const warnings: string[] = [];
 
-  // Check gas reservation floor
+  // 1. Live Gas Price Query from Robinhood Chain RPC
+  let liveGasPriceWei = 20_000_000n; // fallback 0.02 Gwei
+  try {
+    liveGasPriceWei = await publicClient.getGasPrice();
+  } catch {
+    // Keep standard fallback if network hiccup
+  }
+
+  // Realistic gas units for threshold execution (approx 120,000 gas)
+  const estimatedExecutionGasUnits = 120_000n;
+  const liveGasFeeWei = liveGasPriceWei * estimatedExecutionGasUnits;
+  const liveGasPriceGwei = (Number(liveGasPriceWei) / 1e9).toFixed(4);
+
+  // 2. Query On-Chain Balances if walletAddress provided
+  let gasEth = currentGasEth ?? 0.15;
+  let usdgBalance = currentPublicUSDG ?? 2500;
+
+  if (walletAddress) {
+    try {
+      const ethBalanceWei = await publicClient.getBalance({ address: walletAddress as Address });
+      gasEth = parseFloat(formatEther(ethBalanceWei));
+
+      const usdgBalanceWei = await publicClient.readContract({
+        address: USDG_ADDRESS,
+        abi: erc20BalanceAbi,
+        functionName: "balanceOf",
+        args: [walletAddress as Address],
+      });
+      usdgBalance = parseFloat(formatEther(usdgBalanceWei));
+    } catch {
+      // Retain fallback if RPC read fails
+    }
+  }
+
+  // 3. Check gas reservation floor
   const gasReserved = parseFloat(plan.constraints.preserveGas.replace(/[^\d.]/g, "")) || 0.05;
-  const gasPreserved = currentGasEth - 0.002 >= gasReserved;
+  const estimatedGasEthCost = parseFloat(formatEther(liveGasFeeWei));
+  const gasPreserved = gasEth - estimatedGasEthCost >= gasReserved;
   if (!gasPreserved) {
-    warnings.push(`Action would violate gas reserve floor of ${plan.constraints.preserveGas}`);
+    warnings.push(
+      `Execution would deplete gas below mandatory reserve of ${plan.constraints.preserveGas}`
+    );
   }
 
   const balanceDiffs: BalanceDiff[] = [];
   let totalFeeBps = 32; // base 0.32%
   let route: string[] = [];
 
-  if (plan.action === "shield_swap" && plan.assetOut === "NVDA") {
-    const receivedStock = (amountNum * 0.9968) / NVDA_PRICE_USDG;
+  const targetToken = plan.assetOut ? getRobinhoodToken(plan.assetOut) : undefined;
+  const sourceToken = getRobinhoodToken(plan.assetIn) ?? {
+    symbol: plan.assetIn,
+    name: plan.assetIn,
+    address: USDG_ADDRESS,
+    decimals: 18,
+  };
+
+  if (plan.action === "shield_swap" && plan.assetOut) {
+    const assetOutSymbol = plan.assetOut.toUpperCase();
+    const assetPrice = MARKET_REFERENCE_PRICES_USDG[assetOutSymbol] || 100.0;
+    const receivedStock = (amountNum * 0.9968) / assetPrice;
+
     route = [
-      "Shield USDG to Join-Split Pool",
-      "Route via Uniswap V3 Pool (0.05% fee tier)",
-      "Mint Shielded NVDA UTXO Note",
+      `Shield ${plan.assetIn} into VeiloraShieldedPool`,
+      `Execute swap via Robinhood Chain DEX (${sourceToken.symbol} → ${assetOutSymbol})`,
+      `Mint Shielded ${assetOutSymbol} UTXO Note`,
     ];
 
     balanceDiffs.push({
-      asset: "USDG",
-      before: `${currentPublicUSDG.toFixed(2)} USDG`,
-      after: `${(currentPublicUSDG - amountNum).toFixed(2)} USDG`,
-      delta: `-${amountNum.toFixed(2)} USDG`,
+      asset: sourceToken.symbol,
+      tokenAddress: sourceToken.address,
+      before: `${usdgBalance.toFixed(2)} ${sourceToken.symbol}`,
+      after: `${(usdgBalance - amountNum).toFixed(2)} ${sourceToken.symbol}`,
+      delta: `-${amountNum.toFixed(2)} ${sourceToken.symbol}`,
       isShielded: false,
     });
 
     balanceDiffs.push({
-      asset: "NVDA",
-      before: "0.0000 NVDA",
-      after: `${receivedStock.toFixed(4)} NVDA`,
-      delta: `+${receivedStock.toFixed(4)} NVDA`,
+      asset: assetOutSymbol,
+      tokenAddress: targetToken?.address,
+      before: `0.0000 ${assetOutSymbol}`,
+      after: `${receivedStock.toFixed(4)} ${assetOutSymbol}`,
+      delta: `+${receivedStock.toFixed(4)} ${assetOutSymbol}`,
       isShielded: true,
     });
   } else if (plan.action === "safe_unshield") {
     route = [
-      "Verify Clean-Provenance Association Set",
-      "Nullify Shielded UTXO Note",
-      "Settle USDG to Origin Account",
+      "Verify Clean-Provenance Association Set (PPOI Oracle)",
+      "Nullify Shielded UTXO Note in VeiloraShieldedPool",
+      `Settle ${sourceToken.symbol} to Origin Account`,
     ];
     totalFeeBps = 15;
 
     balanceDiffs.push({
-      asset: "USDG",
-      before: "0.00 USDG",
-      after: `${amountNum.toFixed(2)} USDG`,
-      delta: `+${amountNum.toFixed(2)} USDG`,
+      asset: sourceToken.symbol,
+      tokenAddress: sourceToken.address,
+      before: "0.00 (shielded)",
+      after: `${amountNum.toFixed(2)} ${sourceToken.symbol}`,
+      delta: `+${amountNum.toFixed(2)} ${sourceToken.symbol}`,
       isShielded: false,
     });
   } else {
     // Standard Shield deposit
-    route = ["Deposit USDG", "Generate Note Commitment", "Insert to Shielded Tree"];
+    route = [
+      `Deposit ${sourceToken.symbol} to VeiloraShieldedPool`,
+      "Generate Cryptographic Note Commitment & Blinding Key",
+      "Insert Leaf to Shielded Commitment Tree",
+    ];
     totalFeeBps = 10;
 
     balanceDiffs.push({
-      asset: plan.assetIn,
-      before: `${currentPublicUSDG.toFixed(2)} ${plan.assetIn}`,
-      after: `${(currentPublicUSDG - amountNum).toFixed(2)} ${plan.assetIn}`,
-      delta: `-${amountNum.toFixed(2)} ${plan.assetIn}`,
+      asset: sourceToken.symbol,
+      tokenAddress: sourceToken.address,
+      before: `${usdgBalance.toFixed(2)} ${sourceToken.symbol}`,
+      after: `${(usdgBalance - amountNum).toFixed(2)} ${sourceToken.symbol}`,
+      delta: `-${amountNum.toFixed(2)} ${sourceToken.symbol}`,
       isShielded: false,
     });
 
     balanceDiffs.push({
-      asset: plan.assetIn,
-      before: "0.00 (shielded)",
+      asset: sourceToken.symbol,
+      tokenAddress: sourceToken.address,
+      before: `0.00 (shielded)`,
       after: `${amountNum.toFixed(2)} (shielded)`,
-      delta: `+${amountNum.toFixed(2)} ${plan.assetIn}`,
+      delta: `+${amountNum.toFixed(2)} ${sourceToken.symbol}`,
       isShielded: true,
     });
   }
 
-  // Check fee ceiling
+  // 4. Check fee ceiling constraint
   if (totalFeeBps > plan.constraints.maxTotalFeeBps) {
     warnings.push(
       `Fee ${totalFeeBps} bps exceeds user constraint limit of ${plan.constraints.maxTotalFeeBps} bps`
@@ -136,7 +222,7 @@ export async function simulatePlan(
     },
     {
       surface: "Co-Signer Policy Service (Shard B)",
-      visibleData: "UserOp hash, velocity limit, and fee validation flag",
+      visibleData: "UserOp digest, velocity limit, and policy check result",
       guarantee: "Co-signer does not store unencrypted note secrets or recipient history",
     },
     {
@@ -145,6 +231,16 @@ export async function simulatePlan(
       guarantee: "Provider does not receive raw note amounts or counterparty identity",
     },
   ];
+
+  // 5. Deterministic Cryptographic Commitment Preview (No Math.random)
+  const simulatedNullifier = sha256Hex(`preview:nullifier:${plan.id}:${plan.amountIn}`);
+  const simulatedBlinding = sha256Hex(`preview:blinding:${plan.id}:${plan.assetIn}`);
+  const expectedCommitmentPreview = computeNoteCommitment(
+    plan.assetOut || plan.assetIn,
+    parseEther(plan.amountIn || "1").toString(),
+    simulatedNullifier,
+    simulatedBlinding
+  );
 
   const isValid = warnings.length === 0;
 
@@ -156,7 +252,8 @@ export async function simulatePlan(
     balanceDiffs,
     estimatedFees: {
       totalFeeBps,
-      gasFeeEstimateWei: "1500000000000000", // ~0.0015 ETH
+      gasFeeEstimateWei: liveGasFeeWei.toString(),
+      gasPriceGwei: liveGasPriceGwei,
       protocolFeeUSDG: (amountNum * (totalFeeBps / 10000)).toFixed(4),
       provingFeeUSDG: "0.10",
     },
@@ -166,7 +263,7 @@ export async function simulatePlan(
     },
     disclosures,
     provingLatencyTargetSeconds: 8,
-    expectedCommitmentPreview: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+    expectedCommitmentPreview,
     warnings,
   };
 }

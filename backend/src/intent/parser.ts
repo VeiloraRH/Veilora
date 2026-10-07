@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { ROBINHOOD_TOKEN_REGISTRY } from "../tokens";
 
 export interface IntentConstraints {
   maxTotalFeeBps: number;
@@ -65,14 +66,16 @@ export function parseIntent(
     assetIn = amountMatch[2].toUpperCase();
   }
 
-  // Detect target asset for swaps
+  // Detect target asset for swaps against 45 verified Robinhood tokens
   if (action === "shield_swap") {
-    if (lower.includes("nvda")) {
-      assetOut = "NVDA";
-    } else if (lower.includes("eth")) {
+    for (const symbol of Object.keys(ROBINHOOD_TOKEN_REGISTRY)) {
+      if (symbol !== "USDG" && new RegExp(`\\b${symbol}\\b`, "i").test(text)) {
+        assetOut = symbol;
+        break;
+      }
+    }
+    if (!assetOut && lower.includes("eth")) {
       assetOut = "ETH";
-    } else if (lower.includes("usdg")) {
-      assetOut = "USDG";
     }
   }
 
