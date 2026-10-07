@@ -33,18 +33,34 @@ app.use((request, response, next) => {
 });
 
 app.use((request, response, next) => {
-  const allowedOrigin = process.env.FRONTEND_URL;
-  if (allowedOrigin && request.headers.origin === allowedOrigin) {
-    response.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  const origin = request.headers.origin;
+  const configuredOrigin = process.env.FRONTEND_URL?.replace(/\/$/, "");
+  const trustedOrigins = new Set(
+    [
+      configuredOrigin,
+      "https://veilorarh.com",
+      "https://www.veilorarh.com",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ].filter(Boolean)
+  );
+
+  if (origin && trustedOrigins.has(origin.replace(/\/$/, ""))) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
-  } else if (!allowedOrigin) {
+  } else if (origin) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Vary", "Origin");
+  } else {
     response.setHeader("Access-Control-Allow-Origin", "*");
   }
+
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-request-id");
+  response.setHeader("Access-Control-Allow-Credentials", "true");
 
   if (request.method === "OPTIONS") {
-    response.sendStatus(204);
+    response.status(204).end();
     return;
   }
   next();

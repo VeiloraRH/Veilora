@@ -1,5 +1,5 @@
 export const API_BASE =
-  ((import.meta as any).env?.VITE_API_URL as string) || "https://api.veilorarh.com";
+  ((import.meta as any).env?.VITE_API_URL as string) || "/api";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;

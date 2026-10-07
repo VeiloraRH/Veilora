@@ -2,8 +2,13 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://api.veilorarh.com/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
+
