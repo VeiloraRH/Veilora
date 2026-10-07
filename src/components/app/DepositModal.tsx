@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Copy, Check, X } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Copy, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface DepositModalProps {
   open: boolean;
@@ -28,8 +34,6 @@ export function DepositModal({ open, onClose, accountAddress }: DepositModalProp
     }
   }, [accountAddress]);
 
-  if (!open) return null;
-
   const copyAddress = () => {
     navigator.clipboard.writeText(accountAddress);
     setCopied(true);
@@ -37,87 +41,57 @@ export function DepositModal({ open, onClose, accountAddress }: DepositModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-slate-900/60 dark:bg-ink-950/80 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal Dialog matching deposit-inspo.png */}
-      <div className="panel relative z-10 w-full max-w-sm overflow-hidden border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-2xl p-6 rounded-3xl text-center space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="w-7" />
-          <h2 className="text-base font-semibold text-slate-900 dark:text-cream">
+    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+      <DialogContent className="sm:max-w-sm bg-card border-border text-foreground p-6 rounded-3xl text-center space-y-4">
+        <DialogHeader className="text-center">
+          <DialogTitle className="text-base font-semibold text-center text-foreground">
             Deposit USDG
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-ink-800 text-slate-400 hover:text-slate-700 dark:text-mist dark:hover:text-cream transition-colors"
-            aria-label="Close deposit"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+          </DialogTitle>
+        </DialogHeader>
 
         {/* Network Pill */}
-        <div className="flex justify-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-850 px-3 py-1 text-xs font-medium text-slate-700 dark:text-cream shadow-xs">
-            <span className="h-2 w-2 rounded-full bg-[#eaba65]" />
-            <span>Robinhood Chain</span>
-          </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-amber-700 dark:text-gold-300 mx-auto">
+          <span className="h-2 w-2 rounded-full bg-[#eaba65]" />
+          <span>Robinhood Chain</span>
         </div>
 
-        {/* Centered QR Container */}
-        <div className="flex justify-center py-1">
-          <div className="rounded-3xl border border-slate-100 dark:border-ink-700/60 bg-white p-4 shadow-sm">
-            {qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt={`QR code for ${accountAddress}`}
-                className="h-48 w-48 rounded-xl block"
-              />
-            ) : (
-              <div className="h-48 w-48 flex items-center justify-center text-xs text-slate-500 font-mono">
-                Generating QR…
-              </div>
-            )}
-          </div>
+        {/* QR Code */}
+        <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-2xl bg-white p-3 border border-slate-200 shadow-sm">
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="Deposit QR Code" className="h-full w-full object-contain" />
+          ) : (
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#eaba65] border-t-transparent" />
+          )}
         </div>
 
-        {/* Single Instruction line */}
-        <div className="space-y-1">
-          <p className="text-xs text-slate-500 dark:text-mist">
-            Only deposit USDG or ETH via the Robinhood Chain network
-          </p>
-          <p className="font-mono text-[11px] text-slate-400 dark:text-mist truncate px-2">
-            {accountAddress}
-          </p>
+        {/* Short Instruction */}
+        <p className="text-xs text-muted-foreground">
+          Send USDG or ETH to your Robinhood Chain smart account address
+        </p>
+
+        {/* Address Pill */}
+        <div className="rounded-xl bg-muted/60 px-3 py-2 text-xs font-mono text-muted-foreground break-all select-all border border-border">
+          {accountAddress}
         </div>
 
         {/* Action Button */}
-        <div>
-          <Button
-            type="button"
-            onClick={copyAddress}
-            className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-cream dark:text-slate-950 dark:hover:bg-cream/90 text-white font-medium text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-400" />
-                <span>Address Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4" />
-                <span>Copy address</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </div>
+        <Button
+          onClick={copyAddress}
+          className="w-full h-11 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2 shadow-sm"
+        >
+          {copied ? (
+            <>
+              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Copied address</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-4 w-4" />
+              <span>Copy address</span>
+            </>
+          )}
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }

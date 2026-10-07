@@ -13,7 +13,6 @@ import { VaultCards } from "@/components/dashboard/VaultCards";
 import { HoldingsList } from "@/components/dashboard/HoldingsList";
 import { ActivityQueue } from "@/components/dashboard/ActivityQueue";
 import { NetworkStats } from "@/components/dashboard/NetworkStats";
-import { OnboardingScreen } from "@/components/dashboard/OnboardingScreen";
 
 // Interaction Modals (Zero inline forms)
 import { DepositModal } from "@/components/app/DepositModal";
@@ -147,7 +146,11 @@ export function CommandCenter() {
   };
 
   if (!wallet?.address) {
-    return <OnboardingScreen />;
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#eaba65] border-t-transparent" />
+      </div>
+    );
   }
 
   return (

@@ -1,6 +1,13 @@
 import { useState } from "react";
-import { EyeOff, X, Lock } from "lucide-react";
-import { Button, inputClass } from "@/components/ui";
+import { EyeOff, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createShieldedNote } from "@/lib/api";
 
 interface ShieldModalProps {
@@ -14,8 +21,6 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (!open) return null;
-
   const parsedAmount = parseFloat(amount) || 0;
 
   const handleShield = async (e: React.FormEvent) => {
@@ -26,11 +31,9 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
     }
     setLoading(true);
     try {
-      // 1 USDG = 1e18 wei
       const amountWei = (BigInt(Math.round(parsedAmount * 100)) * BigInt(10 ** 16)).toString();
       const res = await createShieldedNote("USDG", amountWei);
 
-      // Save note to local browser notes vault
       const stored = localStorage.getItem("veilora:notes");
       const notes = stored ? JSON.parse(stored) : [];
       notes.push({
@@ -47,7 +50,6 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
       onClose();
       onSuccess(parsedAmount);
     } catch {
-      // Fallback local simulation if network unavailable
       const stored = localStorage.getItem("veilora:notes");
       const notes = stored ? JSON.parse(stored) : [];
       notes.push({
@@ -69,78 +71,86 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-slate-900/60 dark:bg-ink-950/80 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal Dialog */}
-      <div className="panel relative z-10 w-full max-w-md overflow-hidden bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-2xl p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-ink-800">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400/10 text-teal-400 border border-teal-400/20">
-              <EyeOff className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-cream">Shield USDG</h2>
-              <p className="text-xs text-slate-500 dark:text-mist">Move funds into Veilora zero-knowledge pool</p>
-            </div>
+    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+      <DialogContent className="sm:max-w-md bg-card border-border text-foreground p-6 rounded-3xl">
+        <DialogHeader className="flex flex-row items-center gap-3 pb-3 border-b border-border text-left">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
+            <EyeOff className="h-5 w-5" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:text-mist dark:hover:text-cream transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleShield} className="py-5 space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-medium text-slate-700 dark:text-cream">Amount to Shield</label>
+            <DialogTitle className="text-base font-semibold text-foreground">
+              Shield USDG
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Deposit public USDG into the Veilora zero-knowledge privacy pool
+            </DialogDescription>
+          </div>
+        </DialogHeader>
+
+        <form onSubmit={handleShield} className="space-y-4 pt-2">
+          <div className="rounded-2xl bg-muted/40 p-4 border border-border/50 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Amount to shield</span>
+              <span>Available: {publicUsdg.toLocaleString()} USDG</span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full text-3xl font-bold bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+                autoFocus
+              />
+              <div className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 border border-border shadow-sm shrink-0">
+                <span className="text-xs font-semibold text-foreground">USDG</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
               <button
                 type="button"
-                onClick={() => setAmount(publicUsdg.toString())}
-                className="text-[11px] font-medium text-[#eaba65] hover:underline"
+                onClick={() => setAmount(String(publicUsdg))}
+                className="text-xs font-bold text-primary hover:underline"
               >
-                Max ({publicUsdg.toFixed(2)} USDG)
+                Max ({publicUsdg.toLocaleString()} USDG)
               </button>
             </div>
-            <input
-              type="number"
-              step="any"
-              className={inputClass}
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              required
-            />
           </div>
 
-          <div className="rounded-xl border border-teal-400/20 bg-teal-400/5 p-3.5 space-y-1.5 text-xs text-teal-600 dark:text-teal-300">
-            <div className="flex items-center gap-1.5 font-medium">
-              <Lock className="h-4 w-4" />
-              <span>Cryptographic Privacy Guarantee</span>
+          <div className="rounded-xl bg-muted/30 p-3 space-y-1.5 text-xs text-muted-foreground border border-border/40">
+            <div className="flex justify-between">
+              <span>Privacy Method</span>
+              <span className="text-foreground font-medium">Poseidon Note Commitment</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-slate-600 dark:text-cream-dim">
-              Shielded balances are converted into SHA-256 note commitments stored in the on-chain Merkle tree. Balances and future transfers inside the pool are completely hidden.
-            </p>
+            <div className="flex justify-between">
+              <span>Relayer Gas</span>
+              <span className="text-emerald-500 font-medium">Sponsored by Veilora</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Network</span>
+              <span className="text-foreground font-medium">Robinhood Chain</span>
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-ink-800">
-            <Button type="button" variant="outline" onClick={onClose} className="text-xs">
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading || parsedAmount <= 0}
-              className="bg-teal-500 hover:bg-teal-600 text-white border-transparent text-xs"
-            >
-              {loading ? "Shielding…" : "Deposit to Privacy Pool"}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            disabled={loading || parsedAmount <= 0 || parsedAmount > publicUsdg}
+            className="w-full h-11 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Generating Commitment Note...</span>
+              </>
+            ) : (
+              <span>Shield Funds Now</span>
+            )}
+          </Button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

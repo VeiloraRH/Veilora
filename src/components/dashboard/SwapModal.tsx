@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { ArrowDownUp, ChevronDown, X } from "lucide-react";
-import { Button } from "@/components/ui";
+import { ArrowDownUp, ChevronDown, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface SwapModalProps {
   open: boolean;
@@ -22,8 +28,6 @@ export function SwapModal({ open, onClose, publicUsdg, onSuccess }: SwapModalPro
   const [targetEquity, setTargetEquity] = useState(EQUITIES[0]);
   const [usdgAmount, setUsdgAmount] = useState("");
   const [loading, setLoading] = useState(false);
-
-  if (!open) return null;
 
   const parsedUsdg = parseFloat(usdgAmount) || 0;
   const estimatedShares = parsedUsdg > 0 ? (parsedUsdg / targetEquity.price).toFixed(4) : "0";
@@ -48,169 +52,132 @@ export function SwapModal({ open, onClose, publicUsdg, onSuccess }: SwapModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-slate-900/60 dark:bg-ink-950/80 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal Dialog matching swap-inspo.webp */}
-      <div className="panel relative z-10 w-full max-w-md overflow-hidden bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-2xl rounded-3xl p-6 space-y-4">
+    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+      <DialogContent className="sm:max-w-md bg-card border-border text-foreground p-6 rounded-3xl space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-ink-800">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-cream">
-              Swap
-            </h2>
-            <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-600 dark:text-teal-400">
-              Robinhood AMM
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-ink-800 text-slate-400 hover:text-slate-700 dark:text-mist dark:hover:text-cream transition-colors"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <DialogHeader className="pb-2 border-b border-border text-left">
+          <DialogTitle className="text-base font-semibold text-foreground">
+            Swap Assets
+          </DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Card 1: SELL (USDG) */}
-          <div className="rounded-2xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-4 space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-mist">
-              <span className="font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
-                SELL
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span>Bal: {publicUsdg.toFixed(2)} USDG</span>
-                <button
-                  type="button"
-                  onClick={() => setUsdgAmount(publicUsdg.toString())}
-                  className="rounded bg-[#eaba65]/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-gold-300 hover:bg-[#eaba65]/30 transition-colors"
-                >
-                  MAX
-                </button>
-              </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 1. SELL CARD (USDG) */}
+          <div className="rounded-2xl bg-muted/40 p-4 border border-border/50 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>You pay</span>
+              <span>Available: {publicUsdg.toLocaleString()} USDG</span>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-1">
-              {/* Asset Badge */}
-              <div className="flex items-center gap-2 rounded-xl bg-white dark:bg-ink-800 border border-slate-200 dark:border-ink-700 px-3 py-1.5 shadow-xs">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-500/15 text-teal-600 font-bold text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={usdgAmount}
+                onChange={(e) => setUsdgAmount(e.target.value)}
+                className="w-full text-2xl font-bold bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+
+              <div className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 border border-border shadow-sm shrink-0">
+                <div className="h-5 w-5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold flex items-center justify-center text-xs">
                   $
-                </span>
-                <span className="text-sm font-semibold text-slate-900 dark:text-cream">
-                  USDG
-                </span>
+                </div>
+                <span className="text-xs font-semibold text-foreground">USDG</span>
               </div>
+            </div>
 
-              {/* Big Input Amount */}
-              <div className="text-right flex-1">
-                <input
-                  type="number"
-                  step="any"
-                  autoFocus
-                  placeholder="0"
-                  value={usdgAmount}
-                  onChange={(e) => setUsdgAmount(e.target.value)}
-                  className="w-full text-right text-2xl font-bold text-slate-900 dark:text-cream bg-transparent focus:outline-none"
-                  required
-                />
-                <p className="text-[11px] text-slate-400 dark:text-mist">
-                  ~${parsedUsdg > 0 ? parsedUsdg.toFixed(2) : "0.00"}
-                </p>
-              </div>
+            {/* Quick Percentage Pills */}
+            <div className="flex items-center gap-1.5 pt-1">
+              {[0.25, 0.5, 0.75, 1].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => handleApplyPercent(pct)}
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-full bg-card hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors"
+                >
+                  {pct === 1 ? "Max" : `${pct * 100}%`}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Floating Swap Direction Button */}
-          <div className="relative flex justify-center -my-3 z-10">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-850 text-slate-600 dark:text-cream shadow-sm">
-              <ArrowDownUp className="h-4 w-4" />
-            </div>
+          {/* Floating Swap Divider */}
+          <div className="flex justify-center -my-2 relative z-10">
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-card border border-border shadow-md text-muted-foreground hover:text-foreground hover:scale-105 transition-all"
+            >
+              <ArrowDownUp className="h-3.5 w-3.5" />
+            </button>
           </div>
 
-          {/* Card 2: BUY (Target Equity) */}
-          <div className="rounded-2xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/60 p-4 space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-mist">
-              <span className="font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
-                BUY
-              </span>
+          {/* 2. BUY CARD (Equities / Tokens) */}
+          <div className="rounded-2xl bg-muted/40 p-4 border border-border/50 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>You receive (est.)</span>
               <span>1 {targetEquity.symbol} ≈ ${targetEquity.price.toFixed(2)}</span>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-1">
-              {/* Asset Dropdown Selector */}
-              <div className="relative">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-2xl font-bold text-foreground">
+                {estimatedShares}
+              </div>
+
+              {/* Token / Equity Selector */}
+              <div className="relative shrink-0">
                 <select
                   value={targetEquity.symbol}
                   onChange={(e) => {
-                    const found = EQUITIES.find((eq) => eq.symbol === e.target.value);
+                    const found = EQUITIES.find((item) => item.symbol === e.target.value);
                     if (found) setTargetEquity(found);
                   }}
-                  className="appearance-none flex items-center gap-2 rounded-xl bg-white dark:bg-ink-800 border border-slate-200 dark:border-ink-700 pl-3 pr-8 py-1.5 text-sm font-semibold text-slate-900 dark:text-cream shadow-xs cursor-pointer focus:outline-none"
+                  className="appearance-none flex items-center gap-2 rounded-full bg-card pl-3 pr-8 py-1.5 border border-border shadow-sm text-xs font-semibold text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   {EQUITIES.map((eq) => (
-                    <option key={eq.symbol} value={eq.symbol} className="bg-white dark:bg-ink-900">
+                    <option key={eq.symbol} value={eq.symbol}>
                       {eq.symbol} · {eq.name}
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              </div>
-
-              {/* Big Calculated Output */}
-              <div className="text-right flex-1">
-                <p className="text-2xl font-bold text-slate-900 dark:text-cream truncate">
-                  {estimatedShares}
-                </p>
-                <p className="text-[11px] text-slate-400 dark:text-mist">
-                  ~${parsedUsdg > 0 ? parsedUsdg.toFixed(2) : "0.00"}
-                </p>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
               </div>
             </div>
           </div>
 
-          {/* Quick Percentage Pills (25%, 50%, 75%, Max) like Solflare & inspo */}
-          <div className="grid grid-cols-4 gap-2 pt-1">
-            {[0.25, 0.5, 0.75, 1].map((pct) => (
-              <button
-                key={pct}
-                type="button"
-                onClick={() => handleApplyPercent(pct)}
-                className="rounded-xl border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-900 py-1.5 text-xs font-semibold text-slate-700 dark:text-cream hover:border-[#eaba65] transition-colors"
-              >
-                {pct === 1 ? "Max" : `${pct * 100}%`}
-              </button>
-            ))}
-          </div>
-
-          {/* Rate & Route Meta */}
-          <div className="rounded-xl border border-slate-100 dark:border-ink-800/80 bg-slate-50/50 dark:bg-ink-950/40 p-3 text-xs space-y-1 text-slate-500 dark:text-mist">
+          {/* Route & Fee Breakdown */}
+          <div className="rounded-xl bg-muted/30 p-3 space-y-1.5 text-xs text-muted-foreground border border-border/40">
             <div className="flex justify-between">
-              <span>Route:</span>
-              <span className="text-teal-600 dark:text-teal-400 font-medium">Best Rate (Direct Pool)</span>
+              <span>Execution Route</span>
+              <span className="text-foreground font-medium">Robinhood Chain DEX</span>
             </div>
             <div className="flex justify-between">
-              <span>Network Fee:</span>
-              <span className="font-mono text-slate-700 dark:text-cream">~0.0001 ETH</span>
+              <span>Slippage Tolerance</span>
+              <span className="text-foreground font-medium">0.5% auto</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Network Gas</span>
+              <span className="text-emerald-500 font-medium">Sponsored by Veilora</span>
             </div>
           </div>
 
-          <div className="pt-2">
-            <Button
-              type="submit"
-              disabled={loading || parsedUsdg <= 0}
-              className="w-full py-3 rounded-2xl bg-[#eaba65] hover:bg-[#d8a855] text-slate-950 font-semibold text-xs transition-all shadow-sm"
-            >
-              {loading ? "Authorizing Swap…" : parsedUsdg > 0 ? "Authorize Swap" : "Enter amount"}
-            </Button>
-          </div>
+          {/* Submit Action */}
+          <Button
+            type="submit"
+            disabled={loading || parsedUsdg <= 0}
+            className="w-full h-11 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Simulating & Swapping...</span>
+              </>
+            ) : (
+              <span>Authorize Swap</span>
+            )}
+          </Button>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

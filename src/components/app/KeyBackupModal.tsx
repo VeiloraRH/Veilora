@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { Download, Copy, Check, ShieldAlert, KeyRound, Smartphone, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { downloadRecoveryBackup, type CreatedAccountDetails } from "@/lib/walletContext";
 
 interface KeyBackupModalProps {
@@ -15,7 +23,7 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
   const [copiedA, setCopiedA] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  if (!open || !accountDetails) return null;
+  if (!accountDetails) return null;
 
   const handleDownload = () => {
     downloadRecoveryBackup({
@@ -45,143 +53,131 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-slate-900/60 dark:bg-ink-950/90 backdrop-blur-md" />
-
-      {/* Modal Dialog */}
-      <div className="panel relative z-10 w-full max-w-xl overflow-hidden border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-2xl">
-        <div className="border-b border-slate-100 dark:border-ink-800 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/10 text-amber-600 dark:text-gold-300 border border-gold-400/20">
-              <KeyRound className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-cream">Back up your threshold keys</h2>
-              <p className="text-xs text-slate-500 dark:text-mist mt-0.5">
-                Veilora accounts use 2-of-3 threshold keys. You hold 2 keys; Veilora holds 1.
-              </p>
-            </div>
+    <Dialog open={open} onOpenChange={() => undefined}>
+      <DialogContent className="sm:max-w-xl bg-card border-border text-foreground p-6 rounded-3xl">
+        <DialogHeader className="flex flex-row items-center gap-3 pb-3 border-b border-border text-left">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+            <KeyRound className="h-5 w-5" />
           </div>
-        </div>
+          <div>
+            <DialogTitle className="text-xl font-semibold text-foreground">
+              Back up your threshold keys
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Your 2-of-3 smart account requires any two shards to authorize transactions.
+            </DialogDescription>
+          </div>
+        </DialogHeader>
 
-        <div className="max-h-[75vh] overflow-y-auto px-6 py-6 space-y-6">
-          {/* Shard A — Device Key */}
-          <div className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-850/60 p-4">
+        <div className="space-y-4 py-2 text-xs">
+          {/* Shard A */}
+          <div className="rounded-2xl border border-border bg-muted/40 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-teal-600 dark:text-teal-300" />
-                <span className="text-sm font-semibold text-slate-900 dark:text-cream">Device Key (Shard A)</span>
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <Smartphone className="h-4 w-4 text-emerald-500" />
+                <span>Shard A — Primary Device Key</span>
               </div>
-              <span className="text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-400/10 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-400/20">
-                Stored in this browser
+              <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium">
+                Saved in browser
               </span>
             </div>
-            <p className="mt-1 text-xs text-slate-500 dark:text-mist">
-              Used automatically by this device to sign your daily intents.
+            <p className="text-muted-foreground">
+              Saved automatically in your browser's local storage for 1-click signing.
             </p>
             {accountDetails.shardAPrivateKey && (
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-200 dark:border-ink-700 bg-white dark:bg-ink-950/70 px-3 py-2">
-                <span className="font-mono text-xs text-slate-800 dark:text-cream-dim truncate max-w-[320px]">
-                  {accountDetails.shardAPrivateKey.slice(0, 14)}••••••••••••••••••••••••••••••••{accountDetails.shardAPrivateKey.slice(-6)}
+              <div className="flex items-center justify-between rounded-lg bg-card border border-border p-2">
+                <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[320px]">
+                  {accountDetails.shardAPrivateKey.slice(0, 14)}…{accountDetails.shardAPrivateKey.slice(-10)}
                 </span>
-                <button
-                  type="button"
-                  onClick={copyKeyA}
-                  className="flex items-center gap-1 text-xs text-[#eaba65] hover:underline"
-                >
-                  {copiedA ? <Check className="h-3.5 w-3.5 text-teal-500 dark:text-teal-300" /> : <Copy className="h-3.5 w-3.5" />}
-                  <span>{copiedA ? "Copied" : "Copy"}</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Shard C — Recovery Shard */}
-          <div className="rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/5 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-semibold text-slate-900 dark:text-cream">Recovery Key (Shard C)</span>
-              </div>
-              <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-400/20">
-                Offline Backup Only
-              </span>
-            </div>
-
-            <p className="mt-2 text-xs leading-relaxed text-slate-700 dark:text-cream-dim">
-              <strong>Crucial:</strong> To keep your funds strictly non-custodial, this key is <strong>not stored</strong> in your browser or on our servers. You must save it now. If you lose this device, you will need Shard C and the Veilora co-signer to recover your funds.
-            </p>
-
-            {accountDetails.shardCPrivateKey ? (
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between rounded-lg border border-amber-200 dark:border-ink-700 bg-white dark:bg-ink-950/90 px-3 py-2">
-                  <span className="font-mono text-xs text-amber-900 dark:text-gold-200 truncate max-w-[320px]">
-                    {accountDetails.shardCPrivateKey}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copyKeyC}
-                    className="flex items-center gap-1 text-xs text-[#eaba65] hover:underline shrink-0"
-                  >
-                    {copiedC ? <Check className="h-3.5 w-3.5 text-teal-500 dark:text-teal-300" /> : <Copy className="h-3.5 w-3.5" />}
-                    <span>{copiedC ? "Copied" : "Copy"}</span>
-                  </button>
-                </div>
-
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleDownload}
-                  className="w-full flex items-center justify-center gap-2 text-xs py-2 border-amber-400/50 text-amber-800 dark:text-gold-300 hover:bg-amber-100 dark:hover:bg-gold-400/10"
+                  variant="ghost"
+                  size="sm"
+                  onClick={copyKeyA}
+                  className="h-7 text-xs text-primary"
                 >
-                  <Download className="h-4 w-4" />
-                  {downloaded ? "Download Again (.json)" : "Download Recovery File (.json)"}
+                  {copiedA ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                  {copiedA ? "Copied" : "Copy"}
                 </Button>
               </div>
-            ) : (
-              <p className="mt-2 text-xs text-slate-500 dark:text-mist">
-                Key address: <span className="font-mono text-slate-900 dark:text-cream">{accountDetails.shardC}</span>
-              </p>
             )}
           </div>
 
-          {/* Shard B — Explainer */}
-          <div className="rounded-xl border border-slate-200 dark:border-ink-700/40 bg-slate-50 dark:bg-ink-900/60 p-3 text-xs text-slate-600 dark:text-mist">
-            <span className="text-slate-900 dark:text-cream font-semibold">Veilora Co-Signer (Shard B): </span>
-            Maintained in the Veilora safety hardware. It only signs transactions that comply with your spending guardrails and zero-knowledge privacy rules.
+          {/* Shard B */}
+          <div className="rounded-2xl border border-border bg-muted/40 p-4 space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <span>Shard B — Veilora HSM Guardrail</span>
+              </div>
+              <span className="rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[10px] font-medium">
+                Active Co-Signer
+              </span>
+            </div>
+            <p className="text-muted-foreground">
+              Secured on Robinhood Chain with autonomous policy safety checks.
+            </p>
           </div>
 
-          {/* Confirmation Checkbox */}
-          <label className="flex items-start gap-3 cursor-pointer pt-2">
+          {/* Shard C */}
+          <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <ShieldAlert className="h-4 w-4 text-primary" />
+                <span>Shard C — Offline Recovery Key</span>
+              </div>
+              <span className="rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-2 py-0.5 text-[10px] font-medium">
+                Not stored online
+              </span>
+            </div>
+            <p className="text-muted-foreground">
+              This shard is never stored in browser storage. Download your recovery JSON file now.
+            </p>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleDownload}
+                className="flex-1 h-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" />
+                {downloaded ? "Download Again" : "Download Recovery JSON"}
+              </Button>
+              {accountDetails.shardCPrivateKey && (
+                <Button
+                  variant="outline"
+                  onClick={copyKeyC}
+                  className="h-9 rounded-xl border-border text-foreground hover:bg-muted"
+                >
+                  {copiedC ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                  {copiedC ? "Copied" : "Copy Key"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Checkbox */}
+          <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-ink-600 bg-white dark:bg-ink-950 text-[#eaba65] focus:ring-0 focus:ring-offset-0"
+              className="mt-0.5 rounded border-border text-primary focus:ring-primary"
             />
-            <span className="text-xs text-slate-700 dark:text-cream-dim leading-snug">
-              I have saved my Recovery Key (Shard C) and understand that Veilora cannot restore my funds if both this device and Shard C are lost.
+            <span className="text-muted-foreground text-xs leading-normal">
+              I have saved my Shard C recovery file. I understand Veilora cannot recover my account without 2-of-3 shards.
             </span>
           </label>
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-slate-100 dark:border-ink-800 px-6 py-4 flex items-center justify-between bg-slate-50/60 dark:bg-ink-950/40">
-          <p className="text-xs text-slate-500 dark:text-mist">
-            {confirmed ? "Ready to enter your dashboard" : "Confirm backup to continue"}
-          </p>
+        <DialogFooter className="pt-2 border-t border-border">
           <Button
-            type="button"
-            disabled={!confirmed}
             onClick={onConfirm}
-            className="flex items-center gap-2 bg-[#eaba65] text-slate-950 hover:bg-[#d8a855] font-semibold"
+            disabled={!confirmed || !downloaded}
+            className="w-full h-11 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
           >
-            <CheckCircle2 className="h-4 w-4" />
-            Enter Dashboard
+            Access Smart Account
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

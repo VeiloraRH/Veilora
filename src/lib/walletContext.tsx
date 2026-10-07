@@ -9,7 +9,6 @@ import {
   type WalletMetadata,
 } from "./api";
 
-const DEFAULT_WALLET = "0x5e4ae3b279fcC9c470dF26875906D808BdE5B163";
 const STORAGE_KEY = "veilora:wallet_address";
 
 interface NetworkInfo {
@@ -107,7 +106,7 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [walletAddress, setWalletAddressState] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_KEY) || DEFAULT_WALLET;
+    return localStorage.getItem(STORAGE_KEY) || "";
   });
   const [wallet, setWallet] = useState<WalletMetadata | null>(null);
   const [network, setNetwork] = useState<NetworkInfo | null>(null);

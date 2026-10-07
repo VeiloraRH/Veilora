@@ -2,10 +2,12 @@ import { useState } from "react";
 
 interface QuorumIndicatorProps {
   deviceKeyPresent?: boolean;
+  size?: "sm" | "md";
   className?: string;
 }
 
-export function QuorumIndicator({ deviceKeyPresent = true, className = "" }: QuorumIndicatorProps) {
+export function QuorumIndicator({ deviceKeyPresent = true, size = "md", className = "" }: QuorumIndicatorProps) {
+  const isSm = size === "sm";
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
@@ -20,7 +22,7 @@ export function QuorumIndicator({ deviceKeyPresent = true, className = "" }: Quo
       aria-label="2-of-3 threshold quorum status"
     >
       {/* 3 Triangular / Cluster Dots */}
-      <div className="flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-850 px-2 py-1 cursor-pointer transition-colors hover:border-[#eaba65]">
+      <div className={`flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-850 ${isSm ? "px-1.5 py-0.5" : "px-2 py-1"} cursor-pointer transition-colors hover:border-[#eaba65]`}>
         {/* Triangular dot cluster */}
         <div className="relative h-3.5 w-3.5 flex items-center justify-center">
           {/* Top dot: Shard A (Device Key) */}
