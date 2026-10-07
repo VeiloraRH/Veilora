@@ -96,7 +96,7 @@ async function main() {
   );
 
   // Robinhood Chain USDG address
-  const rawUsdgAddress = process.env.USDG_TOKEN_ADDRESS || "0x2b9c8b8b0569ff81f94a1d48c0879685e8ac3ebc";
+  const rawUsdgAddress = process.env.USDG_TOKEN_ADDRESS || "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
   const usdgTokenAddress = getAddress(rawUsdgAddress);
 
   const poolHash = await walletClient.deployContract({

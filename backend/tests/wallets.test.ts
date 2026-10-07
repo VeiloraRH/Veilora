@@ -44,7 +44,7 @@ describe("Threshold Wallets & Co-signing API", () => {
   });
 
   test("POST /v1/wallets/:address/cosign produces valid Shard B ECDSA signature", async () => {
-    const target = "0x2b9c8b8b0569ff81f94a1d48c0879685e8ac3ebc";
+    const target = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
     const value = "0";
     const data = "0x";
     const nonce = 0;
@@ -98,7 +98,7 @@ describe("Threshold Wallets & Co-signing API", () => {
     const cosignRes = await request(app)
       .post(`/v1/wallets/${walletAddress}/cosign`)
       .send({
-        target: "0x2b9c8b8b0569ff81f94a1d48c0879685e8ac3ebc",
+        target: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
         nonce: 1,
         deadline: Math.floor(Date.now() / 1000) + 3600,
       });

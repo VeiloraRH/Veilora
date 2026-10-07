@@ -10,8 +10,8 @@ export const NETWORK = {
   explorerUrl: "https://explorer.mainnet.chain.robinhood.com",
   contracts: {
     factory: "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7",
-    shieldedPool: "0x75c07c0bd9302eb277ee82736c57274a954867d8",
-    usdgToken: "0x2b9C8B8B0569Ff81f94A1d48C0879685e8Ac3ebC",
+    shieldedPool: "0x5e4e2bec80528b0dd30182a7a956dc0e53826b80",
+    usdgToken: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
   },
 };
 
