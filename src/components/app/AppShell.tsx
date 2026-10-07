@@ -18,12 +18,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useMode } from "@/lib/mode";
 import { useWallet } from "@/lib/walletContext";
-import { NETWORK, OUTBOX } from "@/demo/data";
-import { Badge, Dot, Logo } from "@/components/ui";
+import { NETWORK } from "@/demo/data";
+import { Dot, Logo } from "@/components/ui";
 
 type NavItem = { to: NonNullable<LinkProps["to"]>; label: string; icon: typeof Inbox; control?: boolean; count?: number };
-
-const pendingOutbox = OUTBOX.filter((o) => o.status !== "blocked").length;
 
 const NAV: { group: string; items: NavItem[] }[] = [
   {
@@ -31,7 +29,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     items: [
       { to: "/app", label: "Command Center", icon: LayoutDashboard },
       { to: "/app/intent", label: "Intent Console", icon: Sparkles },
-      { to: "/app/outbox", label: "Outbox", icon: Inbox, count: pendingOutbox },
+      { to: "/app/outbox", label: "Outbox", icon: Inbox },
     ],
   },
   {
@@ -189,7 +187,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="font-mono">{blockDisplay}</span>
             </div>
             <div className="ml-auto flex items-center gap-3">
-              <Badge tone="teal" className="hidden sm:inline-flex">Protected</Badge>
               <ModeToggle />
             </div>
           </div>

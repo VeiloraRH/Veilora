@@ -22,6 +22,47 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+const ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com";
+const USDG_CONTRACT = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
+
+export async function getOnChainBalances(address: string): Promise<{ eth: number; usdg: number }> {
+  try {
+    const cleanAddr = address.toLowerCase().replace("0x", "").padStart(64, "0");
+    const [ethRes, usdgRes] = await Promise.all([
+      fetch(ROBINHOOD_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_getBalance",
+          params: [address, "latest"],
+          id: 1,
+        }),
+      }).then((r) => r.json()),
+      fetch(ROBINHOOD_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_call",
+          params: [{ to: USDG_CONTRACT, data: "0x70a08231" + cleanAddr }, "latest"],
+          id: 2,
+        }),
+      }).then((r) => r.json()),
+    ]);
+
+    const ethWei = BigInt(ethRes?.result || "0x0");
+    const usdgWei = BigInt(usdgRes?.result || "0x0");
+
+    return {
+      eth: Number(ethWei) / 1e18,
+      usdg: Number(usdgWei) / 1e18,
+    };
+  } catch {
+    return { eth: 0, usdg: 0 };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Network & System Status
 // ---------------------------------------------------------------------------
