@@ -1,6 +1,13 @@
 import express from "express";
 import { randomUUID } from "node:crypto";
 import { healthRouter } from "./routes/health";
+import { walletsRouter } from "./routes/wallets";
+import { intentRouter } from "./routes/intent";
+import { policiesRouter } from "./routes/policies";
+import { privacyRouter } from "./routes/privacy";
+import { recipesRouter } from "./routes/recipes";
+import { relayerRouter } from "./routes/relayer";
+import { adaptersRouter } from "./routes/adapters";
 
 export const app = express();
 
@@ -43,4 +50,12 @@ app.use((request, response, next) => {
   next();
 });
 
+// Mount Routes
 app.use("/health", healthRouter);
+app.use("/v1/wallets", walletsRouter);
+app.use("/v1/intent", intentRouter);
+app.use("/v1/policies", policiesRouter);
+app.use("/v1/privacy", privacyRouter);
+app.use("/v1/recipes", recipesRouter);
+app.use("/v1/relayer", relayerRouter);
+app.use("/v1/adapters", adaptersRouter);

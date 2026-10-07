@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type QueryResult, type QueryResultRow } from "pg";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -11,3 +11,12 @@ export const db = new Pool({
   connectionTimeoutMillis: 45_000,
   options: "-c search_path=public",
 });
+
+export const pool = db;
+
+export async function query<T extends QueryResultRow = any>(
+  text: string,
+  params?: any[]
+): Promise<QueryResult<T>> {
+  return db.query<T>(text, params);
+}

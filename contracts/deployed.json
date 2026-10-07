@@ -1,0 +1,8 @@
+{
+  "chainId": 4663,
+  "deployer": "0x695d8E941e68D3ea39c14C43745286b5729E8CD7",
+  "veiloraFactory": "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7",
+  "veiloraShieldedPool": "0x75c07c0bd9302eb277ee82736c57274a954867d8",
+  "usdgToken": "0x2b9C8B8B0569Ff81f94A1d48C0879685e8Ac3ebc",
+  "deployedAt": "2026-10-07T04:47:18.549Z"
+}

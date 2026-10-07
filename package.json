@@ -10,6 +10,8 @@
     "check": "tsc --noEmit",
     "test": "cd backend && bun test",
     "backend:dev": "cd backend && bun run dev",
+    "compile:contracts": "bunx solc --bin --abi contracts/src/VeiloraAccount.sol contracts/src/VeiloraFactory.sol contracts/src/VeiloraShieldedPool.sol -o contracts/out",
+    "deploy:contracts": "bun run contracts/script/deploy.ts",
     "push:origin": "git push origin main",
     "push:public": "python3 scripts/sync-public.py",
     "push:all": "bun run push:origin && bun run push:public"
@@ -19,11 +21,13 @@
     "@tanstack/react-router": "^1.112.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^18.0.6",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
-    "three": "0.169.0"
+    "three": "0.169.0",
+    "viem": "^2.57.3"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.6",
