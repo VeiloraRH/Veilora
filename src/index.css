@@ -3,7 +3,8 @@
 /* Veilora palette, sampled from the logo in /media. */
 @theme {
   --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Cormorant Garamond", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --color-ink-950: #070d1e;

@@ -7,7 +7,7 @@ export function Logo({ className, size = 32, wordmark = true }: { className?: st
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <img src="/brand/veilora-mark.png" alt="" width={size} height={size} style={{ width: size, height: size }} />
-      {wordmark && <span className="font-display text-[1.45em] font-semibold tracking-[0.04em] text-cream">Veilora</span>}
+      {wordmark && <span className="font-brand text-[1.45em] font-semibold tracking-[0.04em] text-cream">Veilora</span>}
     </span>
   );
 }
