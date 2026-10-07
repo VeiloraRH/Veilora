@@ -2,7 +2,18 @@
 
 export type Tone = "gold" | "teal" | "coral" | "mist" | "wine" | "cream";
 
-export const NETWORK = { name: "Robinhood Chain", chainId: 4663, block: 18_402_771 };
+export const NETWORK = {
+  name: "Robinhood Chain",
+  chainId: 4663,
+  block: 18_402_771,
+  rpcUrl: "https://rpc.mainnet.chain.robinhood.com",
+  explorerUrl: "https://explorer.mainnet.chain.robinhood.com",
+  contracts: {
+    factory: "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7",
+    shieldedPool: "0x75c07c0bd9302eb277ee82736c57274a954867d8",
+    usdgToken: "0x2b9C8B8B0569Ff81f94A1d48C0879685e8Ac3ebC",
+  },
+};
 
 export const VAULT = {
   label: "Northwind Treasury",

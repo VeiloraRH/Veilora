@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Minus } from "lucide-react";
-import { ADAPTERS, BROADCASTERS, PROVERS, SAFETY_METRICS } from "@/demo/data";
+import { ADAPTERS, BROADCASTERS, NETWORK, PROVERS, SAFETY_METRICS } from "@/demo/data";
 import { Badge, Card, PageHeader, Stat } from "@/components/ui";
 
 export const Route = createFileRoute("/app/network")({
@@ -37,7 +37,74 @@ function NetworkScreen() {
         ))}
       </div>
 
-      <Card title="Adapter capability declarations" eyebrow="Robinhood Chain first" bodyClassName="p-0">
+      <Card title="Verified Smart Contracts" eyebrow="Robinhood Chain Mainnet (Chain ID 4663)" bodyClassName="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-[0.14em] text-mist">
+                <th className="px-5 py-3 font-medium">Contract</th>
+                <th className="px-5 py-3 font-medium">Description</th>
+                <th className="px-5 py-3 font-medium">Address</th>
+                <th className="px-5 py-3 font-medium">Execution Hook</th>
+                <th className="px-5 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-ink-600/50">
+                <td className="px-5 py-3 font-medium text-cream">VeiloraFactory</td>
+                <td className="px-5 py-3 text-mist">CREATE2 deterministic threshold vault deployer</td>
+                <td className="px-5 py-3 font-mono text-xs text-gold-300">
+                  <a
+                    href={`${NETWORK.explorerUrl}/address/${NETWORK.contracts.factory}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:underline"
+                  >
+                    {NETWORK.contracts.factory}
+                  </a>
+                </td>
+                <td className="px-5 py-3 text-xs text-mist">createAccount()</td>
+                <td className="px-5 py-3"><Badge tone="teal">Deployed</Badge></td>
+              </tr>
+              <tr className="border-t border-ink-600/50">
+                <td className="px-5 py-3 font-medium text-cream">VeiloraShieldedPool</td>
+                <td className="px-5 py-3 text-mist">Shielded note commitments & nullifier settlement</td>
+                <td className="px-5 py-3 font-mono text-xs text-gold-300">
+                  <a
+                    href={`${NETWORK.explorerUrl}/address/${NETWORK.contracts.shieldedPool}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:underline"
+                  >
+                    {NETWORK.contracts.shieldedPool}
+                  </a>
+                </td>
+                <td className="px-5 py-3 text-xs text-mist">depositUSDG() / unshieldUSDG()</td>
+                <td className="px-5 py-3"><Badge tone="teal">Deployed</Badge></td>
+              </tr>
+              <tr className="border-t border-ink-600/50">
+                <td className="px-5 py-3 font-medium text-cream">Global Dollar (USDG)</td>
+                <td className="px-5 py-3 text-mist">Robinhood Chain native settlement asset</td>
+                <td className="px-5 py-3 font-mono text-xs text-mist">
+                  <a
+                    href={`${NETWORK.explorerUrl}/token/${NETWORK.contracts.usdgToken}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:underline"
+                  >
+                    {NETWORK.contracts.usdgToken}
+                  </a>
+                </td>
+                <td className="px-5 py-3 text-xs text-mist">ERC-20 standard</td>
+                <td className="px-5 py-3"><Badge tone="teal">Active</Badge></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div className="mt-6">
+        <Card title="Adapter capability declarations" eyebrow="Robinhood Chain first" bodyClassName="p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
@@ -67,6 +134,7 @@ function NetworkScreen() {
           </table>
         </div>
       </Card>
+      </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card title="Broadcasters" eyebrow="Bonded, with fallback" bodyClassName="p-0">
