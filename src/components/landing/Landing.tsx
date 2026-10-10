@@ -1,38 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { ArrowRight, Check, CircleAlert, Cpu, EyeOff, Fingerprint, Laptop, Server, SlidersHorizontal } from "lucide-react";
 import { PLANS, RECIPES } from "@/demo/data";
 import { Logo, VisibilityBadge } from "@/components/ui";
+import { Orbits, SectionTitle, SiteFooter } from "@/components/site/chrome";
+import { GATES } from "@/content/roadmap";
 import { cn } from "@/lib/utils";
-
-/* Thin gold orbit lines, echoing the brand banners. */
-function Orbits({ className }: { className?: string }) {
-  return (
-    <svg className={cn("pointer-events-none absolute", className)} viewBox="0 0 1200 600" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="orbit" x1="0" x2="1">
-          <stop offset="0" stopColor="#eaba65" stopOpacity="0" />
-          <stop offset="0.5" stopColor="#eaba65" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#db6b55" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d="M-20 520 C 300 360, 700 120, 1220 60" stroke="url(#orbit)" strokeWidth="1.2" />
-      <circle cx="0" cy="0" r="520" transform="translate(980 760)" stroke="#eaba65" strokeOpacity="0.07" />
-      <circle cx="0" cy="0" r="380" transform="translate(160 -60)" stroke="#eaba65" strokeOpacity="0.06" />
-      <circle cx="612" cy="214" r="3" fill="#f7d372" />
-    </svg>
-  );
-}
-
-function SectionTitle({ eyebrow, title, children, center }: { eyebrow: string; title: ReactNode; children?: ReactNode; center?: boolean }) {
-  return (
-    <div className={cn("max-w-3xl", center && "mx-auto text-center")}>
-      <p className="eyebrow">{eyebrow}</p>
-      <h2 className="mt-4 font-display text-4xl font-semibold leading-[1.05] text-cream sm:text-5xl lg:text-6xl">{title}</h2>
-      {children && <p className="mt-5 text-base leading-relaxed text-mist sm:text-lg">{children}</p>}
-    </div>
-  );
-}
 
 const LOOP = [
   ["Describe", "Say the goal in plain words."],
@@ -76,14 +48,6 @@ const LAYERS = [
   ["Local planning", "Your intent text and strategy", "Does not hide data a chosen network or provider needs"],
   ["Shielded notes", "Amounts and relationships inside the shield", "Does not make every entry or exit private"],
   ["Selective disclosure", "Unrelated positions and history", "Does not keep disclosed data private from its recipient"],
-];
-
-const GATES = [
-  { n: 1, name: "Trustworthy control core", items: "2-of-3 wallet and recovery · local intents · simulation · policies and outbox · public send, swap, bridge", status: "Building" },
-  { n: 2, name: "Shielded payments", items: "Shield and unshield one stablecoin · shielded receive · selective disclosure · provenance proofs", status: "Next" },
-  { n: 3, name: "Shielded DeFi", items: "Shielded swap and lending recipes · atomic unshield → execute → reshield · broadcaster failover", status: "Planned" },
-  { n: 4, name: "Tokenized stocks", items: "One verified issuer first · corporate-action tests · legal and eligibility review", status: "Planned" },
-  { n: 5, name: "Multichain privacy", items: "More chains only once Robinhood Chain is stable · privacy assumptions shown per chain", status: "Later" },
 ];
 
 const SDK = `const plan = await veilora.intent.create({
@@ -143,6 +107,9 @@ export function Landing() {
               </li>
             ))}
           </ol>
+          <Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
+            See the full roadmap <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
@@ -332,7 +299,7 @@ export function Landing() {
       </section>
 
       {/* Roadmap */}
-      <section className="px-5 py-24 sm:px-10">
+      <section id="roadmap" className="scroll-mt-10 px-5 py-24 sm:px-10">
         <div className="mx-auto max-w-6xl">
           <SectionTitle eyebrow="Launch strategy" title="Earn trust one gate at a time." />
           <ol className="mt-12 border-l border-gold-400/30">
@@ -345,10 +312,13 @@ export function Landing() {
                   </p>
                   <span className={cn("text-xs uppercase tracking-[0.2em]", g.n === 1 ? "text-gold-300" : "text-mist")}>{g.status}</span>
                 </div>
-                <p className="mt-2 max-w-3xl text-sm text-mist">{g.items}</p>
+                <p className="mt-2 max-w-3xl text-sm text-mist">{g.items.join(" · ")}</p>
               </li>
             ))}
           </ol>
+          <Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
+            See the full roadmap <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
@@ -379,31 +349,14 @@ export function Landing() {
             <Link to="/app" className="inline-flex items-center gap-2 rounded-lg bg-gold-400 px-6 py-3 text-sm font-medium text-ink-900 hover:bg-gold-300">
               Launch the app <ArrowRight className="h-4 w-4" />
             </Link>
-            <a href="#developers" className="inline-flex items-center gap-2 rounded-lg border border-cream/30 px-6 py-3 text-sm text-cream hover:border-gold-400 hover:text-gold-300">
-              Read the SDK
-            </a>
+            <Link to="/whitepaper" className="inline-flex items-center gap-2 rounded-lg border border-cream/30 px-6 py-3 text-sm text-cream hover:border-gold-400 hover:text-gold-300">
+              Read the whitepaper
+            </Link>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-ink-600/60 px-5 py-10 sm:px-10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Logo size={28} />
-            <p className="mt-2 text-xs text-mist">© 2026 Veilora · Robinhood Chain (4663)</p>
-          </div>
-          <nav className="flex flex-wrap gap-6 text-sm text-mist">
-            <a href="#how-it-works" className="hover:text-gold-300">Product</a>
-            <a href="#privacy" className="hover:text-gold-300">Privacy</a>
-            <a href="#developers" className="hover:text-gold-300">Developers</a>
-            <Link to="/app" className="hover:text-gold-300">App</Link>
-          </nav>
-        </div>
-        <p className="mx-auto mt-8 max-w-6xl text-xs leading-relaxed text-mist/70">
-          Veilora is in development. Claims about privacy guarantees, audits, tokenized-stock support and proof providers are subject to independent verification before
-          production use. The app shows demo data.
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

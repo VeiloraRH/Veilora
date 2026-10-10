@@ -33,6 +33,8 @@ export function GlassHero() {
           <ul className="nav-links">
             <li><a href="#how-it-works">Product</a></li>
             <li><a href="#privacy">Privacy</a></li>
+            <li><Link to="/roadmap">Roadmap</Link></li>
+            <li><Link to="/whitepaper">Whitepaper</Link></li>
             <li><Link to="/app">Launch App</Link></li>
           </ul>
         </header>

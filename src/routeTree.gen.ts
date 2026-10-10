@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
 import { Route as AppDisclosureRouteImport } from './routes/app/disclosure'
@@ -31,6 +33,16 @@ const IndexRoute = IndexRouteImport.update({
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WhitepaperRoute = WhitepaperRouteImport.update({
+  id: '/whitepaper',
+  path: '/whitepaper',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -92,6 +104,8 @@ const AppSecurityRoute = AppSecurityRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/roadmap': typeof RoadmapRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/disclosure': typeof AppDisclosureRoute
   '/app/intent': typeof AppIntentRoute
@@ -106,6 +120,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/roadmap': typeof RoadmapRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/disclosure': typeof AppDisclosureRoute
   '/app/intent': typeof AppIntentRoute
@@ -122,6 +138,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/roadmap': typeof RoadmapRoute
+  '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/disclosure': typeof AppDisclosureRoute
   '/app/intent': typeof AppIntentRoute
@@ -139,6 +157,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/roadmap'
+    | '/whitepaper'
     | '/app/activity'
     | '/app/disclosure'
     | '/app/intent'
@@ -153,6 +173,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/roadmap'
+    | '/whitepaper'
     | '/app/activity'
     | '/app/disclosure'
     | '/app/intent'
@@ -168,6 +190,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/roadmap'
+    | '/whitepaper'
     | '/app/activity'
     | '/app/disclosure'
     | '/app/intent'
@@ -184,6 +208,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
+  RoadmapRoute: typeof RoadmapRoute
+  WhitepaperRoute: typeof WhitepaperRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -200,6 +226,20 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/whitepaper': {
+      id: '/whitepaper'
+      path: '/whitepaper'
+      fullPath: '/whitepaper'
+      preLoaderRoute: typeof WhitepaperRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -317,6 +357,8 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
+  RoadmapRoute: RoadmapRoute,
+  WhitepaperRoute: WhitepaperRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

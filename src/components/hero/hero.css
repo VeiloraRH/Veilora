@@ -212,7 +212,11 @@
   .hero .cta-row { right: -8vw; }
   .hero .count { font-size: 120px; }
 }
-/* Hide "Portfolio". */
+/* Narrow screens keep Product, Whitepaper and Launch App; the rest live in the footer. */
+@media (max-width: 760px) {
+  .hero .nav-links li:nth-child(2), .hero .nav-links li:nth-child(3) { display: none; }
+}
 @media (max-width: 420px) {
-  .hero .nav-links li:nth-child(2) { display: none; }
+  .hero .nav-links { gap: 12px; }
+  .hero .nav-links li:nth-child(1) { display: none; }
 }
