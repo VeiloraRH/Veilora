@@ -142,8 +142,7 @@ function RoadmapPage() {
               at a time.
             </h1>
             <p className="mt-7 max-w-xl text-base leading-relaxed text-mist sm:text-lg">
-              Veilora ships in gates, not dates. Each gate has to be trustworthy on its own before the next one opens: control before privacy, payments before DeFi, one chain
-              before many.
+              Veilora ships in gates, not dates. Each gate has to be trustworthy on its own before the next one opens: wallet safety, everyday flows, reliable swaps, and broader asset coverage.
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
               {(Object.keys(STATUS) as GateStatus[]).map((s) => (
@@ -163,9 +162,9 @@ function RoadmapPage() {
       <section className="px-4 sm:px-10">
         <div className="mx-auto grid max-w-6xl gap-px overflow-hidden rounded-2xl border border-ink-600/60 bg-ink-600/40 md:grid-cols-3">
           {[
-            ["Control", "Privacy", "No shielded flow ships before quorum signing, simulation and policies are solid."],
-            ["Payments", "DeFi", "One stablecoin shielded end to end before any recipe composes protocols."],
-            ["One chain", "Many", "Robinhood Chain first. Other chains only with their own stated privacy assumptions."],
+            ["Wallet", "Flows", "Secure key handling and signed authorization come before convenience features."],
+            ["Quotes", "Swaps", "Show route, minimum output, and expiry before the user signs."],
+            ["One chain", "Many", "Robinhood Chain first. Add networks only after current flows are dependable."],
           ].map(([a, b, d], i) => (
             <Reveal key={a} delay={i * 90} className="h-full">
               <div className="h-full bg-ink-900 p-7">
@@ -285,7 +284,7 @@ function RoadmapPage() {
       <section className="px-4 py-24 sm:px-10">
         <div className="mx-auto max-w-6xl">
           <SectionTitle eyebrow="How we'll know" title="Measured by control, not by volume.">
-            We don't optimize for shielded TVL or transaction count alone. Each gate is judged on whether people understand and safely control what they do.
+            We measure whether people can understand, authorize, and reconcile their wallet activity safely.
           </SectionTitle>
           <div className="mt-14 grid gap-px overflow-hidden rounded-3xl border border-ink-600/60 bg-ink-600/40 sm:grid-cols-2 lg:grid-cols-4">
             {METRICS.map((m, i) => (

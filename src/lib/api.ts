@@ -73,133 +73,10 @@ export async function getHealth() {
 
 export async function getRelayerStatus() {
   return request<{
-    network: { chainId: number; rpcUrl: string; blockNumber: string; gasPriceGwei: string };
+    network: { chainId: number; rpcHost: string; blockNumber: string; gasPriceGwei: string };
     relayer: { address: string | null; balanceEth: string; ready: boolean };
-    contracts: { factory: string; shieldedPool: string; usdgToken: string };
+    contracts: { factory: string; usdgToken: string };
   }>("/v1/relayer/status");
-}
-
-export async function getAdaptersStatus() {
-  return request<{
-    activeChain: { chainId: number; name: string; status: string };
-    contracts: { factory: string; shieldedPool: string; usdgToken: string };
-    integrations: Record<string, string>;
-  }>("/v1/adapters/status");
-}
-
-// ---------------------------------------------------------------------------
-// Composable Recipes
-// ---------------------------------------------------------------------------
-
-export interface RecipeItem {
-  recipe_id: string;
-  name: string;
-  description: string;
-  steps: string[];
-  supported_assets: string[];
-  max_slippage_bps: number;
-  requires_clean_provenance: boolean;
-}
-
-export async function getRecipes() {
-  return request<{ recipes: RecipeItem[] }>("/v1/recipes");
-}
-
-export async function getRecipeById(id: string) {
-  return request<RecipeItem>(`/v1/recipes/${id}`);
-}
-
-// ---------------------------------------------------------------------------
-// Intent & Simulation Engine
-// ---------------------------------------------------------------------------
-
-export interface StructuredPlan {
-  id: string;
-  goal: string;
-  action: string;
-  assetIn: string;
-  amountIn: string;
-  assetOut?: string;
-  isShielded: boolean;
-  constraints: {
-    maxTotalFeeBps: number;
-    preserveGas: string;
-    requireCleanProvenance: boolean;
-    destinationAddress?: string;
-  };
-  createdAt: string;
-}
-
-export interface PlanSimulation {
-  planId: string;
-  isValid: boolean;
-  status: "eligible" | "policy_blocked" | "insufficient_gas";
-  route: string[];
-  balanceDiffs: Array<{
-    asset: string;
-    tokenAddress?: string;
-    before: string;
-    after: string;
-    delta: string;
-    isShielded: boolean;
-  }>;
-  estimatedFees: {
-    totalFeeBps: number;
-    gasFeeEstimateWei: string;
-    gasPriceGwei: string;
-    protocolFeeUSDG: string;
-    provingFeeUSDG: string;
-  };
-  gasReserveStatus: {
-    reservedGasEth: string;
-    isPreserved: boolean;
-  };
-  disclosures: Array<{
-    surface: string;
-    visibleData: string;
-    guarantee: string;
-  }>;
-  provingLatencyTargetSeconds: number;
-  expectedCommitmentPreview: string;
-  warnings: string[];
-}
-
-export async function parseIntent(goal: string, constraints?: Record<string, any>) {
-  return request<StructuredPlan>("/v1/intent/parse", {
-    method: "POST",
-    body: JSON.stringify({ goal, constraints }),
-  });
-}
-
-export async function simulateIntent(params: {
-  plan?: StructuredPlan;
-  goal?: string;
-  constraints?: Record<string, any>;
-  currentPublicUSDG?: number;
-  currentGasEth?: number;
-  walletAddress?: string;
-}) {
-  return request<{ plan: StructuredPlan; simulation: PlanSimulation }>("/v1/intent/simulate", {
-    method: "POST",
-    body: JSON.stringify(params),
-  });
-}
-
-export async function evaluatePolicies(plan: StructuredPlan, simulation: PlanSimulation) {
-  return request<{
-    passed: boolean;
-    violations: string[];
-    evaluatedPolicyVersion: number;
-    checks: {
-      feeCeilingOk: boolean;
-      gasReserveOk: boolean;
-      assetAllowed: boolean;
-      provenanceRequirementSatisfied: boolean;
-    };
-  }>("/v1/policies/evaluate", {
-    method: "POST",
-    body: JSON.stringify({ plan, simulation }),
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +104,9 @@ export async function createWallet(params: {
   salt?: string;
   totpSecret?: string;
   deployOnCreate?: boolean;
+  requestId?: string;
+  timestamp?: number;
+  shardASignature?: string;
 }) {
   return request<{
     address: string;
@@ -285,7 +165,7 @@ export async function cosignTransaction(
   });
 }
 
-export async function freezeWallet(address: string, hours = 24, reason = "Emergency freeze") {
+export async function freezeWallet(address: string, hours: number, reason: string, timestamp: number, shardASignature: string) {
   return request<{
     address: string;
     frozen: boolean;
@@ -293,11 +173,11 @@ export async function freezeWallet(address: string, hours = 24, reason = "Emerge
     reason: string;
   }>(`/v1/wallets/${address}/freeze`, {
     method: "POST",
-    body: JSON.stringify({ hours, reason }),
+    body: JSON.stringify({ hours, reason, timestamp, shardASignature }),
   });
 }
 
-export async function unfreezeWallet(address: string) {
+export async function unfreezeWallet(address: string, timestamp: number, shardASignature: string) {
   return request<{
     address: string;
     frozen: boolean;
@@ -305,6 +185,7 @@ export async function unfreezeWallet(address: string) {
     reason: null;
   }>(`/v1/wallets/${address}/unfreeze`, {
     method: "POST",
+    body: JSON.stringify({ timestamp, shardASignature }),
   });
 }
 
@@ -320,127 +201,6 @@ export async function getWalletAudit(address: string) {
       created_at: string;
     }>;
   }>(`/v1/wallets/${address}/audit`);
-}
-
-// ---------------------------------------------------------------------------
-// Privacy Plane: Notes, Provenance (PPOI), View Keys
-// ---------------------------------------------------------------------------
-
-export function getShieldNoteCreationMessage(
-  walletAddress: string,
-  assetSymbol: string,
-  amountWei: string,
-  creationRequestId: string,
-) {
-  return `Veilora shield note creation\nwallet:${walletAddress}\nasset:${assetSymbol.toUpperCase()}\namount:${amountWei}\nrequest:${creationRequestId}`;
-}
-
-export function getNoteStatusMessage(walletAddress: string, commitment: string) {
-  return `Veilora note status request: ${walletAddress}:${commitment}`;
-}
-
-export async function createShieldedNote(
-  assetSymbol: string,
-  amountWei: string,
-  ownerAddress: string,
-  creationRequestId: string,
-  shardASignature: string,
-) {
-  return request<{
-    note: {
-      commitment: string;
-      nullifierHash: string;
-      assetSymbol: string;
-      amountWei: string;
-      status: string;
-      createdAt: string;
-    };
-    nullifierSecret: string;
-    blindingSecret: string;
-  }>("/v1/privacy/notes", {
-    method: "POST",
-    body: JSON.stringify({ assetSymbol, amountWei, ownerAddress, creationRequestId, shardASignature }),
-  });
-}
-
-export async function verifyNote(commitment: string, walletAddress: string, shardASignature: string) {
-  return request<{
-    exists: boolean;
-    isUnspent: boolean;
-    asset?: string;
-    amountWei?: string;
-  }>(`/v1/privacy/notes/${commitment}/verify`, {
-    method: "POST",
-    body: JSON.stringify({ walletAddress, shardASignature }),
-  });
-}
-
-export async function generateProvenanceProof(depositCommitment: string, targetAsset = "USDG") {
-  return request<{
-    proofId: string;
-    setId: string;
-    provider: string;
-    status: string;
-    rootHash: string;
-    freshnessTimestamp: string;
-    validUntil: string;
-    disclosures: { reveals: string; guarantee: string };
-    timeoutMinutes: number;
-    isEligibleForExecution: boolean;
-  }>("/v1/privacy/provenance/prove", {
-    method: "POST",
-    body: JSON.stringify({ depositCommitment, targetAsset }),
-  });
-}
-
-export async function getProvenanceSets() {
-  return request<{
-    sets: Array<{
-      set_id: string;
-      name: string;
-      root_hash: string;
-      member_count: string;
-      freshness_timestamp: string;
-      is_active: boolean;
-    }>;
-  }>("/v1/privacy/provenance/sets");
-}
-
-export async function createViewKey(params: {
-  walletAddress: string;
-  scope?: string;
-  label?: string;
-  allowedAssets?: string[];
-  validDays?: number;
-}) {
-  return request<{
-    key_id: string;
-    wallet_address: string;
-    scope: string;
-    label: string;
-    allowed_assets: string[];
-    valid_until: string;
-    viewKeyToken: string;
-  }>("/v1/privacy/viewkeys", {
-    method: "POST",
-    body: JSON.stringify(params),
-  });
-}
-
-export async function inspectViewKey(token: string) {
-  return request<{
-    valid: boolean;
-    viewKey: {
-      key_id: string;
-      wallet_address: string;
-      scope: string;
-      label: string;
-      allowed_assets: string[];
-      valid_until: string;
-      access_count: number;
-      last_accessed_at: string;
-    };
-  }>(`/v1/privacy/viewkeys/${token}`);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,17 +1,23 @@
-import { createPublicClient, createWalletClient, defineChain, formatEther, getAddress, http } from "viem";
+import { createPublicClient, createWalletClient, defineChain, formatEther, getAddress, http, keccak256, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import dotenv from "dotenv";
 
-dotenv.config({ path: join(import.meta.dir, "../.env") });
+dotenv.config({ path: join(import.meta.dir, "../../backend/.env") });
+dotenv.config({ path: join(import.meta.dir, "../.env"), override: false });
 
 const rpcUrl = process.env.ROBINHOOD_CHAIN_RPC || "https://rpc.mainnet.chain.robinhood.com";
 const chainId = Number(process.env.ROBINHOOD_CHAIN_ID) || 4663;
-const privateKey = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}`;
+const privateKey = process.env.RELAYER_PRIVATE_KEY as `0x${string}`;
 
 if (!privateKey) {
-  console.error("❌ DEPLOYER_PRIVATE_KEY is not defined in contracts/.env");
+  console.error("RELAYER_PRIVATE_KEY is not configured in backend/.env");
+  process.exit(1);
+}
+
+if (chainId !== 4663) {
+  console.error(`Refusing deployment: expected Robinhood Chain 4663, got ${chainId}`);
   process.exit(1);
 }
 
@@ -27,11 +33,12 @@ const publicClient = createPublicClient({ chain: robinhoodChain, transport: http
 const walletClient = createWalletClient({ account, chain: robinhoodChain, transport: http(rpcUrl) });
 
 async function main() {
+  const actualChainId = await publicClient.getChainId();
+  if (actualChainId !== chainId) throw new Error(`RPC is connected to chain ${actualChainId}, expected ${chainId}`);
   console.log("==================================================");
   console.log("🛡️  Veilora Contracts Deployer");
   console.log("==================================================");
   console.log(`Network:     Robinhood Chain (Chain ID: ${chainId})`);
-  console.log(`RPC URL:     ${rpcUrl}`);
   console.log(`Deployer:    ${account.address}`);
 
   const balance = await publicClient.getBalance({ address: account.address });
@@ -49,12 +56,23 @@ async function main() {
   }
 
   const outDir = join(import.meta.dir, "../out");
+  const deployedPath = join(import.meta.dir, "../deployed.json");
+  let priorDeployment: Record<string, unknown> = {};
+  if (existsSync(deployedPath)) {
+    try { priorDeployment = JSON.parse(readFileSync(deployedPath, "utf8")); } catch { priorDeployment = {}; }
+  }
 
   // 1. Deploy or reuse VeiloraFactory
-  let factoryAddress: `0x${string}` = "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7";
-  const existingCode = await publicClient.getCode({ address: factoryAddress });
+  const legacyFactoryFallback = "0x210f310f150c0DF3224D61Ca7dCaf3e1ad578bd7";
+  const configuredFactoryAddress = (priorDeployment.veiloraFactory as string | undefined)
+    ? getAddress(priorDeployment.veiloraFactory as string)
+    : getAddress(process.env.VEILORA_FACTORY_ADDRESS || legacyFactoryFallback);
 
-  if (existingCode && existingCode !== "0x") {
+  let factoryAddress: `0x${string}` = configuredFactoryAddress;
+  const existingCode = await publicClient.getCode({ address: factoryAddress });
+  let factoryDeploymentTx: Hex | null = null;
+
+  if (process.env.DEPLOY_NEW_FACTORY !== "true" && existingCode && existingCode !== "0x") {
     console.log(`ℹ️  VeiloraFactory already deployed at: ${factoryAddress}`);
   } else {
     console.log("🚀 Deploying VeiloraFactory (CREATE2 deterministic wallet factory)...");
@@ -78,48 +96,39 @@ async function main() {
     });
     console.log(`   Tx Hash: ${factoryHash}`);
     const factoryReceipt = await publicClient.waitForTransactionReceipt({ hash: factoryHash });
-    factoryAddress = factoryReceipt.contractAddress!;
+    if (factoryReceipt.status !== "success" || !factoryReceipt.contractAddress) {
+      throw new Error("Factory deployment transaction failed or returned no contract address");
+    }
+    factoryDeploymentTx = factoryHash;
+    factoryAddress = factoryReceipt.contractAddress;
+    const deployedCode = await publicClient.getCode({ address: factoryAddress });
+    if (!deployedCode || deployedCode === "0x") throw new Error("Factory deployment succeeded without deployed code");
     console.log(`✅ VeiloraFactory deployed at: ${factoryAddress}`);
   }
 
-  // 2. Deploy VeiloraShieldedPool (USDG note deposit/unshield pool)
-  console.log("\n🚀 Deploying VeiloraShieldedPool (USDG Shielded Note Pool)...");
-  const poolBin = readFileSync(
-    join(outDir, "contracts_src_VeiloraShieldedPool_sol_VeiloraShieldedPool.bin"),
-    "utf8"
-  ).trim();
-  const poolAbi = JSON.parse(
-    readFileSync(
-      join(outDir, "contracts_src_VeiloraShieldedPool_sol_VeiloraShieldedPool.abi"),
-      "utf8"
-    )
-  );
+  const factoryCode = await publicClient.getCode({ address: factoryAddress });
+  if (!factoryCode || factoryCode === "0x") throw new Error("Configured factory address has no code");
 
-  // Robinhood Chain USDG address
+  // USDG remains a registry token; Veilora no longer deploys a proofless pool.
   const rawUsdgAddress = process.env.USDG_TOKEN_ADDRESS || "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
   const usdgTokenAddress = getAddress(rawUsdgAddress);
-
-  const poolHash = await walletClient.deployContract({
-    abi: poolAbi,
-    bytecode: `0x${poolBin}`,
-    args: [usdgTokenAddress],
-  });
-  console.log(`   Tx Hash: ${poolHash}`);
-  const poolReceipt = await publicClient.waitForTransactionReceipt({ hash: poolHash });
-  const poolAddress = poolReceipt.contractAddress!;
-  console.log(`✅ VeiloraShieldedPool deployed at: ${poolAddress}`);
 
   // Save deployed addresses
   const deployed = {
     chainId,
     deployer: account.address,
+    previousFactory: factoryDeploymentTx
+      ? configuredFactoryAddress
+      : ((priorDeployment.previousFactory as string | undefined)
+          ? getAddress(priorDeployment.previousFactory as string)
+          : legacyFactoryFallback),
     veiloraFactory: factoryAddress,
-    veiloraShieldedPool: poolAddress,
+    factoryDeploymentTx: factoryDeploymentTx ?? (priorDeployment.factoryDeploymentTx as Hex | undefined) ?? null,
+    factoryRuntimeCodeHash: keccak256(factoryCode),
     usdgToken: usdgTokenAddress,
-    deployedAt: new Date().toISOString(),
+    deployedAt: factoryDeploymentTx ? new Date().toISOString() : ((priorDeployment.deployedAt as string | undefined) ?? new Date().toISOString()),
   };
 
-  const deployedPath = join(import.meta.dir, "../deployed.json");
   writeFileSync(deployedPath, JSON.stringify(deployed, null, 2));
   console.log(`\n💾 Saved deployment metadata to contracts/deployed.json`);
   console.log("==================================================");

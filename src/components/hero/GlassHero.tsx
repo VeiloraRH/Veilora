@@ -33,15 +33,14 @@ export function GlassHero() {
     <section className="hero" id="hero" data-theme={theme}>
       <canvas id="scene" ref={canvasRef} aria-label="Rotatable glass cube. Drag to rotate." />
       <div className="ui">
-        <h1 className="sr-only">Veilora: shield every move</h1>
+        <h1 className="sr-only">Veilora: own every move</h1>
         <header className="nav">
           <a href="/" className="logo" aria-label="Veilora home">
             <img className="logo-mark" src="/brand/veilora-mark.png" alt="" width={40} height={40} />
             <span>Veilora</span>
           </a>
           <ul className="nav-links">
-            <li><a href="#how-it-works">Product</a></li>
-            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#wallet">Wallet</a></li>
             <li><Link to="/roadmap">Roadmap</Link></li>
             <li><Link to="/whitepaper">Whitepaper</Link></li>
             <li><Link to="/app">Launch App</Link></li>

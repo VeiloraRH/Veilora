@@ -15,15 +15,7 @@ import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
-import { Route as AppDisclosureRouteImport } from './routes/app/disclosure'
-import { Route as AppIntentRouteImport } from './routes/app/intent'
 import { Route as AppMarketRouteImport } from './routes/app/market'
-import { Route as AppMoveRouteImport } from './routes/app/move'
-import { Route as AppNetworkRouteImport } from './routes/app/network'
-import { Route as AppOutboxRouteImport } from './routes/app/outbox'
-import { Route as AppPoliciesRouteImport } from './routes/app/policies'
-import { Route as AppPrivacyRouteImport } from './routes/app/privacy'
-import { Route as AppRecipesRouteImport } from './routes/app/recipes'
 import { Route as AppSecurityRouteImport } from './routes/app/security'
 import { Route as AppSwapRouteImport } from './routes/app/swap'
 
@@ -57,49 +49,9 @@ const AppActivityRoute = AppActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppDisclosureRoute = AppDisclosureRouteImport.update({
-  id: '/disclosure',
-  path: '/disclosure',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppIntentRoute = AppIntentRouteImport.update({
-  id: '/intent',
-  path: '/intent',
-  getParentRoute: () => AppRouteRoute,
-} as any)
 const AppMarketRoute = AppMarketRouteImport.update({
   id: '/market',
   path: '/market',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppMoveRoute = AppMoveRouteImport.update({
-  id: '/move',
-  path: '/move',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppNetworkRoute = AppNetworkRouteImport.update({
-  id: '/network',
-  path: '/network',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppOutboxRoute = AppOutboxRouteImport.update({
-  id: '/outbox',
-  path: '/outbox',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppPoliciesRoute = AppPoliciesRouteImport.update({
-  id: '/policies',
-  path: '/policies',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppPrivacyRoute = AppPrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => AppRouteRoute,
-} as any)
-const AppRecipesRoute = AppRecipesRouteImport.update({
-  id: '/recipes',
-  path: '/recipes',
   getParentRoute: () => AppRouteRoute,
 } as any)
 const AppSecurityRoute = AppSecurityRouteImport.update({
@@ -119,15 +71,7 @@ export interface FileRoutesByFullPath {
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
-  '/app/disclosure': typeof AppDisclosureRoute
-  '/app/intent': typeof AppIntentRoute
   '/app/market': typeof AppMarketRoute
-  '/app/move': typeof AppMoveRoute
-  '/app/network': typeof AppNetworkRoute
-  '/app/outbox': typeof AppOutboxRoute
-  '/app/policies': typeof AppPoliciesRoute
-  '/app/privacy': typeof AppPrivacyRoute
-  '/app/recipes': typeof AppRecipesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
@@ -137,15 +81,7 @@ export interface FileRoutesByTo {
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
-  '/app/disclosure': typeof AppDisclosureRoute
-  '/app/intent': typeof AppIntentRoute
   '/app/market': typeof AppMarketRoute
-  '/app/move': typeof AppMoveRoute
-  '/app/network': typeof AppNetworkRoute
-  '/app/outbox': typeof AppOutboxRoute
-  '/app/policies': typeof AppPoliciesRoute
-  '/app/privacy': typeof AppPrivacyRoute
-  '/app/recipes': typeof AppRecipesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app': typeof AppIndexRoute
@@ -157,15 +93,7 @@ export interface FileRoutesById {
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
-  '/app/disclosure': typeof AppDisclosureRoute
-  '/app/intent': typeof AppIntentRoute
   '/app/market': typeof AppMarketRoute
-  '/app/move': typeof AppMoveRoute
-  '/app/network': typeof AppNetworkRoute
-  '/app/outbox': typeof AppOutboxRoute
-  '/app/policies': typeof AppPoliciesRoute
-  '/app/privacy': typeof AppPrivacyRoute
-  '/app/recipes': typeof AppRecipesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
@@ -178,15 +106,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/whitepaper'
     | '/app/activity'
-    | '/app/disclosure'
-    | '/app/intent'
     | '/app/market'
-    | '/app/move'
-    | '/app/network'
-    | '/app/outbox'
-    | '/app/policies'
-    | '/app/privacy'
-    | '/app/recipes'
     | '/app/security'
     | '/app/swap'
     | '/app/'
@@ -196,15 +116,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/whitepaper'
     | '/app/activity'
-    | '/app/disclosure'
-    | '/app/intent'
     | '/app/market'
-    | '/app/move'
-    | '/app/network'
-    | '/app/outbox'
-    | '/app/policies'
-    | '/app/privacy'
-    | '/app/recipes'
     | '/app/security'
     | '/app/swap'
     | '/app'
@@ -215,15 +127,7 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/whitepaper'
     | '/app/activity'
-    | '/app/disclosure'
-    | '/app/intent'
     | '/app/market'
-    | '/app/move'
-    | '/app/network'
-    | '/app/outbox'
-    | '/app/policies'
-    | '/app/privacy'
-    | '/app/recipes'
     | '/app/security'
     | '/app/swap'
     | '/app/'
@@ -280,67 +184,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppActivityRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/app/disclosure': {
-      id: '/app/disclosure'
-      path: '/disclosure'
-      fullPath: '/app/disclosure'
-      preLoaderRoute: typeof AppDisclosureRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/intent': {
-      id: '/app/intent'
-      path: '/intent'
-      fullPath: '/app/intent'
-      preLoaderRoute: typeof AppIntentRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
     '/app/market': {
       id: '/app/market'
       path: '/market'
       fullPath: '/app/market'
       preLoaderRoute: typeof AppMarketRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/move': {
-      id: '/app/move'
-      path: '/move'
-      fullPath: '/app/move'
-      preLoaderRoute: typeof AppMoveRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/network': {
-      id: '/app/network'
-      path: '/network'
-      fullPath: '/app/network'
-      preLoaderRoute: typeof AppNetworkRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/outbox': {
-      id: '/app/outbox'
-      path: '/outbox'
-      fullPath: '/app/outbox'
-      preLoaderRoute: typeof AppOutboxRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/policies': {
-      id: '/app/policies'
-      path: '/policies'
-      fullPath: '/app/policies'
-      preLoaderRoute: typeof AppPoliciesRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/privacy': {
-      id: '/app/privacy'
-      path: '/privacy'
-      fullPath: '/app/privacy'
-      preLoaderRoute: typeof AppPrivacyRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
-    '/app/recipes': {
-      id: '/app/recipes'
-      path: '/recipes'
-      fullPath: '/app/recipes'
-      preLoaderRoute: typeof AppRecipesRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/app/security': {
@@ -362,15 +210,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
-  AppDisclosureRoute: typeof AppDisclosureRoute
-  AppIntentRoute: typeof AppIntentRoute
   AppMarketRoute: typeof AppMarketRoute
-  AppMoveRoute: typeof AppMoveRoute
-  AppNetworkRoute: typeof AppNetworkRoute
-  AppOutboxRoute: typeof AppOutboxRoute
-  AppPoliciesRoute: typeof AppPoliciesRoute
-  AppPrivacyRoute: typeof AppPrivacyRoute
-  AppRecipesRoute: typeof AppRecipesRoute
   AppSecurityRoute: typeof AppSecurityRoute
   AppSwapRoute: typeof AppSwapRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -378,15 +218,7 @@ interface AppRouteRouteChildren {
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppActivityRoute: AppActivityRoute,
-  AppDisclosureRoute: AppDisclosureRoute,
-  AppIntentRoute: AppIntentRoute,
   AppMarketRoute: AppMarketRoute,
-  AppMoveRoute: AppMoveRoute,
-  AppNetworkRoute: AppNetworkRoute,
-  AppOutboxRoute: AppOutboxRoute,
-  AppPoliciesRoute: AppPoliciesRoute,
-  AppPrivacyRoute: AppPrivacyRoute,
-  AppRecipesRoute: AppRecipesRoute,
   AppSecurityRoute: AppSecurityRoute,
   AppSwapRoute: AppSwapRoute,
   AppIndexRoute: AppIndexRoute,

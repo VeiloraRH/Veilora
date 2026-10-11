@@ -6,7 +6,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 const MODEL_URL =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260929_212926_92423081-b0e4-4f5a-b650-14af6c05c058.glb";
 
-const HEADLINE = ["Shield", "Every", "Move"];
+const HEADLINE = ["Own", "Every", "Move"];
 // Backdrop palettes. Colour fields are [x, y, radius (of the longer side), rgb, alpha].
 export type HeroTheme = "light" | "dark";
 type Palette = {

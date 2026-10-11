@@ -1,5 +1,7 @@
 import { expect, test, describe } from "bun:test";
 import request from "supertest";
+import { getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { app } from "../src/app";
 import { generateShardKey, signUserOpHash, computeExecutionDigest } from "../src/crypto";
 
@@ -23,11 +25,19 @@ describe("Threshold Wallets & Co-signing API", () => {
     shardAAddress = shardA.address;
     shardCAddress = generateShardKey().address;
 
+    const requestId = `0x${"11".repeat(32)}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const shardASignature = await privateKeyToAccount(shardA.privateKey).signMessage({
+      message: `Veilora wallet registration\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:false\ntimestamp:${timestamp}\nrequest:${requestId}`,
+    });
     const res = await request(app)
       .post("/v1/wallets")
       .send({
         shardAAddress,
         shardCAddress,
+        requestId,
+        timestamp,
+        shardASignature,
       });
 
     expect(res.status).toBe(201);
@@ -53,12 +63,17 @@ describe("Threshold Wallets & Co-signing API", () => {
     expect(res.body.isFrozen).toBe(false);
   });
 
-  test("POST /v1/wallets/:address/cosign produces valid Shard B ECDSA signature", async () => {
+  test("POST /v1/wallets/:address/cosign rejects arbitrary unsigned digests and unsupported calls", async () => {
+    const unsigned = await request(app)
+      .post(`/v1/wallets/${walletAddress}/cosign`)
+      .send({ digest: `0x${"11".repeat(32)}` });
+    expect(unsigned.status).toBe(400);
+
     const target = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
     const value = "0";
     const data = "0x";
     const nonce = 0;
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
+    const deadline = Math.floor(Date.now() / 1000) + 240;
 
     const digest = computeExecutionDigest(
       target as `0x${string}`,
@@ -83,22 +98,29 @@ describe("Threshold Wallets & Co-signing API", () => {
         shardASignature: shardASig,
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("APPROVED");
-    expect(res.body.shardBSignature).toBeString();
-    expect(res.body.shardBAddress.toLowerCase()).toBe(shardBAddress.toLowerCase());
-    expect(res.body.combinedSignatures).toBeString();
-    // Combined signature is 130 bytes hex (260 characters + 0x = 262 characters)
-    expect(res.body.combinedSignatures.length).toBe(2 + 130 * 2);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain("policy denied");
   });
 
   test("POST /v1/wallets/:address/freeze activates panic freeze and rejects co-signing", async () => {
+    const unauthorizedFreeze = await request(app)
+      .post(`/v1/wallets/${walletAddress}/freeze`)
+      .send({ hours: 12, reason: "unauthorized attempt" });
+    expect(unauthorizedFreeze.status).toBe(400);
+
+    const freezeTimestamp = Math.floor(Date.now() / 1000);
+    const freezeReason = "Suspected device breach test";
+    const freezeSignature = await privateKeyToAccount(shardAPrivateKey).signMessage({
+      message: `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:freeze\nhours:12\nreason:${freezeReason}\ntimestamp:${freezeTimestamp}`,
+    });
     // 1. Trigger freeze
     const freezeRes = await request(app)
       .post(`/v1/wallets/${walletAddress}/freeze`)
       .send({
         hours: 12,
-        reason: "Suspected device breach test",
+        reason: freezeReason,
+        timestamp: freezeTimestamp,
+        shardASignature: freezeSignature,
       });
 
     expect(freezeRes.status).toBe(200);
@@ -117,7 +139,14 @@ describe("Threshold Wallets & Co-signing API", () => {
     expect(cosignRes.body.error).toBe("Wallet is currently frozen");
 
     // 3. Unfreeze wallet
-    const unfreezeRes = await request(app).post(`/v1/wallets/${walletAddress}/unfreeze`);
+    const unfreezeTimestamp = Math.floor(Date.now() / 1000);
+    const unfreezeSignature = await privateKeyToAccount(shardAPrivateKey).signMessage({
+      message: `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${unfreezeTimestamp}`,
+    });
+    const unfreezeRes = await request(app).post(`/v1/wallets/${walletAddress}/unfreeze`).send({
+      timestamp: unfreezeTimestamp,
+      shardASignature: unfreezeSignature,
+    });
     expect(unfreezeRes.status).toBe(200);
     expect(unfreezeRes.body.frozen).toBe(false);
   });

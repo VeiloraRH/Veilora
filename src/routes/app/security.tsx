@@ -188,7 +188,7 @@ export function SecurityScreen() {
     {
       id: "B",
       name: "Veilora Co-Signer",
-      holder: "Automated policy co-signer on Robinhood Chain",
+      holder: "Encrypted by the Veilora backend and released only after Shard A authorization",
       address: wallet?.shardB || "0xF1d2…895d",
       icon: Server,
       status: "Active",
@@ -338,10 +338,10 @@ export function SecurityScreen() {
         <Card title="Co-Signer Trust Boundary" eyebrow="What Shard B evaluates">
           <div className="space-y-3">
             {[
-              { rule: "Evaluates intent policy limits before adding signature", ok: true },
-              { rule: "Cannot move funds unilaterally without your device signature", ok: true },
-              { rule: "Never sees unblinded shielded note secrets or recipients", ok: true },
-              { rule: "Refuses signing immediately if an emergency freeze is triggered", ok: true },
+              { rule: "Requires a valid Shard A signature over the exact transaction", ok: true },
+              { rule: "Cannot move funds unilaterally without a second key", ok: true },
+              { rule: "Transaction details remain public on Robinhood Chain", ok: true },
+              { rule: "Refuses signing while an authorized emergency freeze is active", ok: true },
             ].map((item, idx) => (
               <div key={idx} className="flex items-center gap-3 text-sm">
                 <ShieldCheck className="h-4 w-4 text-teal-300 shrink-0" />
@@ -351,7 +351,7 @@ export function SecurityScreen() {
           </div>
           <div className="mt-5 border-t border-ink-600/60 pt-4">
             <KV k="Network" v="Robinhood Chain" />
-            <KV k="Co-Signer Policy Engine" v="Veilora HSM Co-Signer" />
+            <KV k="Co-Signer" v="Veilora backend" />
             <KV k="Threshold Required" v="2 of 3" />
             <KV k="Emergency Action" v="Panic Freeze available at any time" />
           </div>

@@ -1,175 +1,55 @@
 # Veilora
 
-[![CI](https://github.com/notadeveloper7/veilora/actions/workflows/backend.yml/badge.svg)](https://github.com/notadeveloper7/veilora/actions/workflows/backend.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-1.x-000000?logo=bun&logoColor=white)
-![TanStack](https://img.shields.io/badge/TanStack-React-FF4154?logo=react&logoColor=white)
-![Robinhood Chain](https://img.shields.io/badge/Robinhood_Chain-4663-00C805?logo=ethereum&logoColor=white)
+Veilora is a threshold self-custody wallet for Robinhood Chain (chain ID 4663). The current app focuses on balances, send, receive, token swaps, and transaction history.
 
-> **Move quietly. Stay in control.**
+## Current capabilities
 
-Veilora is a private financial operating layer for Robinhood Chain (Chain ID `4663`) and compatible networks. It bridges threshold self-custody (2-of-3 MPC quorum), intent-based planning, and local-first balance simulations with shielded DeFi execution, selective disclosure view keys, and clean-provenance (PPOI) proofs into an explainable control loop with no single point of signing authority.
+- **2-of-3 account authorization.** Shard A is encrypted on the user's device, Shard B is held by the backend in authenticated ciphertext, and Shard C is exported during onboarding for offline recovery.
+- **Send and receive.** Transactions use the account's threshold execution path. Receive displays the public account address and QR code.
+- **Swap.** The wallet compares available Uniswap v3 and v4 quotes and submits the selected route after device authorization.
+- **Activity.** Transaction history is fetched from the configured Blockscout API with pagination and filtering in the client.
+- **Account controls.** Disconnect requires a Shard A signature and clears local wallet data; freeze and unfreeze require fresh Shard A signatures.
 
----
+## Trust boundaries and security limits
 
-## Architecture: Three Planes
+- **No privacy or zero-knowledge guarantees:** Veilora currently has no ZK circuit, SNARK prover, or on-chain verifier. All transactions, token balances, and account activities are transparent and public on Robinhood Chain (EVM 4663). Shielded UTXOs, private notes, and selective-disclosure proofs are not supported.
+- **Legacy pool notice:** An early prototype pool contract remains deployed on-chain and cannot be deleted or upgraded. The application and backend do not interface with it, and it holds zero USDG. Users must never send funds to that contract.
+- **Threshold trust model:** Each account requires 2-of-3 signatures to execute. Shard A is client-held and encrypted in browser storage. Shard B is backend-held and encrypted at rest with AES-256-GCM. Shard C is an offline recovery key controlled solely by the user. Neither the user alone (without Shard C) nor the backend alone can move funds.
+- **Backend co-signer enforcement:** Shard B only co-signs transactions authorized by an active Shard A signature that conform to strict policy: allowlisted targets (native transfers, registered tokens, and verified Uniswap v3/v4 routers), a rolling daily spend limit (capped at 20% of account balance), and an unexpired deadline (<= 5 minutes). All arbitrary contract interactions are denied.
+- **Sponsored relayer limits:** Relayed deployments are bounded by per-IP rate limits (20/hour) and a strict daily budget (`RELAYER_DAILY_DEPLOYMENT_LIMIT`, default 10). Replay protection enforces unique signed registration requests.
 
-| Plane | Core Responsibility | Key Components |
-|---|---|---|
-| **Control Plane** | *"What do I want to happen?"* | Intent Console, Simulation & Quote Engine, Policy & Guardrails, 2-of-3 Quorum Outbox, Local Audit Trail |
-| **Privacy Plane** | *"Who can see what?"* | Shielded UTXO Notes, Join-split Commitments, Clean-Provenance Proofs, Scoped View Keys |
-| **Execution Plane** | *"How does it settle?"* | Robinhood Chain Adapter, ERC-4337 Account Abstraction, Uniswap V3 Swaps, Morpho Lending, Broadcaster Network |
+## Repository layout
 
----
+- `src/` — React 19, TanStack Router, Vite, Tailwind CSS v4 wallet frontend.
+- `backend/` — Bun, Express, and PostgreSQL API for wallet registration, co-signing, signed account controls, relaying, and transaction history.
+- `contracts/` — Solidity account and CREATE2 factory contracts with Foundry tests.
 
-## Core Capabilities
+## Development
 
-| Capability | Specification | Guarantee |
-|---|---|---|
-| **Threshold Custody** | 2-of-3 Shard Quorum (Shard A: Device, Shard B: Policy Co-signer, Shard C: Passkey) | No unilateral fund movements or single points of failure |
-| **Intent Normalization** | Natural language to structured simulation diffs | Clear before-and-after state preview before signing |
-| **Shielded Operations** | UTXO-style private notes & join-split circuits | Protects balance exposure and transactional counterparties |
-| **Clean Provenance** | Association-set proofs of innocence (PPOI) | Validates clean history without publishing user books |
-| **Selective Disclosure** | Scoped, time-limited, and revocable view keys | Granular disclosure for counterparty, tax, or audit compliance |
-| **Safe Unshielding** | Deterministic timeout, destination verification & refund state machine | Eliminates stranded-fund risk if proof providers delay |
+Run from the repository root:
 
----
-
-## Execution Pipeline
-
-```text
-1. Express Intent  --> "Buy 500 USDG of NVDA exposure and keep it shielded"
-2. Local Parse     --> Verify supported tokens, routes, and reserve policies
-3. Simulation      --> Compute public diff, expected note commitment, and gas reserve
-4. Policy Gate     --> Validate max slippage / fee ceiling (<0.75%) and provenance
-5. Quorum Auth     --> Collect threshold signatures (Shard A + Shard B)
-6. Atomic Settle   --> Broadcaster executes on Robinhood Chain (ERC-4337 / DEX)
-7. Audit Receipt   --> Local encrypted receipt generated with proof state & commitment
-```
-
----
-
-## API Endpoints
-
-The backend provides HTTP endpoints for status monitoring, simulation, and outbox orchestration:
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | Service health, ISO timestamp, and version metadata |
-| `POST` | `/v1/intent/simulate` | Simulates public/shielded balance diffs and fee quotes |
-| `POST` | `/v1/policies/evaluate` | Evaluates plan against active guardrails and fee ceilings |
-| `POST` | `/v1/outbox/authorize` | Submits threshold signature shares for 2-of-3 execution |
-| `GET` | `/v1/adapters/status` | Current capability declarations for Robinhood Chain |
-
----
-
-## Repository Structure
-
-```text
-veilora/
-├── .github/workflows/
-│   └── backend.yml           # CI: test, GHCR build/push, release, Render deploy
-├── backend/                  # Bun + Express + PostgreSQL service
-│   ├── db/migrations/        # SQL migrations (001_initial.sql)
-│   ├── src/
-│   │   ├── db/               # pg.Pool connection & transaction migration runner
-│   │   ├── routes/           # Express routes (/health)
-│   │   ├── app.ts            # App configuration & middleware
-│   │   └── index.ts          # Server entrypoint
-│   ├── tests/                # Bun test suite with supertest
-│   ├── Dockerfile            # Container build for deployment
-│   └── package.json
-├── contracts/                # Smart contracts scaffold (Robinhood Chain)
-├── src/                      # TanStack React frontend
-│   ├── components/ui/        # Reusable interface components
-│   ├── lib/                  # Utilities (cn, helpers)
-│   ├── routes/               # File-based TanStack Router pages
-│   │   ├── __root.tsx        # Navigation shell
-│   │   └── index.tsx         # Intent Simulator landing experience
-│   ├── main.tsx              # React DOM entry
-│   └── router.tsx            # TanStack Router instance
-├── technical-docs/           # Product specifications & architectural PDFs
-├── vercel.json               # Vercel deployment configuration
-├── vite.config.ts            # Vite + TanStack Router + Tailwind configuration
-└── package.json              # Monorepo root scripts & frontend dependencies
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-- [Bun](https://bun.sh) (>= 1.4.0)
-- [Node.js](https://nodejs.org) (>= 20)
-- PostgreSQL (local instance or Supabase)
-
-### 1. Installation
-
-```bash
-# Clone repository
-git clone https://github.com/notadeveloper7/veilora.git
-cd veilora
-
-# Install frontend dependencies
-bun install
-
-# Install backend dependencies
-cd backend && bun install && cd ..
-```
-
-### 2. Environment Setup
-
-```bash
-# Frontend environment
-cp .env.example .env
-
-# Backend environment
-cp backend/.env.example backend/.env
-```
-
-### 3. Development
-
-```bash
-# Run TanStack React frontend (http://localhost:5173)
+```sh
+bun install --frozen-lockfile
 bun run dev
-
-# Run backend API in watch mode (http://localhost:3001)
-bun run backend:dev
-```
-
-### 4. Running Tests & Type Checks
-
-```bash
-# Run frontend typecheck & build
 bun run check
 bun run build
-
-# Run backend test suite
-bun run test
+bun test
+bun run compile:contracts
 ```
 
----
+Backend development runs separately:
 
-## Phased Roadmap
+```sh
+cd backend
+bun install --frozen-lockfile
+bun run db:migrate
+bun run dev
+```
 
-- [x] **Gate 1 — Trustworthy Control Core:** 2-of-3 threshold custody architecture, intent console, simulation engine, policy guardrails, and audit receipts.
-- [ ] **Gate 2 — Shielded Payments:** Private notes and clean-provenance (PPOI) proof integration for USDG on Robinhood Chain.
-- [ ] **Gate 3 — Shielded DeFi Recipes:** Composable recipes (shield → swap → note commit) with broadcaster failover and atomic execution.
-- [ ] **Gate 4 — Tokenized-Stock Differentiation:** Shielded equity exposure (e.g., NVDA exposure) with corporate-action handling and compliance proofs.
-- [ ] **Gate 5 — Multichain Privacy:** Extend execution plane beyond Robinhood Chain with explicit per-chain privacy declarations.
+The backend requires `DATABASE_URL`, a Robinhood Chain RPC URL, and `SHARD_B_ENCRYPTION_KEY` (at least 32 bytes of secret material). `CO_SIGNER_SHARD_B_SECRET` remains supported for existing encrypted records during key migration. Sponsored account deployment also requires `RELAYER_PRIVATE_KEY`; daily deployments are capped by `RELAYER_DAILY_DEPLOYMENT_LIMIT`.
 
----
+## Deployment
 
-## Tech Stack
+The factory address is configured through `VEILORA_FACTORY_ADDRESS`; USDG is configured through `USDG_TOKEN_ADDRESS`. The deployment script reads `RELAYER_PRIVATE_KEY` from `backend/.env`, checks for chain ID 4663, and does not print the RPC URL or private key. Existing account addresses depend on their original factory, so keep the original factory address available for accounts that have not yet deployed.
 
-- **Frontend:** TanStack React, TanStack Router, TanStack Query, Tailwind CSS, Vite
-- **Backend:** TypeScript, Bun, Express, PostgreSQL (`pg`)
-- **Hosting:** Vercel (Frontend), Render / GHCR (Backend)
-- **Primary Chain:** Robinhood Chain (`4663`)
-
----
-
-## License
-
-[MIT](LICENSE) © 2026 Veilora
+Run database migrations before serving the updated backend. Migration `004` removes the unused shielded-note and disclosure scaffolding; migrations `005`–`007` add registration replay protection, a sponsored deployment budget, daily co-sign limits, and per-wallet factory versioning.

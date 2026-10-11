@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CheckCircle2, AlertCircle, X, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Tone, Visibility } from "@/demo/data";
+import type { Tone } from "@/demo/data";
 
 // Shadcn component exports
 export { Button, buttonVariants, type ButtonProps } from "./button";
@@ -89,34 +89,6 @@ export function Logo({
           Veilora
         </span>
       )}
-    </span>
-  );
-}
-
-const VIS: Record<Visibility, { label: string; tone: Tone }> = {
-  public: { label: "Public", tone: "coral" },
-  shielded: { label: "Shielded", tone: "teal" },
-  provider: { label: "Proof provider", tone: "gold" },
-  local: { label: "On device", tone: "cream" },
-};
-
-export function VisibilityBadge({ v }: { v: Visibility }) {
-  const toneClasses: Record<Tone, string> = {
-    gold: "bg-gold-400/15 text-amber-700 dark:text-gold-300 border-gold-400/30",
-    teal: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30",
-    coral: "bg-coral-500/15 text-coral-600 dark:text-coral-400 border-coral-500/30",
-    wine: "bg-wine-500/15 text-wine-600 dark:text-coral-400 border-wine-500/30",
-    mist: "bg-slate-100 dark:bg-ink-700/60 text-slate-600 dark:text-mist border-slate-200 dark:border-ink-600",
-    cream: "bg-slate-100 dark:bg-cream/8 text-slate-800 dark:text-cream border-slate-200 dark:border-cream/20",
-  };
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
-        toneClasses[VIS[v].tone]
-      )}
-    >
-      {VIS[v].label}
     </span>
   );
 }

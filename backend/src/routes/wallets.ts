@@ -1,6 +1,5 @@
 import { Router, type Request, type Response } from "express";
 import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
-import { sha256Hex } from "../crypto";
 import { query } from "../db/index";
 import {
   CHAIN_ID,
@@ -22,13 +21,36 @@ import {
 } from "../crypto";
 import { buildBlockscoutHistoryUrl } from "../blockscout";
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
+import { enforceExecutionPolicy } from "../txPolicy";
 
 export const walletsRouter = Router();
 
 const ADDRESS_LOOKUP_ATTEMPTS = 3;
 const ADDRESS_LOOKUP_DELAYS_MS = [250, 750];
+const DAILY_SPONSORED_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
+const REGISTRATION_WINDOW_MS = 60 * 60 * 1000;
+const REGISTRATION_LIMIT_PER_IP = 20;
+const registrationAttempts = new Map<string, { startedAt: number; count: number }>();
+
+function consumeRegistrationAttempt(ip: string): boolean {
+  const now = Date.now();
+  const current = registrationAttempts.get(ip);
+  if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
+    registrationAttempts.set(ip, { startedAt: now, count: 1 });
+    if (registrationAttempts.size > 5000) {
+      for (const [key, attempt] of registrationAttempts) {
+        if (now - attempt.startedAt >= REGISTRATION_WINDOW_MS) registrationAttempts.delete(key);
+      }
+    }
+    return true;
+  }
+  if (current.count >= REGISTRATION_LIMIT_PER_IP) return false;
+  current.count += 1;
+  return true;
+}
 
 async function readCounterfactualAddress(
+  factoryAddress: `0x${string}`,
   shardA: `0x${string}`,
   shardB: `0x${string}`,
   shardC: `0x${string}`,
@@ -38,7 +60,7 @@ async function readCounterfactualAddress(
   for (let attempt = 0; attempt < ADDRESS_LOOKUP_ATTEMPTS; attempt += 1) {
     try {
       return await publicClient.readContract({
-        address: FACTORY_ADDRESS,
+        address: factoryAddress,
         abi: veiloraFactoryAbi,
         functionName: "getAddress",
         args: [shardA, shardB, shardC, salt],
@@ -62,6 +84,10 @@ async function readCounterfactualAddress(
  */
 walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!consumeRegistrationAttempt(req.ip || req.socket.remoteAddress || "unknown")) {
+      res.status(429).json({ error: "Wallet registration rate limit reached; try again later" });
+      return;
+    }
     let shardA = req.body.shardAAddress as `0x${string}` | undefined;
     let shardC = req.body.shardCAddress as `0x${string}` | undefined;
     if (!shardA || !isAddress(shardA) || !shardC || !isAddress(shardC)) {
@@ -71,6 +97,27 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     const salt = BigInt(req.body.salt || 0);
     shardA = getAddress(shardA);
     shardC = getAddress(shardC);
+    const { requestId, timestamp, shardASignature } = req.body;
+    if (typeof requestId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(requestId) ||
+        !Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300 ||
+        !shardASignature || !isHex(shardASignature) || shardASignature.length !== 132) {
+      res.status(400).json({ error: "A fresh Shard A registration signature and request ID are required" });
+      return;
+    }
+    const registrationMessage = `Veilora wallet registration\nshardA:${shardA}\nshardC:${shardC}\nsalt:${salt}\ndeploy:${req.body.deployOnCreate === true}\ntimestamp:${timestamp}\nrequest:${requestId}`;
+    const registrationSigner = await recoverMessageAddress({ message: registrationMessage, signature: shardASignature });
+    if (registrationSigner.toLowerCase() !== shardA.toLowerCase()) {
+      res.status(403).json({ error: "Registration signature does not match Shard A" });
+      return;
+    }
+    const duplicateRequest = await query(
+      "SELECT address FROM wallets WHERE registration_request_id = $1",
+      [requestId],
+    );
+    if (duplicateRequest.rows.length) {
+      res.status(409).json({ error: "This wallet registration request has already been used" });
+      return;
+    }
 
     // Generate Shard B (Backend Co-Signer Shard)
     const shardB = generateShardKey();
@@ -80,6 +127,7 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     let counterfactualAddress: `0x${string}`;
     try {
       counterfactualAddress = await readCounterfactualAddress(
+        FACTORY_ADDRESS,
         shardA,
         shardB.address,
         shardC,
@@ -96,6 +144,20 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     if (req.body.deployOnCreate === true) {
       if (!relayerClient || !relayerAccount) {
         res.status(503).json({ error: "Account deployment is unavailable: the backend gas payer is not configured" });
+        return;
+      }
+
+      const reservation = await query(
+        `INSERT INTO relayer_deployment_budget (utc_day, deployment_count)
+         VALUES ((now() AT TIME ZONE 'UTC')::date, 1)
+         ON CONFLICT (utc_day) DO UPDATE
+           SET deployment_count = relayer_deployment_budget.deployment_count + 1
+           WHERE relayer_deployment_budget.deployment_count < $1
+         RETURNING deployment_count`,
+        [DAILY_SPONSORED_DEPLOYMENT_LIMIT],
+      );
+      if (!reservation.rows.length) {
+        res.status(429).json({ error: "Daily sponsored wallet deployment limit reached" });
         return;
       }
 
@@ -130,18 +192,20 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
 
     await query(
       `INSERT INTO wallets (
-        address, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
-        shard_c_address, api_key_hash, threshold, totp_secret_encrypted
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 2, $8)
+        address, factory_address, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
+        shard_c_address, api_key_hash, threshold, totp_secret_encrypted, registration_request_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2, $9, $10)
       ON CONFLICT (address) DO UPDATE SET
         shard_a_address = EXCLUDED.shard_a_address,
         shard_b_address = EXCLUDED.shard_b_address,
         shard_b_encrypted = EXCLUDED.shard_b_encrypted,
         shard_c_address = EXCLUDED.shard_c_address,
+        factory_address = EXCLUDED.factory_address,
         api_key_hash = EXCLUDED.api_key_hash,
         updated_at = now()`,
       [
         counterfactualAddress.toLowerCase(),
+        FACTORY_ADDRESS.toLowerCase(),
         CHAIN_ID,
         shardA.toLowerCase(),
         shardB.address.toLowerCase(),
@@ -149,6 +213,7 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         shardC.toLowerCase(),
         apiKeyHash,
         req.body.totpSecret ? encryptSecret(req.body.totpSecret) : null,
+        requestId,
       ]
     );
 
@@ -203,17 +268,8 @@ walletsRouter.delete("/:address", async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const legacyOwnerViewTag = sha256Hex(`view:${address}`).slice(0, 18);
-    await query(
-      `WITH legacy_notes AS (
-         DELETE FROM shielded_notes
-         WHERE wallet_address IS NULL AND owner_view_tag = $2
-         RETURNING commitment
-       )
-       DELETE FROM wallets WHERE address = $1`,
-      [address.toLowerCase(), legacyOwnerViewTag],
-    );
-    // cosign_audit and view_keys are linked with ON DELETE CASCADE.
+    await query("DELETE FROM wallets WHERE address = $1", [address.toLowerCase()]);
+    // Wallet audit records are linked with ON DELETE CASCADE.
     res.json({ deleted: true, walletAddress: address });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to delete wallet data" });
@@ -259,6 +315,7 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
       address: getAddress(wallet.address),
       chainId: wallet.chain_id,
       shardA: getAddress(wallet.shard_a_address),
+      factoryAddress: getAddress(wallet.factory_address || FACTORY_ADDRESS),
       shardB: getAddress(wallet.shard_b_address),
       shardC: getAddress(wallet.shard_c_address),
       threshold: wallet.threshold,
@@ -311,33 +368,52 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
       return;
     }
 
-    // 2. Compute or read the digest to sign
-    let digest: `0x${string}`;
-
-    if (req.body.target && req.body.nonce !== undefined && req.body.deadline !== undefined) {
-      // Robinhood Chain native executeWithSignatures format
-      const target = getAddress(req.body.target);
-      const value = BigInt(req.body.value || 0);
-      const data = (req.body.data || "0x") as `0x${string}`;
-      const nonce = BigInt(req.body.nonce);
-      const deadline = BigInt(req.body.deadline);
-
-      digest = computeExecutionDigest(
-        target,
-        value,
-        data,
-        nonce,
-        deadline,
-        BigInt(wallet.chain_id || CHAIN_ID)
+    // Only sign a complete, owner-authorized execution. Arbitrary caller-supplied
+    // digests and ERC-4337 hashes are intentionally not accepted.
+    const { target: rawTarget, value = "0", data = "0x", nonce: rawNonce, deadline: rawDeadline, shardASignature } = req.body;
+    if (!isAddress(rawTarget || "") || rawNonce === undefined || rawDeadline === undefined ||
+        !/^(0|[1-9]\d*)$/.test(String(value)) || !/^(0|[1-9]\d*)$/.test(String(rawNonce)) ||
+        !/^(0|[1-9]\d*)$/.test(String(rawDeadline)) || !isHex(data)) {
+      res.status(400).json({ error: "Valid target, value, calldata, nonce and deadline are required" });
+      return;
+    }
+    if (!shardASignature || !isHex(shardASignature) || shardASignature.length !== 132) {
+      res.status(400).json({ error: "A valid Shard A execution signature is required" });
+      return;
+    }
+    const target = getAddress(rawTarget);
+    const nonce = BigInt(rawNonce);
+    const deadline = BigInt(rawDeadline);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (deadline <= now || deadline > now + 300n) {
+      res.status(400).json({ error: "Execution deadline must be within the next five minutes" });
+      return;
+    }
+    // The deployed account enforces the authoritative nonce during execution.
+    // This endpoint has no caller-supplied digest path; Shard A must authorize
+    // this exact payload, and the short deadline bounds stale approvals.
+    const digest = computeExecutionDigest(
+      target,
+      BigInt(value),
+      data as `0x${string}`,
+      nonce,
+      deadline,
+      BigInt(wallet.chain_id || CHAIN_ID),
+    );
+    const recoveredShardA = await recoverMessageAddress({ message: { raw: digest }, signature: shardASignature });
+    if (recoveredShardA.toLowerCase() !== String(wallet.shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Execution signature does not match this wallet's Shard A" });
+      return;
+    }
+    try {
+      await enforceExecutionPolicy(getAddress(address), target, BigInt(value), data as `0x${string}`);
+    } catch (policyError) {
+      await query(
+        `INSERT INTO cosign_audit (wallet_address, user_op_hash, status, metadata)
+         VALUES ($1, $2, 'REJECTED_POLICY', $3)`,
+        [address, digest, JSON.stringify({ reason: policyError instanceof Error ? policyError.message : "Policy denied" })],
       );
-    } else if (req.body.digest && isHex(req.body.digest) && req.body.digest.length === 66) {
-      digest = req.body.digest as `0x${string}`;
-    } else if (req.body.userOpHash && isHex(req.body.userOpHash) && req.body.userOpHash.length === 66) {
-      digest = req.body.userOpHash as `0x${string}`;
-    } else {
-      res.status(400).json({
-        error: "Missing execution parameters (target, value, data, nonce, deadline) or 32-byte digest/userOpHash",
-      });
+      res.status(403).json({ error: policyError instanceof Error ? policyError.message : "Transaction denied by co-signer policy" });
       return;
     }
 
@@ -347,12 +423,7 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
 
     // 4. Optionally combine with client Shard A signature if supplied
     let combinedSignatures: `0x${string}` | undefined = undefined;
-    if (req.body.shardASignature && isHex(req.body.shardASignature)) {
-      combinedSignatures = concatSignatures(
-        req.body.shardASignature as `0x${string}`,
-        shardBSignature
-      );
-    }
+    combinedSignatures = concatSignatures(shardASignature as `0x${string}`, shardBSignature);
 
     // 5. Immutable Co-Sign Audit Trail
     await query(
@@ -364,8 +435,8 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
         shardBSignature,
         JSON.stringify({
           signer,
-          target: req.body.target,
-          nonce: req.body.nonce,
+          target,
+          nonce: nonce.toString(),
           timestamp: new Date().toISOString(),
         }),
       ]
@@ -391,8 +462,24 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
 walletsRouter.post("/:address/freeze", async (req: Request, res: Response): Promise<void> => {
   try {
     const address = String(req.params.address).toLowerCase();
-    const hours = Number(req.body.hours) || 24;
-    const reason = req.body.reason || "Emergency user freeze";
+    const hours = Number(req.body.hours);
+    const reason = String(req.body.reason || "Emergency user freeze");
+    const timestamp = Number(req.body.timestamp);
+    const signature = req.body.shardASignature as `0x${string}` | undefined;
+    if (!Number.isInteger(hours) || hours < 1 || hours > 168 || reason.length > 128 || /[\r\n]/.test(reason) ||
+        !Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300 ||
+        !signature || !isHex(signature) || signature.length !== 132 || !isAddress(address)) {
+      res.status(400).json({ error: "A fresh, valid Shard A freeze authorization is required" });
+      return;
+    }
+    const rows = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [address]);
+    if (!rows.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
+    const message = `Veilora account security action\nwallet:${getAddress(address)}\naction:freeze\nhours:${hours}\nreason:${reason}\ntimestamp:${timestamp}`;
+    const signer = await recoverMessageAddress({ message, signature });
+    if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Freeze authorization does not match this wallet's Shard A" });
+      return;
+    }
 
     const state = await freezeWallet(address, hours, reason);
     res.json(state);
@@ -408,6 +495,21 @@ walletsRouter.post("/:address/freeze", async (req: Request, res: Response): Prom
 walletsRouter.post("/:address/unfreeze", async (req: Request, res: Response): Promise<void> => {
   try {
     const address = String(req.params.address).toLowerCase();
+    const timestamp = Number(req.body.timestamp);
+    const signature = req.body.shardASignature as `0x${string}` | undefined;
+    if (!Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300 ||
+        !signature || !isHex(signature) || signature.length !== 132 || !isAddress(address)) {
+      res.status(400).json({ error: "A fresh, valid Shard A unfreeze authorization is required" });
+      return;
+    }
+    const rows = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [address]);
+    if (!rows.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
+    const message = `Veilora account security action\nwallet:${getAddress(address)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${timestamp}`;
+    const signer = await recoverMessageAddress({ message, signature });
+    if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Unfreeze authorization does not match this wallet's Shard A" });
+      return;
+    }
     const state = await unfreezeWallet(address);
     res.json(state);
   } catch (error: any) {

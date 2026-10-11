@@ -17,11 +17,7 @@ export const robinhoodChain = defineChain({
 });
 
 export const FACTORY_ADDRESS = getAddress(
-  process.env.VEILORA_FACTORY_ADDRESS || "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7"
-);
-
-export const SHIELDED_POOL_ADDRESS = getAddress(
-  process.env.VEILORA_SHIELDED_POOL_ADDRESS || "0x5e4e2bec80528b0dd30182a7a956dc0e53826b80"
+  process.env.VEILORA_FACTORY_ADDRESS || "0xf86bea538ea756048f8df9be4bcd88aeb4d65376"
 );
 
 export const USDG_ADDRESS = getAddress(

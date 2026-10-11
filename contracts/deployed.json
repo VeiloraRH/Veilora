@@ -1,8 +1,10 @@
 {
   "chainId": 4663,
   "deployer": "0x695d8E941e68D3ea39c14C43745286b5729E8CD7",
-  "veiloraFactory": "0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7",
-  "veiloraShieldedPool": "0x5e4e2bec80528b0dd30182a7a956dc0e53826b80",
+  "previousFactory": "0x210f310f150c0DF3224D61Ca7dCaf3e1ad578bd7",
+  "veiloraFactory": "0xF86BEA538ea756048F8dF9Be4bCd88AEb4D65376",
+  "factoryDeploymentTx": "0x9928fa42dc1ea69393a528d338e7b97c22e7c6d7d31d19d3e8532f8dab2ed6bb",
+  "factoryRuntimeCodeHash": "0x1a2dfb88985b80eab40611b2294bbe6692b7335677dc42ce24ef43ecd81a5cfc",
   "usdgToken": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
-  "deployedAt": "2026-10-07T05:09:23.760Z"
+  "deployedAt": "2026-10-11T15:37:33.000Z"
 }

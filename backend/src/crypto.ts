@@ -3,12 +3,16 @@ import { generatePrivateKey, privateKeyToAccount, privateKeyToAddress } from "vi
 import { encodeAbiParameters, hexToBytes, isHex, keccak256, stringToHex } from "viem";
 
 function getMasterKey(): Buffer {
-  const rawKey =
-    process.env.SHARD_B_ENCRYPTION_KEY ||
-    process.env.CO_SIGNER_SHARD_B_SECRET ||
-    "veilora-master-vault-encryption-key-seed-32-byte";
+  const rawKey = process.env.SHARD_B_ENCRYPTION_KEY || process.env.CO_SIGNER_SHARD_B_SECRET;
+  if (!rawKey || Buffer.byteLength(rawKey, "utf8") < 32) {
+    throw new Error("SHARD_B_ENCRYPTION_KEY must be configured with at least 32 bytes of secret material");
+  }
   // Always derive 32-byte key via SHA-256
   return createHash("sha256").update(rawKey).digest();
+}
+
+export function assertEncryptionKeyConfigured(): void {
+  getMasterKey();
 }
 
 /**

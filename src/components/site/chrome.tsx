@@ -101,14 +101,8 @@ export function SiteFooter() {
           <p className="mt-2 text-xs text-mist">© 2026 Veilora · Robinhood Chain (4663)</p>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-mist">
-          <a href="/#how-it-works" className="hover:text-gold-300">
+          <a href="/#wallet" className="hover:text-gold-300">
             Product
-          </a>
-          <a href="/#privacy" className="hover:text-gold-300">
-            Privacy
-          </a>
-          <a href="/#developers" className="hover:text-gold-300">
-            Developers
           </a>
           <Link to="/roadmap" className="hover:text-gold-300">
             Roadmap
@@ -122,8 +116,7 @@ export function SiteFooter() {
         </nav>
       </div>
       <p className="mx-auto mt-8 max-w-6xl text-xs leading-relaxed text-mist/70">
-        Veilora is in development. Claims about privacy guarantees, audits, tokenized-stock support and proof providers are subject to independent verification before production
-        use. The app shows demo data.
+        Veilora is in development. Token support, price sources and service availability can vary; verify transaction details before signing. Network transactions are public.
       </p>
     </footer>
   );

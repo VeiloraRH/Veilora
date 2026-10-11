@@ -18,7 +18,6 @@ describe("Veilora Contracts Suite", () => {
   test("Solidity bytecode and ABIs are compiled", () => {
     expect(existsSync(join(outDir, "contracts_src_VeiloraAccount_sol_VeiloraAccount.bin"))).toBeTrue();
     expect(existsSync(join(outDir, "contracts_src_VeiloraFactory_sol_VeiloraFactory.bin"))).toBeTrue();
-    expect(existsSync(join(outDir, "contracts_src_VeiloraShieldedPool_sol_VeiloraShieldedPool.bin"))).toBeTrue();
   });
 
   test("2-of-3 Threshold Quorum Signatures: Shard A + Shard B format", async () => {

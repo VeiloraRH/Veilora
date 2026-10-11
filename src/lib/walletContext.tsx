@@ -4,11 +4,8 @@ import {
   createWallet,
   freezeWallet,
   unfreezeWallet,
-  getRelayerStatus,
   getWalletAudit,
   deleteWalletData,
-  createShieldedNote as createShieldedNoteRequest,
-  getShieldNoteCreationMessage,
   type WalletMetadata,
 } from "./api";
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
@@ -28,18 +25,6 @@ function deviceKeyMatchesAddress(privateKey: string, address: string): boolean {
   }
 }
 
-interface NetworkInfo {
-  blockNumber: string;
-  gasPriceGwei: string;
-  relayerAddress: string | null;
-  relayerReady: boolean;
-  contracts: {
-    factory: string;
-    shieldedPool: string;
-    usdgToken: string;
-  };
-}
-
 export interface CreatedAccountDetails {
   address: string;
   shardA: string;
@@ -52,7 +37,6 @@ export interface CreatedAccountDetails {
 interface WalletContextType {
   walletAddress: string;
   wallet: WalletMetadata | null;
-  network: NetworkInfo | null;
   loading: boolean;
   error: string | null;
   deviceKeyPresent: boolean;
@@ -76,7 +60,6 @@ interface WalletContextType {
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
   unfreezeAccount: () => Promise<void>;
   removeWallet: () => Promise<void>;
-  createShieldedNote: (assetSymbol: string, amountWei: string) => Promise<Awaited<ReturnType<typeof createShieldedNoteRequest>>>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -86,7 +69,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem(STORAGE_KEY) || "";
   });
   const [wallet, setWallet] = useState<WalletMetadata | null>(null);
-  const [network, setNetwork] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deviceKeyPresent, setDeviceKeyPresent] = useState<boolean>(() => {
@@ -107,21 +89,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, addr);
     setWalletAddressState(addr);
   };
-
-  const loadNetwork = useCallback(async () => {
-    try {
-      const res = await getRelayerStatus();
-      setNetwork({
-        blockNumber: res.network.blockNumber,
-        gasPriceGwei: res.network.gasPriceGwei,
-        relayerAddress: res.relayer.address,
-        relayerReady: res.relayer.ready,
-        contracts: res.contracts,
-      });
-    } catch {
-      // Network status fetch fallback
-    }
-  }, []);
 
   const loadWallet = useCallback(async (addr: string) => {
     if (!addr) {
@@ -145,13 +112,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    await Promise.all([loadWallet(walletAddress), loadNetwork()]);
-  }, [loadWallet, loadNetwork, walletAddress]);
+    await loadWallet(walletAddress);
+  }, [loadWallet, walletAddress]);
 
   useEffect(() => {
-    loadNetwork();
     loadWallet(walletAddress);
-  }, [loadNetwork, loadWallet, walletAddress]);
+  }, [loadWallet, walletAddress]);
 
   const createAccount = async (passphrase: string): Promise<CreatedAccountDetails> => {
     setLoading(true);
@@ -161,7 +127,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const shardCPk = generatePrivateKey();
       const shardAAddress = privateKeyToAddress(shardAPk);
       const shardCAddress = privateKeyToAddress(shardCPk);
-      const res = await createWallet({ shardAAddress, shardCAddress, deployOnCreate: true });
+      const requestId = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+      const timestamp = Math.floor(Date.now() / 1000);
+      const message = `Veilora wallet registration\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:true\ntimestamp:${timestamp}\nrequest:${requestId}`;
+      const shardASignature = await privateKeyToAccount(shardAPk).signMessage({ message });
+      const res = await createWallet({ shardAAddress, shardCAddress, deployOnCreate: true, requestId, timestamp, shardASignature });
 
       localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(shardAPk, passphrase));
       localStorage.setItem("veilora:shardA:address", res.shardA);
@@ -244,28 +214,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const freezeAccount = async (hours = 24, reason = "Emergency freeze") => {
-    await freezeWallet(walletAddress, hours, reason);
+    if (!wallet || !deviceKey || !deviceKeyMatchesAddress(deviceKey, wallet.shardA)) throw new Error("Unlock the matching Shard A device key first.");
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:freeze\nhours:${hours}\nreason:${reason}\ntimestamp:${timestamp}`;
+    const signature = await privateKeyToAccount(deviceKey as `0x${string}`).signMessage({ message });
+    await freezeWallet(walletAddress, hours, reason, timestamp, signature);
     await loadWallet(walletAddress);
   };
 
   const unfreezeAccount = async () => {
-    await unfreezeWallet(walletAddress);
+    if (!wallet || !deviceKey || !deviceKeyMatchesAddress(deviceKey, wallet.shardA)) throw new Error("Unlock the matching Shard A device key first.");
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${timestamp}`;
+    const signature = await privateKeyToAccount(deviceKey as `0x${string}`).signMessage({ message });
+    await unfreezeWallet(walletAddress, timestamp, signature);
     await loadWallet(walletAddress);
-  };
-
-  const createWalletOwnedShieldedNote = async (assetSymbol: string, amountWei: string) => {
-    if (!walletAddress || !wallet) throw new Error("Connect a Veilora wallet before creating a shielded note.");
-    const shardAPrivateKey = getStoredDeviceKey();
-    if (!shardAPrivateKey || !deviceKeyMatchesAddress(shardAPrivateKey, wallet.shardA)) {
-      throw new Error("Unlock the matching Shard A device key before creating a shielded note.");
-    }
-
-    const canonicalAddress = getAddress(walletAddress);
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const creationRequestId = `0x${Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-    const message = getShieldNoteCreationMessage(canonicalAddress, assetSymbol, amountWei, creationRequestId);
-    const signature = await privateKeyToAccount(shardAPrivateKey as `0x${string}`).signMessage({ message });
-    return createShieldedNoteRequest(assetSymbol, amountWei, canonicalAddress, creationRequestId, signature);
   };
 
   const removeWallet = async () => {
@@ -301,7 +264,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       value={{
         walletAddress,
         wallet,
-        network,
         loading,
         error,
         auditTrail,
@@ -320,7 +282,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         freezeAccount,
         unfreezeAccount,
         removeWallet,
-        createShieldedNote: createWalletOwnedShieldedNote,
       }}
     >
       {children}

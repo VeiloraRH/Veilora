@@ -392,13 +392,16 @@ function WhitepaperPage() {
           <h1 className="mt-8 max-w-5xl font-brand text-[52px] font-semibold leading-[0.95] text-cream sm:text-8xl lg:text-[112px]">
             Threshold control,
             <br />
-            <span className="italic font-medium text-brand-gradient">private execution,</span>
+            <span className="italic font-medium text-brand-gradient">transparent execution,</span>
             <br />
             explainable finance.
           </h1>
           <p className="mt-8 max-w-2xl text-base leading-relaxed text-mist sm:text-lg">
-            How Veilora combines threshold self-custody, intent planning and shielded execution into one private financial operating layer for Robinhood Chain.
+            A product direction document for Veilora's Robinhood Chain wallet. It describes concepts and future research, not current app capabilities.
           </p>
+          <div role="note" className="mt-6 max-w-3xl rounded-xl border border-gold-400/40 bg-gold-400/10 p-4 text-sm leading-relaxed text-cream">
+            Current status: Veilora supports transparent on-chain wallet transactions. Shielding, private notes, provenance proofs, and selective-disclosure keys are not available.
+          </div>
           <div className="mt-10 flex flex-wrap gap-3">
             <a href="#thesis" className="inline-flex items-center gap-2 rounded-lg bg-gold-400 px-6 py-3 text-sm font-medium text-ink-900 hover:bg-gold-300">
               Start reading <ArrowDown className="h-4 w-4" />
@@ -637,7 +640,7 @@ function WhitepaperPage() {
                 refund behaviour, privacy disclosures, and test and audit status.
               </p>
               <ol className="space-y-2">
-                {["Shield USDG", "Shield → swap → receive shielded asset", "Shield → lend → monitor yield position", "Unshield → execute → reshield output", "Bridge → receive → shield at destination, where supported"].map((r, i) => (
+                {["Shield USDG", "Shield → swap → receive shielded asset", "Shield → supply → monitor collateral position", "Unshield → execute → reshield output", "Bridge → receive → shield at destination, where supported"].map((r, i) => (
                   <li key={r} className="flex items-center gap-4 rounded-lg border border-ink-600/50 px-4 py-2.5 text-sm">
                     <span className="font-mono text-xs text-gold-400">R{i + 1}</span>
                     <span className="font-mono text-[13px] text-cream-dim">{r}</span>

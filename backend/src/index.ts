@@ -1,8 +1,11 @@
 import "dotenv/config";
+import { assertEncryptionKeyConfigured } from "./crypto";
 import { app } from "./app";
 import { migrate } from "./db/migrate";
 
 const port = Number(process.env.PORT ?? 3001);
+
+assertEncryptionKeyConfigured();
 
 async function start() {
   try {

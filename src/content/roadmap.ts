@@ -1,5 +1,3 @@
-/* Launch gates, from "VEILORA — Integrated Product Approach" §10 and §12. */
-
 export type GateStatus = "Building" | "Next" | "Planned" | "Later";
 
 export type Gate = {
@@ -15,138 +13,67 @@ export type Gate = {
 export const GATES: Gate[] = [
   {
     n: 1,
-    name: "Trustworthy control core",
-    short: "Control core",
+    name: "Wallet safety and recovery",
+    short: "Wallet safety",
     status: "Building",
-    why: "Privacy is only as safe as the authorization around it. The control loop ships first, before any shielded DeFi.",
-    items: [
-      "2-of-3 wallet and recovery",
-      "Local intent planning",
-      "Simulation and balance diffs",
-      "Policies and outbox",
-      "Transparent send, swap and bridge flows",
-      "Local audit receipts",
-    ],
-    opens: "Every action is simulated, policy-checked and approved by quorum.",
+    why: "Every wallet action starts with clear ownership, safe key handling, and verifiable transaction approval.",
+    items: ["2-of-3 account authorization", "Encrypted device-key storage", "Offline recovery-key flow", "Signed freeze and disconnect actions"],
+    opens: "Users can control and recover their account with understandable security boundaries.",
   },
   {
     n: 2,
-    name: "Shielded payments",
-    short: "Shielded payments",
+    name: "Everyday wallet flows",
+    short: "Wallet flows",
     status: "Next",
-    why: "One stablecoin, end to end, with explicit states for every proof and every refund.",
-    items: [
-      "Shield and unshield for one stablecoin",
-      "Shielded receive flow",
-      "Selective disclosure",
-      "Provenance proof integration",
-      "Safe timeout and refund behaviour",
-      "Mobile proving benchmark",
-    ],
-    opens: "No funds can sit in an unexplained proof-provider state.",
+    why: "Make the core wallet fast to understand and dependable on Robinhood Chain.",
+    items: ["Clear send and receive carousels", "Live balance refresh", "Readable transaction receipts", "Accessible mobile layout"],
+    opens: "Send, receive, and balance states stay consistent with chain settlement.",
   },
   {
     n: 3,
-    name: "Shielded DeFi",
-    short: "Shielded DeFi",
+    name: "Swap reliability",
+    short: "Swaps",
     status: "Planned",
-    why: "Composable recipes with one simulation and one approval, executed atomically where the route allows it.",
-    items: [
-      "Shielded swap recipe",
-      "Shielded lending recipe",
-      "Atomic unshield → execute → reshield",
-      "Broadcaster failover",
-      "Full simulation of privacy and fee effects",
-    ],
-    opens: "Recipes declare contracts, fees, proofs, failure behaviour and audit status.",
+    why: "Compare supported routes and make execution outcomes easy to verify.",
+    items: ["Live Uniswap v3 and v4 quotes", "Slippage and expiry checks", "Token approval limits", "Quote-to-settlement monitoring"],
+    opens: "Each swap shows its route, minimum output, and final settlement receipt.",
   },
   {
     n: 4,
-    name: "Tokenized stocks",
-    short: "Tokenized stocks",
+    name: "Market coverage",
+    short: "Market",
     status: "Planned",
-    why: "The long-term edge on Robinhood Chain, treated as its own asset class rather than as ordinary ERC-20 support.",
-    items: [
-      "One verified stock-token issuer and asset first",
-      "Corporate-action and rebase tests",
-      "Legal and eligibility review",
-      "Shielded purchase and receipt",
-      "Proof and selective-disclosure flows",
-      "Only then expand the registry",
-    ],
-    opens: "Asset, legal and pricing models verified for each listed stock token.",
+    why: "Show supported first-class assets with verified addresses and current balances.",
+    items: ["ETH and USDG details", "Robinhood token registry", "Reliable market pricing", "Asset metadata verification"],
+    opens: "Listed assets have verified contract addresses and clear price sources.",
   },
   {
     n: 5,
-    name: "Multichain privacy",
-    short: "Multichain",
+    name: "History and operations",
+    short: "History",
     status: "Later",
-    why: "More chains only once the Robinhood Chain privacy and recovery experience is stable.",
-    items: [
-      "Add adapters only after Robinhood Chain is stable",
-      "Keep chain-specific privacy assumptions visible",
-      "Never promise identical privacy across chains",
-    ],
-    opens: "Each chain shows its own privacy assumptions before you sign.",
+    why: "Make account activity searchable and improve operational visibility without exposing secrets.",
+    items: ["Search and history filters", "Indexed token transfers", "Relayer health checks", "Incident and recovery runbook"],
+    opens: "Users can reconcile activity with on-chain receipts and understand service status.",
   },
 ];
 
 export const REVISE = [
-  ["“One-tap” privacy", "Keep the action simple, but always show the simulation and disclosure summary."],
-  ["“Private DeFi”", "Say what is shielded, what stays public and which providers see route data."],
-  ["“15-minute PPOI”", "A measured service-level target with a safe fallback, not a promise."],
-  ["Broadcaster economics", "Define subsidies, bonding, failure handling and censorship resistance."],
-  ["Yield inside the shield", "A later recipe, with clear smart-contract and protocol risk."],
+  ["Price estimates", "Show the source and timestamp, and label estimates when values are incomplete."],
+  ["Swap quotes", "Show route, minimum received, expiry and fees before the user signs."],
+  ["Account recovery", "Keep recovery instructions clear and verify the offline backup step."],
+  ["Transaction history", "Use chain-indexed records and link each item to its explorer receipt."],
 ];
 
 export const DEFERRED = [
-  "Token launch, staking or fee-token mechanics",
-  "A broad stock-token registry",
-  "Many-chain shielded support",
+  "Additional chains before Robinhood Chain flows are stable",
   "Automated treasury execution",
-  "Unbounded protocol-composition recipes",
-  "Any privacy claim that depends on an unaudited or unshipped proof system",
+  "Unverified token listings",
+  "Any privacy feature without a deployed, independently reviewed proof system",
 ];
 
 export const METRICS: { area: string; items: string[] }[] = [
-  {
-    area: "Safety",
-    items: [
-      "Zero unilateral-spend incidents",
-      "Zero executions bypassing policy and approval",
-      "Zero funds trapped by an unresolved proof state",
-      "Share of actions with a viewed simulation",
-      "Share of users completing a recovery drill",
-    ],
-  },
-  {
-    area: "Privacy",
-    items: [
-      "Eligible computations completed on-device",
-      "Raw intents sent to external services",
-      "Shielded actions with successful note recovery",
-      "Selective-disclosure completion rate",
-      "Proof-provider outage recovery time",
-    ],
-  },
-  {
-    area: "Usefulness",
-    items: [
-      "Time from intent to approved plan",
-      "Quote-to-settlement discrepancy",
-      "Shield-to-first-private-action completion",
-      "Shield, swap, lend and unshield recipe completion",
-      "Risky actions blocked before signing",
-    ],
-  },
-  {
-    area: "Network health",
-    items: [
-      "Broadcaster liveness and fallback success",
-      "Proving latency by device class",
-      "Adapter test coverage",
-      "SDK integration time",
-      "Adapters with current capability declarations",
-    ],
-  },
+  { area: "Safety", items: ["Zero unauthorized co-signatures", "Zero arbitrary contract calls accepted", "Sponsored deployment spend within daily cap", "Users completing a recovery drill"] },
+  { area: "Usefulness", items: ["Send and receive completion rate", "Quote-to-settlement discrepancy", "History search success", "Time to refresh balances"] },
+  { area: "Network health", items: ["Relayer liveness", "History provider availability", "Swap route availability", "Supported token registry accuracy"] },
 ];

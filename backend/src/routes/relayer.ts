@@ -4,7 +4,6 @@ import {
   CHAIN_ID,
   RPC_URL,
   FACTORY_ADDRESS,
-  SHIELDED_POOL_ADDRESS,
   USDG_ADDRESS,
   publicClient,
   relayerAccount,
@@ -38,7 +37,7 @@ relayerRouter.get("/status", async (_req: Request, res: Response): Promise<void>
     res.json({
       network: {
         chainId: CHAIN_ID,
-        rpcUrl: RPC_URL,
+        rpcHost: (() => { try { return new URL(RPC_URL).host; } catch { return "configured"; } })(),
         blockNumber: blockNumber.toString(),
         gasPriceGwei: formatEther(gasPrice * 1_000_000_000n),
       },
@@ -49,7 +48,6 @@ relayerRouter.get("/status", async (_req: Request, res: Response): Promise<void>
       },
       contracts: {
         factory: FACTORY_ADDRESS,
-        shieldedPool: SHIELDED_POOL_ADDRESS,
         usdgToken: USDG_ADDRESS,
       },
     });
@@ -122,7 +120,7 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       console.log(`[Relayer] Deploying counterfactual wallet ${cleanWallet} on Robinhood Chain...`);
 
       const deployTx = await relayerClient.writeContract({
-        address: FACTORY_ADDRESS,
+        address: getAddress(w.factory_address || FACTORY_ADDRESS),
         abi: veiloraFactoryAbi,
         functionName: "createAccount",
         args: [

@@ -2,16 +2,12 @@ import express from "express";
 import { randomUUID } from "node:crypto";
 import { healthRouter } from "./routes/health";
 import { walletsRouter } from "./routes/wallets";
-import { intentRouter } from "./routes/intent";
-import { policiesRouter } from "./routes/policies";
-import { privacyRouter } from "./routes/privacy";
-import { recipesRouter } from "./routes/recipes";
 import { relayerRouter } from "./routes/relayer";
-import { adaptersRouter } from "./routes/adapters";
 
 export const app = express();
 
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 
 app.use((request, response, next) => {
@@ -45,19 +41,18 @@ app.use((request, response, next) => {
     ].filter(Boolean)
   );
 
-  if (origin && trustedOrigins.has(origin.replace(/\/$/, ""))) {
+  if (origin) {
+    if (!trustedOrigins.has(origin.replace(/\/$/, ""))) {
+      response.status(403).json({ error: "Origin is not allowed" });
+      return;
+    }
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
-  } else if (origin) {
-    response.setHeader("Access-Control-Allow-Origin", origin);
-    response.setHeader("Vary", "Origin");
-  } else {
-    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-request-id");
-  response.setHeader("Access-Control-Allow-Credentials", "true");
 
   if (request.method === "OPTIONS") {
     response.status(204).end();
@@ -69,9 +64,4 @@ app.use((request, response, next) => {
 // Mount Routes
 app.use("/health", healthRouter);
 app.use("/v1/wallets", walletsRouter);
-app.use("/v1/intent", intentRouter);
-app.use("/v1/policies", policiesRouter);
-app.use("/v1/privacy", privacyRouter);
-app.use("/v1/recipes", recipesRouter);
 app.use("/v1/relayer", relayerRouter);
-app.use("/v1/adapters", adaptersRouter);

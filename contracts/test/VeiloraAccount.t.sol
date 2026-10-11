@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {VeiloraAccount} from "../src/VeiloraAccount.sol";
 import {VeiloraFactory} from "../src/VeiloraFactory.sol";
-import {VeiloraShieldedPool} from "../src/VeiloraShieldedPool.sol";
 
 interface Vm {
     function prank(address) external;
@@ -76,7 +75,6 @@ contract MockERC20 {
 contract VeiloraAccountTest is TestBase {
     VeiloraAccount public account;
     VeiloraFactory public factory;
-    VeiloraShieldedPool public pool;
     MockTarget public target;
     MockERC20 public mockUSDG;
 
@@ -102,7 +100,6 @@ contract VeiloraAccountTest is TestBase {
         account = new VeiloraAccount(entryPoint, shardA, shardB, shardC);
         target = new MockTarget();
         mockUSDG = new MockERC20();
-        pool = new VeiloraShieldedPool(address(mockUSDG));
     }
 
     function test_Initialization() public view {
@@ -191,22 +188,4 @@ contract VeiloraAccountTest is TestBase {
         assertEq(predicted, deployed);
     }
 
-    function test_ShieldedPool_DepositAndUnshield() public {
-        bytes32 commitment = keccak256("note:usdg:100:secret");
-        bytes32 nullifier = keccak256("nullifier:note:usdg:100");
-
-        mockUSDG.mint(address(this), 1000);
-        mockUSDG.approve(address(pool), 1000);
-
-        // 1. Deposit
-        pool.depositUSDG(commitment, 100);
-        assertTrue(pool.commitments(commitment));
-        assertEq(pool.nextLeafIndex(), 1);
-
-        // 2. Unshield
-        address recipient = address(0x5555);
-        pool.unshieldUSDG(nullifier, recipient, 100);
-        assertTrue(pool.nullifierSpent(nullifier));
-        assertEq(mockUSDG.balanceOf(recipient), 100);
-    }
 }

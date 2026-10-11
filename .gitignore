@@ -1,6 +1,8 @@
 # Dependencies
 
 w2.json
+w3.json
+.audit-grade/
 
 node_modules/
 bun.lockb
