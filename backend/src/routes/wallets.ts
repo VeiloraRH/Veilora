@@ -5,6 +5,8 @@ import {
   CHAIN_ID,
   FACTORY_ADDRESS,
   publicClient,
+  relayerAccount,
+  relayerClient,
 } from "../config";
 import { veiloraFactoryAbi, veiloraAccountAbi } from "../abi";
 import {
@@ -20,6 +22,37 @@ import {
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
 
 export const walletsRouter = Router();
+
+const ADDRESS_LOOKUP_ATTEMPTS = 3;
+const ADDRESS_LOOKUP_DELAYS_MS = [250, 750];
+
+async function readCounterfactualAddress(
+  shardA: `0x${string}`,
+  shardB: `0x${string}`,
+  shardC: `0x${string}`,
+  salt: bigint,
+): Promise<`0x${string}`> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < ADDRESS_LOOKUP_ATTEMPTS; attempt += 1) {
+    try {
+      return await publicClient.readContract({
+        address: FACTORY_ADDRESS,
+        abi: veiloraFactoryAbi,
+        functionName: "getAddress",
+        args: [shardA, shardB, shardC, salt],
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < ADDRESS_LOOKUP_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, ADDRESS_LOOKUP_DELAYS_MS[attempt]));
+      }
+    }
+  }
+
+  throw new Error(
+    `Could not retrieve the smart account address from Robinhood Chain after ${ADDRESS_LOOKUP_ATTEMPTS} attempts: ${lastError instanceof Error ? lastError.message : "RPC request failed"}`,
+  );
+}
 
 /**
  * POST /v1/wallets
@@ -41,20 +74,53 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     const shardB = generateShardKey();
     const encryptedShardB = encryptSecret(shardB.privateKey);
 
-    // Compute deterministic CREATE2 address via VeiloraFactory
+    // Do not register or deploy unless the factory returns the authoritative address.
     let counterfactualAddress: `0x${string}`;
     try {
-      counterfactualAddress = await publicClient.readContract({
-        address: FACTORY_ADDRESS,
-        abi: veiloraFactoryAbi,
-        functionName: "getAddress",
-        args: [shardA, shardB.address, shardC, salt],
-      });
-    } catch {
-      // Deterministic fallback if RPC is unreachable during test
-      counterfactualAddress = getAddress(
-        "0x" + shardB.address.slice(2).padStart(40, "0")
+      counterfactualAddress = await readCounterfactualAddress(
+        shardA,
+        shardB.address,
+        shardC,
+        salt,
       );
+    } catch (error) {
+      res.status(503).json({
+        error: error instanceof Error ? error.message : "Could not retrieve the smart account address from Robinhood Chain",
+      });
+      return;
+    }
+
+    let isDeployed = false;
+    if (req.body.deployOnCreate === true) {
+      if (!relayerClient || !relayerAccount) {
+        res.status(503).json({ error: "Account deployment is unavailable: the backend gas payer is not configured" });
+        return;
+      }
+
+      try {
+        const code = await publicClient.getCode({ address: counterfactualAddress });
+        isDeployed = Boolean(code && code !== "0x");
+        if (!isDeployed) {
+          const deployHash = await relayerClient.writeContract({
+            address: FACTORY_ADDRESS,
+            abi: veiloraFactoryAbi,
+            functionName: "createAccount",
+            args: [shardA, shardB.address, shardC, salt],
+          });
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: deployHash });
+          if (receipt.status !== "success") {
+            throw new Error(`Account deployment transaction reverted (${deployHash})`);
+          }
+          const deployedCode = await publicClient.getCode({ address: counterfactualAddress });
+          isDeployed = Boolean(deployedCode && deployedCode !== "0x");
+          if (!isDeployed) throw new Error("Deployment transaction succeeded but the account has no on-chain code");
+        }
+      } catch (error) {
+        res.status(502).json({
+          error: error instanceof Error ? `Could not deploy the smart account: ${error.message}` : "Could not deploy the smart account",
+        });
+        return;
+      }
     }
 
     const apiKey = generateApiKey();
@@ -83,14 +149,6 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         req.body.totpSecret ? encryptSecret(req.body.totpSecret) : null,
       ]
     );
-
-    let isDeployed = false;
-    try {
-      const code = await publicClient.getCode({ address: counterfactualAddress });
-      isDeployed = Boolean(code && code !== "0x");
-    } catch {
-      // Ignore RPC lookup failure
-    }
 
     res.status(201).json({
       address: counterfactualAddress,

@@ -18,7 +18,7 @@ interface OnboardingModalProps {
 }
 
 export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
-  const { createAccount, connectExistingWallet } = useWallet();
+  const { createAccount, connectExistingWallet, clearLatestRecoveryKey } = useWallet();
   const [slide, setSlide] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [existingMode, setExistingMode] = useState(false);
@@ -80,6 +80,8 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const handleBackupConfirm = () => {
     localStorage.setItem("veilora:onboarded", "true");
     setShowBackupModal(false);
+    setCreatedAccount(null);
+    clearLatestRecoveryKey();
     onClose();
   };
 

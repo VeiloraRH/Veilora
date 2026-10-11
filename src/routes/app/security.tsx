@@ -41,6 +41,7 @@ export function SecurityScreen() {
     freezeAccount,
     unfreezeAccount,
     createAccount,
+    clearLatestRecoveryKey,
     auditTrail,
   } = useWallet();
 
@@ -530,7 +531,11 @@ export function SecurityScreen() {
       <KeyBackupModal
         open={showBackupModal}
         accountDetails={createdAccount}
-        onConfirm={() => setShowBackupModal(false)}
+        onConfirm={() => {
+          setShowBackupModal(false);
+          setCreatedAccount(null);
+          clearLatestRecoveryKey();
+        }}
       />
 
       {/* MODAL 6: View Local Device Key */}

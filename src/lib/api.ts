@@ -226,6 +226,7 @@ export async function createWallet(params: {
   shardCAddress?: string;
   salt?: string;
   totpSecret?: string;
+  deployOnCreate?: boolean;
 }) {
   return request<{
     address: string;

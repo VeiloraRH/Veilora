@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Copy, Check, ShieldAlert, KeyRound, Smartphone, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, KeyRound, Smartphone, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { downloadRecoveryBackup, type CreatedAccountDetails } from "@/lib/walletContext";
+import type { CreatedAccountDetails } from "@/lib/walletContext";
 
 interface KeyBackupModalProps {
   open: boolean;
@@ -18,39 +18,9 @@ interface KeyBackupModalProps {
 }
 
 export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupModalProps) {
-  const [downloaded, setDownloaded] = useState(false);
-  const [copiedC, setCopiedC] = useState(false);
-  const [copiedA, setCopiedA] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
   if (!accountDetails) return null;
-
-  const handleDownload = () => {
-    downloadRecoveryBackup({
-      smartAccount: accountDetails.address,
-      shardA: accountDetails.shardA,
-      shardB: accountDetails.shardB,
-      shardC: accountDetails.shardC,
-      shardCPrivateKey: accountDetails.shardCPrivateKey || "",
-    });
-    setDownloaded(true);
-  };
-
-  const copyKeyC = () => {
-    if (accountDetails.shardCPrivateKey) {
-      navigator.clipboard.writeText(accountDetails.shardCPrivateKey);
-      setCopiedC(true);
-      setTimeout(() => setCopiedC(false), 2000);
-    }
-  };
-
-  const copyKeyA = () => {
-    if (accountDetails.shardAPrivateKey) {
-      navigator.clipboard.writeText(accountDetails.shardAPrivateKey);
-      setCopiedA(true);
-      setTimeout(() => setCopiedA(false), 2000);
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={() => undefined}>
@@ -89,15 +59,6 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
                 <span className="font-mono text-[11px] text-muted-foreground truncate max-w-[320px]">
                   {accountDetails.shardAPrivateKey.slice(0, 14)}…{accountDetails.shardAPrivateKey.slice(-10)}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={copyKeyA}
-                  className="h-7 text-xs text-primary"
-                >
-                  {copiedA ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-                  {copiedA ? "Copied" : "Copy"}
-                </Button>
               </div>
             )}
           </div>
@@ -130,27 +91,10 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
               </span>
             </div>
             <p className="text-muted-foreground">
-              This shard is never stored in browser storage. Download your recovery JSON file now.
+              This shard is shown only during setup. Write it on paper and keep it offline; Veilora will not save or download it.
             </p>
-
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleDownload}
-                className="flex-1 h-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                {downloaded ? "Download Again" : "Download Recovery JSON"}
-              </Button>
-              {accountDetails.shardCPrivateKey && (
-                <Button
-                  variant="outline"
-                  onClick={copyKeyC}
-                  className="h-9 rounded-xl border-border text-foreground hover:bg-muted"
-                >
-                  {copiedC ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
-                  {copiedC ? "Copied" : "Copy Key"}
-                </Button>
-              )}
+            <div className="rounded-lg border border-primary/25 bg-card p-3 font-mono text-xs leading-6 break-all select-all text-foreground">
+              {accountDetails.shardCPrivateKey}
             </div>
           </div>
 
@@ -163,7 +107,7 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
               className="mt-0.5 rounded border-border text-primary focus:ring-primary"
             />
             <span className="text-muted-foreground text-xs leading-normal">
-              I have saved my Shard C recovery file. I understand Veilora cannot recover my account without 2-of-3 shards.
+              I wrote down Shard C and stored it offline. I understand Veilora cannot recover my account without 2-of-3 shards.
             </span>
           </label>
         </div>
@@ -171,10 +115,10 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
         <DialogFooter className="pt-2 border-t border-border">
           <Button
             onClick={onConfirm}
-            disabled={!confirmed || !downloaded}
+            disabled={!confirmed}
             className="w-full h-11 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
           >
-            Access Smart Account
+            I wrote it down · Continue
           </Button>
         </DialogFooter>
       </DialogContent>

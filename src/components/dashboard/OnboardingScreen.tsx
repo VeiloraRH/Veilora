@@ -6,7 +6,7 @@ import {
   PiggyBank,
   CheckCircle2,
   KeyRound,
-  Download,
+  ClipboardPenLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useWallet, downloadRecoveryBackup, type CreatedAccountDetails } from "@/lib/walletContext";
+import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { requestNewDevicePassphrase, validateDevicePassphrase } from "@/lib/deviceKeyVault";
 
 function CoinUSDG({ className }: { className?: string }) {
@@ -87,7 +87,7 @@ function CoinWaves({ className }: { className?: string }) {
 }
 
 export function OnboardingScreen() {
-  const { createAccount, connectExistingWallet } = useWallet();
+  const { createAccount, connectExistingWallet, clearLatestRecoveryKey } = useWallet();
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importAddr, setImportAddr] = useState("");
@@ -100,7 +100,7 @@ export function OnboardingScreen() {
   // Success backup modal state
   const [backupOpen, setBackupOpen] = useState(false);
   const [createdDetails, setCreatedDetails] = useState<CreatedAccountDetails | null>(null);
-  const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [hasWrittenDown, setHasWrittenDown] = useState(false);
 
   const handleCreate = async () => {
     const passphrase = requestNewDevicePassphrase();
@@ -109,15 +109,7 @@ export function OnboardingScreen() {
     try {
       const res = await createAccount(passphrase);
       setCreatedDetails(res);
-      // Auto-trigger the recovery backup download
-      downloadRecoveryBackup({
-        smartAccount: res.address,
-        shardA: res.shardA,
-        shardB: res.shardB,
-        shardC: res.shardC,
-        shardCPrivateKey: res.shardCPrivateKey || "",
-      });
-      setHasDownloaded(true);
+      setHasWrittenDown(false);
       setBackupOpen(true);
     } catch (err: any) {
       alert(err?.message || "Failed to create smart account");
@@ -427,7 +419,7 @@ export function OnboardingScreen() {
       </Dialog>
 
       {/* ================= RECOVERY BACKUP DIALOG (shadcn) ================= */}
-      <Dialog open={backupOpen} onOpenChange={setBackupOpen}>
+      <Dialog open={backupOpen} onOpenChange={() => undefined}>
         <DialogContent className="sm:max-w-lg bg-card border-border text-foreground">
           <DialogHeader>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eaba65]/10 text-[#eaba65] border border-[#eaba65]/20 mb-2">
@@ -459,23 +451,31 @@ export function OnboardingScreen() {
               </p>
 
               <div className="flex items-center gap-2 font-semibold text-foreground pt-2">
-                <Download className="h-4 w-4 text-[#eaba65]" />
-                Shard C (Recovery Key JSON)
+                <ClipboardPenLine className="h-4 w-4 text-[#eaba65]" />
+                Shard C (Recovery Key)
               </div>
-              <p className="text-muted-foreground">
-                {hasDownloaded
-                  ? "Your recovery JSON backup file was automatically saved to your Downloads folder."
-                  : "Keep your recovery file safe in an offline vault."}
-              </p>
+              <p className="text-muted-foreground">Write this key on paper and keep it offline. Veilora will not save or download it.</p>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 font-mono text-xs leading-6 break-all select-all text-foreground">
+                {createdDetails?.shardCPrivateKey}
+              </div>
+              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                <input type="checkbox" checked={hasWrittenDown} onChange={(event) => setHasWrittenDown(event.target.checked)} className="mt-0.5" />
+                <span>I wrote down the recovery key and stored it somewhere safe offline.</span>
+              </label>
             </div>
           </div>
 
           <DialogFooter className="pt-2">
             <Button
-              onClick={() => setBackupOpen(false)}
+              disabled={!hasWrittenDown}
+              onClick={() => {
+                setBackupOpen(false);
+                setCreatedDetails(null);
+                clearLatestRecoveryKey();
+              }}
               className="w-full bg-[#eaba65] text-[#070d1e] hover:bg-[#dfaf58] font-semibold h-11"
             >
-              Continue to Dashboard
+              I wrote it down · Continue
             </Button>
           </DialogFooter>
         </DialogContent>

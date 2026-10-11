@@ -62,7 +62,7 @@ export function RemoveWalletModal({
               <span>Ensure you have your recovery key</span>
             </div>
             <p className="text-[11px]">
-              Disconnecting clears your local device key (Shard A). To regain access later, you will need your Shard C recovery file.
+              Disconnecting clears your encrypted local device key (Shard A). To regain access later, you will need the Shard C key you wrote down during setup.
             </p>
           </div>
 
@@ -74,7 +74,7 @@ export function RemoveWalletModal({
               className="mt-0.5 rounded border-border text-primary focus:ring-primary"
             />
             <span className="text-xs text-foreground">
-              I have saved my offline recovery file and wish to disconnect.
+              I have my offline Shard C recovery key and wish to disconnect.
             </span>
           </label>
         </div>
