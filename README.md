@@ -13,10 +13,10 @@ Veilora is a threshold self-custody wallet for Robinhood Chain (chain ID 4663). 
 ## Trust boundaries and security limits
 
 - **No privacy or zero-knowledge guarantees:** Veilora currently has no ZK circuit, SNARK prover, or on-chain verifier. All transactions, token balances, and account activities are transparent and public on Robinhood Chain (EVM 4663). Shielded UTXOs, private notes, and selective-disclosure proofs are not supported.
-- **Legacy pool notice:** An early prototype pool contract remains deployed on-chain and cannot be deleted or upgraded. The application and backend do not interface with it, and it holds zero USDG. Users must never send funds to that contract.
+- **Legacy pool notice:** An early prototype pool contract remains deployed on-chain and cannot be deleted or upgraded. The application and backend do not interface with it. Users must never send funds to that contract.
 - **Threshold trust model:** Each account requires 2-of-3 signatures to execute. Shard A is client-held and encrypted in browser storage. Shard B is backend-held and encrypted at rest with AES-256-GCM. Shard C is an offline recovery key controlled solely by the user. Neither the user alone (without Shard C) nor the backend alone can move funds.
 - **Backend co-signer enforcement:** Shard B only co-signs transactions authorized by an active Shard A signature that conform to strict policy: allowlisted targets (native transfers, registered tokens, and verified Uniswap v3/v4 routers), a rolling daily spend limit (capped at 20% of account balance), and an unexpired deadline (<= 5 minutes). All arbitrary contract interactions are denied.
-- **Sponsored relayer limits:** Relayed deployments are bounded by per-IP rate limits (20/hour) and a strict daily budget (`RELAYER_DAILY_DEPLOYMENT_LIMIT`, default 10). Replay protection enforces unique signed registration requests.
+- **Sponsored relayer limits:** Registration is limited to 20 requests per IP per hour across backend replicas; only a keyed hash of the IP is stored. Sponsored deployments also have a shared daily budget (`RELAYER_DAILY_DEPLOYMENT_LIMIT`, default 10). Signed registration request IDs prevent replay.
 
 ## Repository layout
 
@@ -50,6 +50,6 @@ The backend requires `DATABASE_URL`, a Robinhood Chain RPC URL, and `SHARD_B_ENC
 
 ## Deployment
 
-The factory address is configured through `VEILORA_FACTORY_ADDRESS`; USDG is configured through `USDG_TOKEN_ADDRESS`. The deployment script reads `RELAYER_PRIVATE_KEY` from `backend/.env`, checks for chain ID 4663, and does not print the RPC URL or private key. Existing account addresses depend on their original factory, so keep the original factory address available for accounts that have not yet deployed.
+The current factory is `0xF86BEA538EA756048F8DF9BE4BCD88AEB4D65376` on Robinhood Chain 4663. Configure `VEILORA_FACTORY_ADDRESS` to this value in the production backend; USDG is configured through `USDG_TOKEN_ADDRESS`. The deployment script reads `RELAYER_PRIVATE_KEY` from `backend/.env`, checks for chain ID 4663, and does not print the RPC URL or private key. Existing account addresses depend on their original factory, so keep the original factory address available for accounts that have not yet deployed.
 
-Run database migrations before serving the updated backend. Migration `004` removes the unused shielded-note and disclosure scaffolding; migrations `005`–`007` add registration replay protection, a sponsored deployment budget, daily co-sign limits, and per-wallet factory versioning.
+Run database migrations in the production deployment environment before serving the updated backend. Migration `004` drops obsolete, unimplemented privacy tables; migrations `005`–`007` add registration replay protection, a sponsored deployment budget, daily co-sign limits, and per-wallet factory versioning; migration `008` enables shared registration rate limits without storing raw IP addresses. The local `backend/.env` may point to production: do not run `bun run db:migrate` locally unless `DATABASE_URL` has first been verified to target a disposable or intended database.

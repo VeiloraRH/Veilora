@@ -1,70 +1,38 @@
 # Security Policy
 
-Veilora handles private state transitions, threshold signing authorization, and digital asset execution on Robinhood Chain. Security and cryptographic soundness are central to our product integrity.
-
----
+Veilora is a self-custody wallet for Robinhood Chain (chain ID `4663`). The current application supports transparent on-chain wallet operations. It does not provide zero-knowledge shielding, private notes, provenance proofs, or selective disclosure.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Veilora, please **do not** open a public issue or discuss it publicly.
+Please do not disclose vulnerabilities publicly before coordinating a fix. Report them to **security@veilorarh.com** with:
 
-Instead, report it immediately to our security response team:
+- A description and reproduction steps or proof of concept.
+- The affected component and potential impact.
+- Any relevant transaction hashes, addresses, or logs, with secrets removed.
 
-📧 **security@veilorarh.com**
+We aim to acknowledge reports within 48 hours, provide an initial assessment within 72 hours, and coordinate disclosure after a fix is available. These are response targets, not guarantees.
 
-Please include:
-- A clear description of the vulnerability.
-- Steps to reproduce the issue or a proof-of-concept (PoC).
-- The potential impact on users, funds, or privacy guarantees.
-- Affected components (Control Plane, Privacy Plane, Execution Plane, or backend services).
+## In Scope
 
----
+- Smart-account authorization, signature validation, and replay protection.
+- Backend co-signing policies, wallet registration, relaying, and API authentication.
+- Device-key encryption, recovery flows, and sensitive data handling.
+- Transaction construction, recipient validation, token handling, and swap routing.
+- Wallet history and balance data integrity.
 
-## Response Timeline
+## Out of Scope
 
-- **Initial Acknowledgment:** Within **48 hours** of receiving your report.
-- **Triage & Assessment:** Within **72 hours** with severity classification.
-- **Critical Remediation:** Target deployment of critical patches within **7 days**.
-- **Public Disclosure:** Coordinated disclosure after mitigation has been deployed and verified.
+- Social engineering or compromise of a user's device outside Veilora's code.
+- Vulnerabilities in Robinhood Chain, token issuers, or other upstream services.
+- Denial of service against infrastructure where no security boundary is crossed.
 
----
+## Current Trust Boundaries
 
-## Scope
+- On-chain balances and transactions are public and transparent.
+- Shard A is stored encrypted in the user's browser; Shard B is encrypted at rest by the backend; Shard C is intended for offline user recovery.
+- The backend co-signer applies transaction allowlists and spend limits. This is an additional policy boundary, not a substitute for reviewing and authorizing transactions with the user's device key.
+- A prototype shielded-pool contract from an earlier version remains deployed and cannot be removed. The current application does not call it. Do not send funds to it.
 
-### In Scope
-- Threshold signing quorum bypasses (circumventing 2-of-3 Shard rules).
-- Shielded note double-spending or nullifier collisions.
-- Policy engine evasions (bypassing fee ceilings, gas reserves, or destination checks).
-- Unauthorized exposure of private notes, view keys, or intent payloads.
-- Backend API authentication, injection, or transaction replay vulnerabilities.
-- Safe unshielding state machine flaws that could trap funds or cause indefinite limbo.
+## Deployed Factory
 
-### Out of Scope
-- Denial of Service (DoS) attacks on publicly rate-limited infrastructure.
-- Social engineering attacks targeting user devices directly.
-- Vulnerabilities in upstream third-party chains or underlying EVM implementations outside our adapters.
-
----
-
-## Attack Surfaces
-
-Given Veilora's architecture, we actively protect against:
-1. **Quorum Bypass:** Attempts to authorize execution with fewer than 2 valid threshold shards.
-2. **Proof Invalidation / Replay:** Malicious or replayed clean-provenance (PPOI) proofs.
-3. **Broadcaster Redirection:** Rogue relayers attempting to redirect unshielded payouts away from verified destinations.
-4. **Intent Injection / Parsing Drift:** Misleading natural language representations that create divergent execution plans.
-5. **View Key Leakage:** Unintended revelation of past or unrelated transactions beyond the requested scope.
-
----
-
-## Safe Harbor & Reporter Recognition
-
-We support responsible security research. If you make a good-faith effort to avoid privacy violations, destruction of data, and service interruption during your research:
-- We will not pursue legal action against you.
-- We will credit you in our release notes and security advisories (unless you prefer anonymity).
-
----
-
-## Deployed Contracts
-
-*Contract deployments on Robinhood Chain (Chain ID `4663`) will be published here upon testnet and mainnet verification.*
+The current Veilora factory is deployed on Robinhood Chain (`4663`) at `0xF86BEA538EA756048F8DF9BE4BCD88AEB4D65376`. Existing wallets may still depend on the previous factory at `0x210f310f150c0df3224d61ca7dcaf3e1ad578bd7`.

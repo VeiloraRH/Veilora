@@ -158,4 +158,21 @@ describe("Threshold Wallets & Co-signing API", () => {
     expect(Array.isArray(res.body.records)).toBe(true);
     expect(res.body.records.length).toBeGreaterThan(0);
   });
+
+  test("POST /v1/wallets enforces the shared per-IP hourly registration limit", async () => {
+    const ip = "198.51.100.27";
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await request(app)
+        .post("/v1/wallets")
+        .set("X-Forwarded-For", ip)
+        .send({});
+      expect(response.status).toBe(400);
+    }
+
+    const limited = await request(app)
+      .post("/v1/wallets")
+      .set("X-Forwarded-For", ip)
+      .send({});
+    expect(limited.status).toBe(429);
+  });
 });

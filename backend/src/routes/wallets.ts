@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { createHmac } from "node:crypto";
 import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
 import { query } from "../db/index";
 import {
@@ -28,25 +29,40 @@ export const walletsRouter = Router();
 const ADDRESS_LOOKUP_ATTEMPTS = 3;
 const ADDRESS_LOOKUP_DELAYS_MS = [250, 750];
 const DAILY_SPONSORED_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
-const REGISTRATION_WINDOW_MS = 60 * 60 * 1000;
 const REGISTRATION_LIMIT_PER_IP = 20;
-const registrationAttempts = new Map<string, { startedAt: number; count: number }>();
 
-function consumeRegistrationAttempt(ip: string): boolean {
-  const now = Date.now();
-  const current = registrationAttempts.get(ip);
-  if (!current || now - current.startedAt >= REGISTRATION_WINDOW_MS) {
-    registrationAttempts.set(ip, { startedAt: now, count: 1 });
-    if (registrationAttempts.size > 5000) {
-      for (const [key, attempt] of registrationAttempts) {
-        if (now - attempt.startedAt >= REGISTRATION_WINDOW_MS) registrationAttempts.delete(key);
-      }
-    }
-    return true;
+function hashRegistrationIp(ip: string): string {
+  const key = process.env.SHARD_B_ENCRYPTION_KEY || process.env.CO_SIGNER_SHARD_B_SECRET;
+  if (!key || Buffer.byteLength(key, "utf8") < 32) {
+    throw new Error("Registration rate limiting requires the configured backend encryption secret");
   }
-  if (current.count >= REGISTRATION_LIMIT_PER_IP) return false;
-  current.count += 1;
-  return true;
+  const derivedKey = createHmac("sha256", key).update("veilora:registration-rate-limit:v1").digest();
+  return createHmac("sha256", derivedKey).update(ip).digest("hex");
+}
+
+async function consumeRegistrationAttempt(ip: string): Promise<boolean> {
+  const ipHash = hashRegistrationIp(ip);
+  const result = await query(
+    `INSERT INTO wallet_registration_rate_limits (ip_hash, window_started_at, request_count)
+     VALUES ($1, now(), 1)
+     ON CONFLICT (ip_hash) DO UPDATE SET
+       window_started_at = CASE
+         WHEN wallet_registration_rate_limits.window_started_at <= now() - interval '1 hour' THEN now()
+         ELSE wallet_registration_rate_limits.window_started_at
+       END,
+       request_count = CASE
+         WHEN wallet_registration_rate_limits.window_started_at <= now() - interval '1 hour' THEN 1
+         ELSE wallet_registration_rate_limits.request_count + 1
+       END,
+       updated_at = now()
+     WHERE wallet_registration_rate_limits.window_started_at <= now() - interval '1 hour'
+        OR wallet_registration_rate_limits.request_count < $2
+     RETURNING request_count`,
+    [ipHash, REGISTRATION_LIMIT_PER_IP],
+  );
+  // Opportunistically remove expired hashes so the table does not grow forever.
+  await query("DELETE FROM wallet_registration_rate_limits WHERE window_started_at < now() - interval '2 hours'");
+  return result.rows.length > 0;
 }
 
 async function readCounterfactualAddress(
@@ -84,7 +100,7 @@ async function readCounterfactualAddress(
  */
 walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    if (!consumeRegistrationAttempt(req.ip || req.socket.remoteAddress || "unknown")) {
+    if (!await consumeRegistrationAttempt(req.ip || req.socket.remoteAddress || "unknown")) {
       res.status(429).json({ error: "Wallet registration rate limit reached; try again later" });
       return;
     }
