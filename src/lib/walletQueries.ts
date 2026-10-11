@@ -23,7 +23,7 @@ export function usePortfolioValue() {
  return {holdings,prices};
 }
 export type WalletTransaction={id:string;hash:string;timestamp:string;direction:'sent'|'received'|'contract';symbol:string;amount:string;from:string;to:string;status:'confirmed'|'failed'|'pending'};
-type ExplorerItem={hash?:string;transaction_hash?:string;timestamp?:string;from?:{hash?:string};to?:{hash?:string};value?:string;status?:string;result?:string;error?:string;index?:number;log_index?:number;total?:{value?:string;decimals?:string};token?:{symbol?:string;decimals?:string}};
+type ExplorerItem={hash?:string;transaction_hash?:string;timestamp?:string;from?:{hash?:string};to?:{hash?:string};value?:string;status?:string;result?:string;error?:string|null;success?:boolean;index?:number;log_index?:number;total?:{value?:string;decimals?:string};token?:{symbol?:string;decimals?:string}};
 export function useTransactions() {
  const {walletAddress}=useWallet();
  return useQuery({queryKey:['transactions',walletAddress],enabled:!!walletAddress,staleTime:30000,retry:1,queryFn:async({signal})=> {
@@ -44,7 +44,7 @@ export function useTransactions() {
      const raw=item.total?.value ?? item.value ?? '0';
      if(kind==='internal-transactions' && raw==='0') continue;
      const direction=from.toLowerCase()===wallet ? 'sent' : to.toLowerCase()===wallet ? 'received' : 'contract';
-     result.push({id:`${kind}:${hash}:${item.log_index ?? item.index ?? i}`,hash,from,to,timestamp:item.timestamp ?? '',direction:kind==='transactions' && raw==='0' ? 'contract' : direction,symbol:item.token?.symbol || 'ETH',amount:formatUnits(BigInt(raw),Number(item.total?.decimals ?? item.token?.decimals ?? 18)),status:item.status==='error'||item.result==='error'||item.error ? 'failed' : item.timestamp ? 'confirmed' : 'pending'});
+     result.push({id:`${kind}:${hash}:${item.log_index ?? item.index ?? i}`,hash,from,to,timestamp:item.timestamp ?? '',direction:kind==='transactions' && raw==='0' ? 'contract' : direction,symbol:item.token?.symbol || 'ETH',amount:formatUnits(BigInt(raw),Number(item.total?.decimals ?? item.token?.decimals ?? 18)),status:item.status==='error'||item.result==='error'||item.error||item.success===false ? 'failed' : item.timestamp ? 'confirmed' : 'pending'});
     }
     cursor=body.next_page_params;
     if(cursor) {const key=JSON.stringify(cursor); if(seen.has(key)) throw new Error('History pagination stalled. Please refresh.'); seen.add(key);}

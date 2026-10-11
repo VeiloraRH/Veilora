@@ -20,6 +20,7 @@ import {
   signUserOpHash,
   concatSignatures,
 } from "../crypto";
+import { buildBlockscoutHistoryUrl } from "../blockscout";
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
 
 export const walletsRouter = Router();
@@ -446,15 +447,13 @@ walletsRouter.get("/:address/transactions", async (req: Request, res: Response):
     if (!isAddress(address) || !["transactions", "token-transfers", "internal-transactions"].includes(kind)) {
       res.status(400).json({ error: "Invalid wallet or history type" }); return;
     }
-    const base = process.env.CHAIN_EXPLORER_API_URL || "https://robinhoodchain.blockscout.com/api/v2";
-    const url = new URL(`${base}/addresses/${getAddress(address)}/${kind}`);
-    if (kind === "token-transfers") url.searchParams.set("type", "ERC-20");
+    const url = buildBlockscoutHistoryUrl(getAddress(address), kind as "transactions" | "token-transfers" | "internal-transactions");
     if (req.query.cursor) {
       let cursor: unknown;
       try { cursor = JSON.parse(String(req.query.cursor)); } catch { res.status(400).json({error:"Invalid history cursor"}); return; }
       if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) {res.status(400).json({error:"Invalid history cursor"}); return;}
       for (const [key, value] of Object.entries(cursor)) {
-        if (!/^[a-z_]+$/.test(key) || !["string", "number", "boolean"].includes(typeof value)) {res.status(400).json({error:"Invalid history cursor"}); return;}
+        if (!/^[a-z_]+$/.test(key) || ["apikey", "type"].includes(key) || !["string", "number", "boolean"].includes(typeof value)) {res.status(400).json({error:"Invalid history cursor"}); return;}
         url.searchParams.set(key, String(value));
       }
     }
