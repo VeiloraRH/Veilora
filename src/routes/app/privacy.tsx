@@ -8,10 +8,7 @@ import {
   Loader2,
   ShieldCheck,
 } from "lucide-react";
-import {
-  createShieldedNote,
-  generateProvenanceProof,
-} from "@/lib/api";
+import { generateProvenanceProof } from "@/lib/api";
 import { useWallet } from "@/lib/walletContext";
 import {
   Badge,
@@ -157,7 +154,7 @@ function ShieldFlow({
 }: {
   onAddNote: (n: LocalNote) => void;
 }) {
-  const { wallet } = useWallet();
+  const { createShieldedNote } = useWallet();
   const [step, setStep] = useState(0);
   const [amt, setAmt] = useState("2000");
   const [submitting, setSubmitting] = useState(false);
@@ -184,7 +181,7 @@ function ShieldFlow({
     setSubmitting(true);
     try {
       const amountWei = (BigInt(Math.floor(netShielded)) * BigInt(10 ** 18)).toString();
-      const res = await createShieldedNote("USDG", amountWei, wallet?.address);
+      const res = await createShieldedNote("USDG", amountWei);
 
       const newNote: LocalNote = {
         id: `n-${Date.now().toString().slice(-4)}`,

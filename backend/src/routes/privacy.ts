@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { randomBytes, createHash } from "node:crypto";
+import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
 import { createShieldedNote, verifyNoteStatus } from "../privacy/notes";
 import { generateProvenanceProof, getActiveProvenanceSets } from "../privacy/provenance";
 import { query } from "../db/index";
@@ -12,27 +13,78 @@ export const privacyRouter = Router();
  */
 privacyRouter.post("/notes", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { assetSymbol = "USDG", amountWei, ownerAddress } = req.body;
-    if (!amountWei) {
-      res.status(400).json({ error: "Field 'amountWei' is required" });
+    const { assetSymbol = "USDG", amountWei, ownerAddress, creationRequestId, shardASignature } = req.body;
+    if (typeof amountWei !== "string" || !/^\d+$/.test(amountWei) || BigInt(amountWei) <= 0n) {
+      res.status(400).json({ error: "A positive integer 'amountWei' is required" });
+      return;
+    }
+    if (typeof assetSymbol !== "string" || !/^[a-zA-Z0-9]{2,12}$/.test(assetSymbol)) {
+      res.status(400).json({ error: "A valid asset symbol is required" });
+      return;
+    }
+    if (!isAddress(ownerAddress || "") || typeof creationRequestId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(creationRequestId)) {
+      res.status(400).json({ error: "A wallet address and unique creation request ID are required" });
+      return;
+    }
+    if (!shardASignature || !isHex(shardASignature) || shardASignature.length !== 132) {
+      res.status(400).json({ error: "A valid Shard A signature is required" });
       return;
     }
 
-    const created = await createShieldedNote(assetSymbol, amountWei, ownerAddress);
+    const walletAddress = getAddress(ownerAddress);
+    const wallet = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [walletAddress.toLowerCase()]);
+    if (!wallet.rows.length) {
+      res.status(404).json({ error: "Veilora wallet not found" });
+      return;
+    }
+    const message = `Veilora shield note creation\nwallet:${walletAddress}\nasset:${assetSymbol.toUpperCase()}\namount:${amountWei}\nrequest:${creationRequestId}`;
+    const signer = await recoverMessageAddress({ message, signature: shardASignature });
+    if (signer.toLowerCase() !== String(wallet.rows[0].shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Signature does not match this wallet's Shard A" });
+      return;
+    }
+
+    const created = await createShieldedNote(assetSymbol, amountWei, walletAddress, creationRequestId);
     res.status(201).json(created);
   } catch (error: any) {
+    if (error?.code === "23505" || error?.message?.includes("already been used")) {
+      res.status(409).json({ error: "This note creation request has already been used" });
+      return;
+    }
     res.status(500).json({ error: error.message || "Failed to create shielded note" });
   }
 });
 
 /**
- * GET /v1/privacy/notes/:commitment
+ * POST /v1/privacy/notes/:commitment/verify
  * Checks whether a shielded commitment exists and is unspent.
  */
-privacyRouter.get("/notes/:commitment", async (req: Request, res: Response): Promise<void> => {
+privacyRouter.post("/notes/:commitment/verify", async (req: Request, res: Response): Promise<void> => {
   try {
     const commitment = String(req.params.commitment);
-    const status = await verifyNoteStatus(commitment);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(commitment)) {
+      res.status(400).json({ error: "A valid 32-byte note commitment is required" });
+      return;
+    }
+    const ownerAddress = String(req.body.walletAddress || "");
+    const signature = String(req.body.shardASignature || "");
+    if (!isAddress(ownerAddress) || !signature || !isHex(signature) || signature.length !== 132) {
+      res.status(400).json({ error: "Wallet address and Shard A signature are required" });
+      return;
+    }
+    const walletAddress = getAddress(ownerAddress);
+    const wallet = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [walletAddress.toLowerCase()]);
+    if (!wallet.rows.length) {
+      res.status(404).json({ error: "Veilora wallet not found" });
+      return;
+    }
+    const message = `Veilora note status request: ${walletAddress}:${commitment}`;
+    const signer = await recoverMessageAddress({ message, signature });
+    if (signer.toLowerCase() !== String(wallet.rows[0].shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Signature does not match this wallet's Shard A" });
+      return;
+    }
+    const status = await verifyNoteStatus(commitment, walletAddress);
     res.json(status);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to verify note status" });

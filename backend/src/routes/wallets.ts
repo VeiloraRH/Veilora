@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
+import { sha256Hex } from "../crypto";
 import { query } from "../db/index";
 import {
   CHAIN_ID,
@@ -201,7 +202,16 @@ walletsRouter.delete("/:address", async (req: Request, res: Response): Promise<v
       return;
     }
 
-    await query("DELETE FROM wallets WHERE address = $1", [address.toLowerCase()]);
+    const legacyOwnerViewTag = sha256Hex(`view:${address}`).slice(0, 18);
+    await query(
+      `WITH legacy_notes AS (
+         DELETE FROM shielded_notes
+         WHERE wallet_address IS NULL AND owner_view_tag = $2
+         RETURNING commitment
+       )
+       DELETE FROM wallets WHERE address = $1`,
+      [address.toLowerCase(), legacyOwnerViewTag],
+    );
     // cosign_audit and view_keys are linked with ON DELETE CASCADE.
     res.json({ deleted: true, walletAddress: address });
   } catch (error: any) {

@@ -7,6 +7,8 @@ import {
   getRelayerStatus,
   getWalletAudit,
   deleteWalletData,
+  createShieldedNote as createShieldedNoteRequest,
+  getShieldNoteCreationMessage,
   type WalletMetadata,
 } from "./api";
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
@@ -74,6 +76,7 @@ interface WalletContextType {
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
   unfreezeAccount: () => Promise<void>;
   removeWallet: () => Promise<void>;
+  createShieldedNote: (assetSymbol: string, amountWei: string) => Promise<Awaited<ReturnType<typeof createShieldedNoteRequest>>>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -250,6 +253,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await loadWallet(walletAddress);
   };
 
+  const createWalletOwnedShieldedNote = async (assetSymbol: string, amountWei: string) => {
+    if (!walletAddress || !wallet) throw new Error("Connect a Veilora wallet before creating a shielded note.");
+    const shardAPrivateKey = getStoredDeviceKey();
+    if (!shardAPrivateKey || !deviceKeyMatchesAddress(shardAPrivateKey, wallet.shardA)) {
+      throw new Error("Unlock the matching Shard A device key before creating a shielded note.");
+    }
+
+    const canonicalAddress = getAddress(walletAddress);
+    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+    const creationRequestId = `0x${Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    const message = getShieldNoteCreationMessage(canonicalAddress, assetSymbol, amountWei, creationRequestId);
+    const signature = await privateKeyToAccount(shardAPrivateKey as `0x${string}`).signMessage({ message });
+    return createShieldedNoteRequest(assetSymbol, amountWei, canonicalAddress, creationRequestId, signature);
+  };
+
   const removeWallet = async () => {
     if (!walletAddress) throw new Error("There is no connected wallet to delete.");
     const shardAPrivateKey = getStoredDeviceKey();
@@ -302,6 +320,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         freezeAccount,
         unfreezeAccount,
         removeWallet,
+        createShieldedNote: createWalletOwnedShieldedNote,
       }}
     >
       {children}

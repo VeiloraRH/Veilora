@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useWallet } from "@/lib/walletContext";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +9,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { createShieldedNote } from "@/lib/api";
 
 interface ShieldModalProps {
   open: boolean;
@@ -18,8 +18,10 @@ interface ShieldModalProps {
 }
 
 export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModalProps) {
+  const { createShieldedNote } = useWallet();
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const parsedAmount = parseFloat(amount) || 0;
 
@@ -30,6 +32,7 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const amountWei = (BigInt(Math.round(parsedAmount * 100)) * BigInt(10 ** 16)).toString();
       const res = await createShieldedNote("USDG", amountWei);
@@ -49,22 +52,8 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
 
       onClose();
       onSuccess(parsedAmount);
-    } catch {
-      const stored = localStorage.getItem("veilora:notes");
-      const notes = stored ? JSON.parse(stored) : [];
-      notes.push({
-        id: `note-${Date.now()}`,
-        asset: "USDG",
-        amount: parsedAmount,
-        commitment: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
-        nullifierHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
-        status: "spendable",
-        createdAt: new Date().toISOString(),
-      });
-      localStorage.setItem("veilora:notes", JSON.stringify(notes));
-
-      onClose();
-      onSuccess(parsedAmount);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create a shielded note.");
     } finally {
       setLoading(false);
     }
@@ -88,6 +77,7 @@ export function ShieldModal({ open, onClose, publicUsdg, onSuccess }: ShieldModa
         </DialogHeader>
 
         <form onSubmit={handleShield} className="space-y-4 pt-2">
+          {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
           <div className="rounded-2xl bg-muted/40 p-4 border border-border/50 space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Amount to shield</span>

@@ -326,7 +326,26 @@ export async function getWalletAudit(address: string) {
 // Privacy Plane: Notes, Provenance (PPOI), View Keys
 // ---------------------------------------------------------------------------
 
-export async function createShieldedNote(assetSymbol: string, amountWei: string, ownerAddress?: string) {
+export function getShieldNoteCreationMessage(
+  walletAddress: string,
+  assetSymbol: string,
+  amountWei: string,
+  creationRequestId: string,
+) {
+  return `Veilora shield note creation\nwallet:${walletAddress}\nasset:${assetSymbol.toUpperCase()}\namount:${amountWei}\nrequest:${creationRequestId}`;
+}
+
+export function getNoteStatusMessage(walletAddress: string, commitment: string) {
+  return `Veilora note status request: ${walletAddress}:${commitment}`;
+}
+
+export async function createShieldedNote(
+  assetSymbol: string,
+  amountWei: string,
+  ownerAddress: string,
+  creationRequestId: string,
+  shardASignature: string,
+) {
   return request<{
     note: {
       commitment: string;
@@ -340,17 +359,20 @@ export async function createShieldedNote(assetSymbol: string, amountWei: string,
     blindingSecret: string;
   }>("/v1/privacy/notes", {
     method: "POST",
-    body: JSON.stringify({ assetSymbol, amountWei, ownerAddress }),
+    body: JSON.stringify({ assetSymbol, amountWei, ownerAddress, creationRequestId, shardASignature }),
   });
 }
 
-export async function verifyNote(commitment: string) {
+export async function verifyNote(commitment: string, walletAddress: string, shardASignature: string) {
   return request<{
     exists: boolean;
     isUnspent: boolean;
     asset?: string;
     amountWei?: string;
-  }>(`/v1/privacy/notes/${commitment}`);
+  }>(`/v1/privacy/notes/${commitment}/verify`, {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, shardASignature }),
+  });
 }
 
 export async function generateProvenanceProof(depositCommitment: string, targetAsset = "USDG") {

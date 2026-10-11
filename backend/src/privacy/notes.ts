@@ -38,22 +38,26 @@ export function computeNullifierHash(nullifier: string, commitment: string): str
 export async function createShieldedNote(
   assetSymbol: string,
   amountWei: string,
-  ownerAddress?: string
+  ownerAddress: string,
+  creationRequestId: string,
 ): Promise<{ note: ShieldedNote; nullifierSecret: string; blindingSecret: string }> {
   const nullifierSecret = "0x" + randomBytes(32).toString("hex");
   const blindingSecret = "0x" + randomBytes(32).toString("hex");
 
   const commitment = computeNoteCommitment(assetSymbol, amountWei, nullifierSecret, blindingSecret);
   const nullifierHash = computeNullifierHash(nullifierSecret, commitment);
-  const ownerViewTag = ownerAddress ? sha256Hex(`view:${ownerAddress}`).slice(0, 18) : undefined;
+  const ownerViewTag = sha256Hex(`view:${ownerAddress}`).slice(0, 18);
 
-  await query(
+  const inserted = await query(
     `INSERT INTO shielded_notes (
-      commitment, nullifier_hash, asset_symbol, amount_wei, status, owner_view_tag
-    ) VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (commitment) DO NOTHING`,
-    [commitment, nullifierHash, assetSymbol.toUpperCase(), amountWei, "unspent", ownerViewTag]
+      commitment, nullifier_hash, asset_symbol, amount_wei, status, owner_view_tag,
+      wallet_address, creation_request_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (creation_request_id) WHERE creation_request_id IS NOT NULL DO NOTHING
+    RETURNING commitment`,
+    [commitment, nullifierHash, assetSymbol.toUpperCase(), amountWei, "unspent", ownerViewTag, ownerAddress.toLowerCase(), creationRequestId]
   );
+  if (inserted.rowCount !== 1) throw new Error("This note creation request has already been used.");
 
   return {
     note: {
@@ -73,15 +77,17 @@ export async function createShieldedNote(
 /**
  * Verifies if a note is valid and unspent.
  */
-export async function verifyNoteStatus(commitment: string): Promise<{
+export async function verifyNoteStatus(commitment: string, ownerAddress: string): Promise<{
   exists: boolean;
   isUnspent: boolean;
   asset?: string;
   amountWei?: string;
 }> {
   const res = await query(
-    `SELECT asset_symbol, amount_wei, status FROM shielded_notes WHERE commitment = $1`,
-    [commitment]
+    `SELECT asset_symbol, amount_wei, status FROM shielded_notes
+     WHERE commitment = $1
+       AND (wallet_address = $2 OR (wallet_address IS NULL AND owner_view_tag = $3))`,
+    [commitment, ownerAddress.toLowerCase(), sha256Hex(`view:${ownerAddress}`).slice(0, 18)]
   );
 
   if (res.rows.length === 0) {
