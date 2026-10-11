@@ -437,3 +437,33 @@ walletsRouter.get("/:address/audit", async (req: Request, res: Response): Promis
     res.status(500).json({ error: error.message || "Failed to fetch audit log" });
   }
 });
+
+/** Paginated, complete on-chain history from the configured chain indexer. */
+walletsRouter.get("/:address/transactions", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const address = String(req.params.address);
+    const kind = String(req.query.kind || "transactions");
+    if (!isAddress(address) || !["transactions", "token-transfers", "internal-transactions"].includes(kind)) {
+      res.status(400).json({ error: "Invalid wallet or history type" }); return;
+    }
+    const base = process.env.CHAIN_EXPLORER_API_URL || "https://robinhoodchain.blockscout.com/api/v2";
+    const url = new URL(`${base}/addresses/${getAddress(address)}/${kind}`);
+    if (kind === "token-transfers") url.searchParams.set("type", "ERC-20");
+    if (req.query.cursor) {
+      let cursor: unknown;
+      try { cursor = JSON.parse(String(req.query.cursor)); } catch { res.status(400).json({error:"Invalid history cursor"}); return; }
+      if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) {res.status(400).json({error:"Invalid history cursor"}); return;}
+      for (const [key, value] of Object.entries(cursor)) {
+        if (!/^[a-z_]+$/.test(key) || !["string", "number", "boolean"].includes(typeof value)) {res.status(400).json({error:"Invalid history cursor"}); return;}
+        url.searchParams.set(key, String(value));
+      }
+    }
+    const response = await fetch(url, {headers:{Accept:"application/json"},signal:AbortSignal.timeout(15000)});
+    if (!response.ok) throw new Error("History provider unavailable");
+    const result = await response.json() as {items?: unknown[];next_page_params?: unknown};
+    if (!Array.isArray(result.items)) throw new Error("Invalid history response");
+    res.json({items:result.items,next_page_params:result.next_page_params ?? null});
+  } catch {
+    res.status(502).json({error:"The chain explorer is temporarily unavailable. Your transactions are still on-chain. Please retry shortly."});
+  }
+});

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Veilora — Move quietly. Stay in control.</title>
     <meta name="description" content="Veilora is a private control layer for tokenized assets and DeFi on Robinhood Chain: threshold self-custody, explainable intent planning, shielded execution and selective disclosure." />
-    <meta name="theme-color" content="#0c142b" />
+    <meta name="theme-color" content="#f7f8fc" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -27,12 +27,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // Apply the saved theme (dark by default) before first paint to avoid a flash.
+      // Apply the saved theme (light by default) before first paint to avoid a flash.
       try {
         var t = localStorage.getItem("veilora:theme");
-        if (t !== "light") document.documentElement.classList.add("dark");
+        if (t === "dark") document.documentElement.classList.add("dark");
       } catch (e) {
-        document.documentElement.classList.add("dark");
+        document.documentElement.classList.remove("dark");
       }
     </script>
   </head>

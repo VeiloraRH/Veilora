@@ -9,7 +9,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
+  theme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -24,7 +24,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Storage fallback
     }
-    return "dark"; // Dark by default; the toggle switches to light
+    return "light"; // Respect saved preference; new sessions start in light mode
   });
 
   useEffect(() => {

@@ -56,7 +56,7 @@ export async function getOnChainBalances(address: string): Promise<{ eth: number
 
     return {
       eth: Number(ethWei) / 1e18,
-      usdg: Number(usdgWei) / 1e18,
+      usdg: Number(usdgWei) / 1e6,
     };
   } catch {
     return { eth: 0, usdg: 0 };
