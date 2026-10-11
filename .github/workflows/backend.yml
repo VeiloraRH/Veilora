@@ -12,6 +12,7 @@ permissions:
 jobs:
   changes:
     name: Backend change filter
+    if: github.repository == 'VeiloraRH/Veilora'
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
