@@ -6,10 +6,11 @@ import {
   unfreezeWallet,
   getRelayerStatus,
   getWalletAudit,
+  deleteWalletData,
   type WalletMetadata,
 } from "./api";
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
-import { generatePrivateKey, privateKeyToAddress } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
 const STORAGE_KEY = "veilora:wallet_address";
@@ -54,6 +55,7 @@ interface WalletContextType {
   error: string | null;
   deviceKeyPresent: boolean;
   latestRecoveryKey: string | null;
+  pendingRecoveryDetails: CreatedAccountDetails | null;
   auditTrail: Array<{
     id: string;
     user_op_hash: string;
@@ -71,7 +73,7 @@ interface WalletContextType {
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
   unfreezeAccount: () => Promise<void>;
-  removeWallet: () => void;
+  removeWallet: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -90,6 +92,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [deviceKey, setDeviceKey] = useState<string | null>(null);
   const [deviceKeyUnlocked, setDeviceKeyUnlocked] = useState(false);
   const [latestRecoveryKey, setLatestRecoveryKey] = useState<string | null>(null);
+  const [pendingRecoveryDetails, setPendingRecoveryDetails] = useState<CreatedAccountDetails | null>(null);
   const [auditTrail, setAuditTrail] = useState<Array<{
     id: string;
     user_op_hash: string;
@@ -164,15 +167,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setDeviceKeyUnlocked(true);
       setDeviceKeyPresent(true);
 
-      setWalletAddress(res.address);
-      await loadWallet(res.address);
-
-      // Shard C is held only in memory until the user writes it down.
-      if (shardCPk) {
-        setLatestRecoveryKey(shardCPk);
-      }
-
-      return {
+      const details: CreatedAccountDetails = {
         address: res.address,
         shardA: res.shardA,
         shardB: res.shardB,
@@ -180,6 +175,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         shardAPrivateKey: shardAPk,
         shardCPrivateKey: shardCPk,
       };
+      // Keep the onboarding gate active until the user acknowledges the offline recovery key.
+      setLatestRecoveryKey(shardCPk);
+      setPendingRecoveryDetails(details);
+      setWalletAddress(res.address);
+      await loadWallet(res.address);
+
+      return details;
     } finally {
       setLoading(false);
     }
@@ -187,6 +189,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const clearLatestRecoveryKey = () => {
     setLatestRecoveryKey(null);
+    setPendingRecoveryDetails(null);
   };
 
   const getStoredDeviceKey = () => {
@@ -247,19 +250,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await loadWallet(walletAddress);
   };
 
-  const removeWallet = () => {
+  const removeWallet = async () => {
+    if (!walletAddress) throw new Error("There is no connected wallet to delete.");
+    const shardAPrivateKey = getStoredDeviceKey();
+    if (!shardAPrivateKey) throw new Error("Unlock Shard A before deleting this wallet's server data.");
+
+    const canonicalAddress = getAddress(walletAddress);
+    const deletionMessage = `Veilora account data deletion request: ${canonicalAddress}`;
+    const signer = privateKeyToAccount(shardAPrivateKey as `0x${string}`);
+    const signature = await signer.signMessage({ message: deletionMessage });
+    await deleteWalletData(canonicalAddress, signature);
+
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem("veilora:shardA:privateKey");
+    localStorage.removeItem(LEGACY_DEVICE_KEY);
     localStorage.removeItem(ENCRYPTED_DEVICE_KEY);
     localStorage.removeItem("veilora:shardA:address");
     localStorage.removeItem("veilora:onboarded");
     localStorage.removeItem("veilora:notes");
+    localStorage.removeItem("veilora:view_keys");
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);
     setDeviceKey(null);
     setDeviceKeyUnlocked(false);
     setLatestRecoveryKey(null);
+    setPendingRecoveryDetails(null);
     setAuditTrail([]);
   };
 
@@ -275,6 +290,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         deviceKeyPresent,
         deviceKeyUnlocked,
         latestRecoveryKey,
+        pendingRecoveryDetails,
         setWalletAddress,
         refresh,
         createAccount,

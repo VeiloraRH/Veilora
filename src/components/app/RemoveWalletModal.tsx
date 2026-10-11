@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, LogOut } from "lucide-react";
+import { AlertTriangle, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
 interface RemoveWalletModalProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   walletAddress: string;
 }
 
@@ -24,14 +24,25 @@ export function RemoveWalletModal({
   walletAddress,
 }: RemoveWalletModalProps) {
   const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleConfirm = () => {
-    onConfirm();
-    onClose();
+  const handleConfirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+      setConfirmed(false);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this wallet's data. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
+    <Dialog open={open} onOpenChange={(val) => !val && !busy && onClose()}>
       <DialogContent className="sm:max-w-md bg-card border-border text-foreground p-6 rounded-3xl">
         <DialogHeader className="flex flex-row items-center gap-3 pb-3 border-b border-border text-left">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive border border-destructive/20 shrink-0">
@@ -42,7 +53,7 @@ export function RemoveWalletModal({
               Disconnect Wallet
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Remove account from this device
+              Erase this account from Veilora
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -62,7 +73,7 @@ export function RemoveWalletModal({
               <span>Ensure you have your recovery key</span>
             </div>
             <p className="text-[11px]">
-              Disconnecting clears your encrypted local device key (Shard A). To regain access later, you will need the Shard C key you wrote down during setup.
+              This removes this browser’s Shard A, local notes and view keys, plus the server’s Shard B, account record, audit history, and view-key records. The smart account and its on-chain assets remain. Veilora can no longer co-sign for it; accessing it later requires Shard A and your Shard C recovery key.
             </p>
           </div>
 
@@ -74,9 +85,10 @@ export function RemoveWalletModal({
               className="mt-0.5 rounded border-border text-primary focus:ring-primary"
             />
             <span className="text-xs text-foreground">
-              I have my offline Shard C recovery key and wish to disconnect.
+              I have written down Shard C and understand the server-held Shard B will be permanently deleted.
             </span>
           </label>
+          {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-2 text-destructive">{error}</p>}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border">
@@ -91,11 +103,12 @@ export function RemoveWalletModal({
           <Button
             type="button"
             variant="destructive"
-            disabled={!confirmed}
+            disabled={!confirmed || busy}
             onClick={handleConfirm}
             className="font-semibold"
           >
-            Disconnect Account
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {busy ? "Deleting account data…" : "Delete Data & Disconnect"}
           </Button>
         </DialogFooter>
       </DialogContent>

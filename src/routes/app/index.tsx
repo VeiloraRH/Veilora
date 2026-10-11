@@ -311,15 +311,7 @@ export function CommandCenter() {
       <RemoveWalletModal
         open={removeWalletOpen}
         onClose={() => setRemoveWalletOpen(false)}
-        onConfirm={() => {
-          removeWallet();
-          setStatusModal({
-            open: true,
-            type: "info",
-            title: "Wallet Removed",
-            message: "Your smart account and device keys have been removed from this browser.",
-          });
-        }}
+        onConfirm={removeWallet}
         walletAddress={wallet?.address || ""}
       />
 

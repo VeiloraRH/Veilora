@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 function AppRouteGate() {
-  const { walletAddress, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey } = useWallet();
+  const { walletAddress, pendingRecoveryDetails, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey } = useWallet();
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
   // If no wallet is configured, render the full-screen onboarding view (NO sidebar, NO header)
-  if (!walletAddress) {
+  if (!walletAddress || pendingRecoveryDetails) {
     return <OnboardingScreen />;
   }
 

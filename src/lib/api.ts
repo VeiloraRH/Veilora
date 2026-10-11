@@ -245,6 +245,16 @@ export async function createWallet(params: {
   });
 }
 
+export async function deleteWalletData(walletAddress: string, shardASignature: string) {
+  return request<{ deleted: boolean; walletAddress: string }>(
+    `/v1/wallets/${encodeURIComponent(walletAddress)}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({ shardASignature }),
+    },
+  );
+}
+
 export async function getWallet(address: string) {
   return request<WalletMetadata>(`/v1/wallets/${address}`);
 }

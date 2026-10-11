@@ -12,8 +12,7 @@ import {
   PlusCircle,
   Copy,
 } from "lucide-react";
-import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
-import { KeyBackupModal } from "@/components/app/KeyBackupModal";
+import { useWallet } from "@/lib/walletContext";
 import { DevicePassphraseDialog } from "@/components/app/DevicePassphraseDialog";
 import {
   Badge,
@@ -41,7 +40,6 @@ export function SecurityScreen() {
     freezeAccount,
     unfreezeAccount,
     createAccount,
-    clearLatestRecoveryKey,
     auditTrail,
   } = useWallet();
 
@@ -55,8 +53,6 @@ export function SecurityScreen() {
   const [unfreezeSubmitting, setUnfreezeSubmitting] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
-  const [showBackupModal, setShowBackupModal] = useState(false);
   const [passphraseOpen, setPassphraseOpen] = useState(false);
   const [passphraseAction, setPassphraseAction] = useState<"create" | "import" | null>(null);
   const [passphraseBusy, setPassphraseBusy] = useState(false);
@@ -161,10 +157,7 @@ export function SecurityScreen() {
     setPassphraseBusy(true);
     try {
       if (passphraseAction === "create") {
-        const newAcc = await createAccount(passphrase);
-        setCreateModalOpen(false);
-        setCreatedAccount(newAcc);
-        setShowBackupModal(true);
+        await createAccount(passphrase);
       } else {
         if (!wallet?.shardA) throw new Error("Load a registered Veilora wallet before importing its Shard A key.");
         await importDeviceKey(importKeyInput.trim(), passphrase, wallet.shardA);
@@ -523,17 +516,6 @@ export function SecurityScreen() {
           </p>
         </div>
       </Modal>
-
-      {/* MODAL 5: Key Backup Modal for newly created accounts */}
-      <KeyBackupModal
-        open={showBackupModal}
-        accountDetails={createdAccount}
-        onConfirm={() => {
-          setShowBackupModal(false);
-          setCreatedAccount(null);
-          clearLatestRecoveryKey();
-        }}
-      />
 
       <DevicePassphraseDialog
         open={passphraseOpen}

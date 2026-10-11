@@ -6,9 +6,8 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
+import { useWallet } from "@/lib/walletContext";
 import { Button, Field, StatusModal, inputClass } from "@/components/ui";
-import { KeyBackupModal } from "./KeyBackupModal";
 import { DevicePassphraseDialog } from "./DevicePassphraseDialog";
 import { cn } from "@/lib/utils";
 import { validateDevicePassphrase } from "@/lib/deviceKeyVault";
@@ -19,7 +18,7 @@ interface OnboardingModalProps {
 }
 
 export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
-  const { createAccount, connectExistingWallet, clearLatestRecoveryKey } = useWallet();
+  const { createAccount, connectExistingWallet } = useWallet();
   const [slide, setSlide] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [existingMode, setExistingMode] = useState(false);
@@ -28,8 +27,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const [existingPassphrase, setExistingPassphrase] = useState("");
   const [existingPassphraseConfirm, setExistingPassphraseConfirm] = useState("");
   const [existingStep, setExistingStep] = useState(0);
-  const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
-  const [showBackupModal, setShowBackupModal] = useState(false);
   const [passphraseOpen, setPassphraseOpen] = useState(false);
 
   const [statusModal, setStatusModal] = useState<{
@@ -66,20 +63,10 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const handleCreateWithPassphrase = async (passphrase: string) => {
     setSubmitting(true);
     try {
-      const res = await createAccount(passphrase);
-      setCreatedAccount(res);
-      setShowBackupModal(true);
+      await createAccount(passphrase);
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleBackupConfirm = () => {
-    localStorage.setItem("veilora:onboarded", "true");
-    setShowBackupModal(false);
-    setCreatedAccount(null);
-    clearLatestRecoveryKey();
-    onClose();
   };
 
   const handleConnectExisting = async () => {
@@ -375,11 +362,6 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         }
       />
 
-      <KeyBackupModal
-        open={showBackupModal}
-        accountDetails={createdAccount}
-        onConfirm={handleBackupConfirm}
-      />
       <DevicePassphraseDialog
         open={passphraseOpen}
         onOpenChange={setPassphraseOpen}

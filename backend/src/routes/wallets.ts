@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getAddress, isAddress, isHex } from "viem";
+import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
 import { query } from "../db/index";
 import {
   CHAIN_ID,
@@ -164,6 +164,48 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to create threshold wallet" });
+  }
+});
+
+/**
+ * DELETE /v1/wallets/:address
+ * Permanently removes Veilora-held data for a wallet after proof of Shard A ownership.
+ */
+walletsRouter.delete("/:address", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawAddress = String(req.params.address);
+    if (!isAddress(rawAddress)) {
+      res.status(400).json({ error: "A valid smart account address is required" });
+      return;
+    }
+    const address = getAddress(rawAddress);
+    const signature = req.body.shardASignature as `0x${string}` | undefined;
+    if (!signature || !isHex(signature) || signature.length !== 132) {
+      res.status(400).json({ error: "A valid Shard A deletion signature is required" });
+      return;
+    }
+
+    const rows = await query(
+      "SELECT address, shard_a_address FROM wallets WHERE address = $1",
+      [address.toLowerCase()],
+    );
+    if (!rows.rows.length) {
+      res.status(404).json({ error: "Wallet not found" });
+      return;
+    }
+
+    const deletionMessage = `Veilora account data deletion request: ${address}`;
+    const signer = await recoverMessageAddress({ message: deletionMessage, signature });
+    if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
+      res.status(403).json({ error: "Deletion signature does not match this wallet's Shard A" });
+      return;
+    }
+
+    await query("DELETE FROM wallets WHERE address = $1", [address.toLowerCase()]);
+    // cosign_audit and view_keys are linked with ON DELETE CASCADE.
+    res.json({ deleted: true, walletAddress: address });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to delete wallet data" });
   }
 });
 
