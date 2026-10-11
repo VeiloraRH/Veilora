@@ -4,6 +4,14 @@
   --bg: #0c142b;
   --fg: #f4ead8;
   --gold: #eaba65;
+  --cta-border: rgba(244, 234, 216, 0.85);
+  --cta-bg: rgba(12, 20, 43, 0.25);
+  --stroke: rgba(234, 186, 101, 0.85);
+  --wash-teal: rgba(106, 157, 161, 0.3);
+  --wash-gold: rgba(234, 186, 101, 0.18);
+  --wash-coral: rgba(219, 107, 85, 0.24);
+  --wash-wine: rgba(139, 61, 59, 0.38);
+  --top: #091024;
   --pad-x: clamp(20px, 6.95vw, 120px);
   position: relative;
   width: 100%;
@@ -13,14 +21,29 @@
   overflow: hidden;
   /* Matches the canvas backdrop so there is no flash before WebGL paints. */
   background:
-    radial-gradient(55% 60% at 10% 12%, rgba(106, 157, 161, 0.3), transparent 70%),
-    radial-gradient(45% 50% at 86% 8%, rgba(234, 186, 101, 0.18), transparent 70%),
-    radial-gradient(50% 55% at 95% 72%, rgba(219, 107, 85, 0.24), transparent 70%),
-    radial-gradient(55% 60% at 18% 92%, rgba(139, 61, 59, 0.38), transparent 70%),
-    linear-gradient(#091024, var(--bg));
+    radial-gradient(55% 60% at 10% 12%, var(--wash-teal), transparent 70%),
+    radial-gradient(45% 50% at 86% 8%, var(--wash-gold), transparent 70%),
+    radial-gradient(50% 55% at 95% 72%, var(--wash-coral), transparent 70%),
+    radial-gradient(55% 60% at 18% 92%, var(--wash-wine), transparent 70%),
+    linear-gradient(var(--top), var(--bg));
   color: var(--fg);
   font-family: "Poppins", sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Light theme: warm cream ground, navy type, deeper gold for contrast. */
+.hero[data-theme="light"] {
+  --bg: #f8f3ea;
+  --fg: #0c142b;
+  --gold: #b07a22;
+  --cta-border: rgba(12, 20, 43, 0.75);
+  --cta-bg: rgba(255, 253, 248, 0.45);
+  --stroke: rgba(176, 122, 34, 0.75);
+  --wash-teal: rgba(143, 188, 191, 0.5);
+  --wash-gold: rgba(247, 211, 114, 0.45);
+  --wash-coral: rgba(217, 121, 96, 0.32);
+  --wash-wine: rgba(219, 107, 85, 0.24);
+  --top: #fbf7ef;
 }
 
 .hero #scene {
@@ -94,6 +117,10 @@
 .hero .nav-links a:hover { color: var(--gold); }
 .hero .nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
 
+.hero .theme-li { display: flex; align-items: center; }
+.hero .hero-toggle { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 35%, transparent); }
+.hero .hero-toggle:hover { color: var(--gold); border-color: var(--gold); }
+
 /* ARROWS (top-right, left of the dots column) */
 .hero .arrows { position: absolute; top: 18.9%; left: 76.7%; display: flex; gap: 32px; transform: translate(-19px, -50%); }
 .hero .arrow {
@@ -163,9 +190,9 @@
   height: 48px;
   display: inline-flex;
   align-items: center;
-  border: 1.5px solid rgba(244, 234, 216, 0.85);
+  border: 1.5px solid var(--cta-border);
   border-radius: 6px;
-  background: rgba(12, 20, 43, 0.25);
+  background: var(--cta-bg);
   color: var(--fg);
   font-size: 14px;
   font-weight: 400;
@@ -174,7 +201,7 @@
   transition: background 0.25s, color 0.25s;
 }
 .hero .cta:hover { background: var(--gold); border-color: var(--gold); color: var(--bg); }
-.hero .cta-line { flex: 1; height: 1.5px; background: rgba(234, 186, 101, 0.75); min-width: 40px; }
+.hero .cta-line { flex: 1; height: 1.5px; background: var(--stroke); min-width: 40px; }
 .hero .count {
   flex: none;
   font-size: clamp(140px, 19.8vw, 360px);
@@ -182,7 +209,7 @@
   line-height: 1;
   letter-spacing: -0.02em;
   color: transparent;
-  -webkit-text-stroke: 1.5px rgba(234, 186, 101, 0.85);
+  -webkit-text-stroke: 1.5px var(--stroke);
   transform: translateY(6%);
   user-select: none;
 }

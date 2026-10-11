@@ -7,23 +7,58 @@ const MODEL_URL =
   "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260929_212926_92423081-b0e4-4f5a-b650-14af6c05c058.glb";
 
 const HEADLINE = ["Shield", "Every", "Move"];
-// Brand colours (logo navy, glow and cream).
-const BG = "#0c142b";
-const GLOW = "#1b2b4a";
-const INK = "#f4ead8";
-// Soft colour fields blended over the navy base: [x, y, radius (of the longer side), rgb, alpha].
-const BLOBS: [number, number, number, string, number][] = [
-  [0.1, 0.12, 0.55, "106,157,161", 0.32], // teal, top left
-  [0.86, 0.08, 0.45, "234,186,101", 0.2], // gold, top right
-  [0.95, 0.72, 0.5, "219,107,85", 0.26], // coral, right
-  [0.18, 0.92, 0.55, "139,61,59", 0.4], // wine, bottom left
-  [0.55, 1.05, 0.4, "237,163,92", 0.14], // amber, bottom centre
-];
+// Backdrop palettes. Colour fields are [x, y, radius (of the longer side), rgb, alpha].
+export type HeroTheme = "light" | "dark";
+type Palette = {
+  top: string;
+  bg: string;
+  bgRgb: string;
+  pool: string;
+  poolRgb: string;
+  ink: string;
+  grain: number;
+  blobs: [number, number, number, string, number][];
+};
+const PALETTES: Record<HeroTheme, Palette> = {
+  dark: {
+    top: "#091024",
+    bg: "#0c142b",
+    bgRgb: "12,20,43",
+    pool: "#1b2b4a",
+    poolRgb: "27,43,74",
+    ink: "#f4ead8",
+    grain: 10,
+    blobs: [
+      [0.1, 0.12, 0.55, "106,157,161", 0.32], // teal, top left
+      [0.86, 0.08, 0.45, "234,186,101", 0.2], // gold, top right
+      [0.95, 0.72, 0.5, "219,107,85", 0.26], // coral, right
+      [0.18, 0.92, 0.55, "139,61,59", 0.4], // wine, bottom left
+      [0.55, 1.05, 0.4, "237,163,92", 0.14], // amber, bottom centre
+    ],
+  },
+  light: {
+    top: "#fbf7ef",
+    bg: "#f8f3ea",
+    bgRgb: "248,243,234",
+    pool: "#fffdf8",
+    poolRgb: "255,253,248",
+    ink: "#0c142b",
+    grain: 7,
+    blobs: [
+      [0.1, 0.12, 0.55, "143,188,191", 0.5], // teal, top left
+      [0.86, 0.08, 0.45, "247,211,114", 0.45], // gold, top right
+      [0.95, 0.72, 0.5, "217,121,96", 0.32], // coral, right
+      [0.18, 0.92, 0.55, "219,107,85", 0.24], // rose, bottom left
+      [0.55, 1.05, 0.4, "237,163,92", 0.28], // amber, bottom centre
+    ],
+  },
+};
 const FOV = 30;
 const CAM_Z = 10;
 
 export interface GlassScene {
   spin(direction: -1 | 1): void;
+  setTheme(theme: HeroTheme): void;
   dispose(): void;
 }
 
@@ -170,11 +205,12 @@ function isMobile(W: number, H: number): boolean {
   return W < 768 || W / H < 1;
 }
 
-export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () => void): GlassScene {
+export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () => void, theme: HeroTheme = "dark"): GlassScene {
   let disposed = false;
+  let pal = PALETTES[theme];
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-  renderer.setClearColor(BG, 1);
+  renderer.setClearColor(pal.bg, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
@@ -233,7 +269,7 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
     for (let i = 0; i < img.data.length; i += 4) {
       const v = Math.random() * 255;
       img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-      img.data[i + 3] = 10;
+      img.data[i + 3] = 255;
     }
     g.putImageData(img, 0, 0);
   }
@@ -249,14 +285,14 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const base = ctx.createLinearGradient(0, 0, 0, H);
-    base.addColorStop(0, "#091024");
-    base.addColorStop(1, BG);
+    base.addColorStop(0, pal.top);
+    base.addColorStop(1, pal.bg);
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, W, H);
 
     const mobile = isMobile(W, H);
     const R = Math.max(W, H);
-    for (const [x, y, r, rgb, a] of BLOBS) {
+    for (const [x, y, r, rgb, a] of pal.blobs) {
       const g = ctx.createRadialGradient(W * x, H * y, 0, W * x, H * y, R * r);
       g.addColorStop(0, `rgba(${rgb},${a})`);
       g.addColorStop(0.45, `rgba(${rgb},${a * 0.45})`);
@@ -265,21 +301,23 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
       ctx.fillRect(0, 0, W, H);
     }
 
-    // Navy pool behind the headline keeps the type legible over the colour.
+    // Pool behind the headline keeps the type legible over the colour.
     const glow = ctx.createRadialGradient(W * 0.5, H * 0.47, 0, W * 0.5, H * 0.47, R * 0.42);
-    glow.addColorStop(0, GLOW);
-    glow.addColorStop(1, "rgba(27,43,74,0)");
+    glow.addColorStop(0, pal.pool);
+    glow.addColorStop(1, `rgba(${pal.poolRgb},0)`);
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
     // Fine grain to stop the gradients banding.
+    ctx.globalAlpha = pal.grain / 255;
     ctx.fillStyle = ctx.createPattern(grain, "repeat")!;
     ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
 
     // Fade the bottom edge into the landing page colour so the two sections meet seamlessly.
     const fade = ctx.createLinearGradient(0, H * 0.8, 0, H);
-    fade.addColorStop(0, "rgba(12,20,43,0)");
-    fade.addColorStop(1, BG);
+    fade.addColorStop(0, `rgba(${pal.bgRgb},0)`);
+    fade.addColorStop(1, pal.bg);
     ctx.fillStyle = fade;
     ctx.fillRect(0, H * 0.8, W, H * 0.2);
 
@@ -292,7 +330,7 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
       ctx.font = `800 ${fs}px Poppins`;
     }
 
-    ctx.fillStyle = INK;
+    ctx.fillStyle = pal.ink;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     const cx = W * (mobile ? 0.5 : 0.505);
@@ -551,6 +589,12 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
     });
 
   return {
+    setTheme(next) {
+      pal = PALETTES[next];
+      renderer.setClearColor(pal.bg, 1);
+      drawHeadline();
+      if (ready) render();
+    },
     spin(direction) {
       velX = 0;
       velY = 0;

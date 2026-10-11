@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "./ThemeToggle";
 
 /* Thin gold orbit lines, echoing the brand banners. */
 export function Orbits({ className }: { className?: string }) {
@@ -78,6 +79,7 @@ export function SiteHeader() {
               {n.label}
             </Link>
           ))}
+          <ThemeToggle className="ml-1" />
           <Link
             to="/app"
             className="ml-1 hidden items-center gap-1.5 rounded-full border border-gold-400/50 px-4 py-1.5 text-sm text-gold-300 transition-colors hover:bg-gold-400 hover:text-ink-900 sm:inline-flex"
@@ -139,7 +141,7 @@ export function SitePage({ title, children }: { title: string; children: ReactNo
   }, [title]);
 
   return (
-    <div className="min-h-screen bg-ink-900 text-cream">
+    <div className="site min-h-screen bg-ink-900 text-cream">
       <SiteHeader />
       {children}
       <SiteFooter />

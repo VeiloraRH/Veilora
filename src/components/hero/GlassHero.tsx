@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { createGlassScene, type GlassScene } from "./glass-scene";
+import { ThemeToggle } from "@/components/site/ThemeToggle";
+import { useTheme } from "@/lib/theme";
 import "./hero.css";
 
 const DOTS = [0, 1, 2];
@@ -10,9 +12,12 @@ export function GlassHero() {
   const sceneRef = useRef<GlassScene | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [activeDot, setActiveDot] = useState(1);
+  const { theme } = useTheme();
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   useEffect(() => {
-    const scene = createGlassScene(canvasRef.current!, () => setLoaded(true));
+    const scene = createGlassScene(canvasRef.current!, () => setLoaded(true), themeRef.current);
     sceneRef.current = scene;
     return () => {
       scene.dispose();
@@ -20,8 +25,12 @@ export function GlassHero() {
     };
   }, []);
 
+  useEffect(() => {
+    sceneRef.current?.setTheme(theme);
+  }, [theme]);
+
   return (
-    <section className="hero" id="hero">
+    <section className="hero" id="hero" data-theme={theme}>
       <canvas id="scene" ref={canvasRef} aria-label="Rotatable glass cube. Drag to rotate." />
       <div className="ui">
         <h1 className="sr-only">Veilora: shield every move</h1>
@@ -36,6 +45,7 @@ export function GlassHero() {
             <li><Link to="/roadmap">Roadmap</Link></li>
             <li><Link to="/whitepaper">Whitepaper</Link></li>
             <li><Link to="/app">Launch App</Link></li>
+            <li className="theme-li"><ThemeToggle className="hero-toggle" /></li>
           </ul>
         </header>
 

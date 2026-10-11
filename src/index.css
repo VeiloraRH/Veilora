@@ -119,6 +119,29 @@
   --color-teal-400: #6a9da1;
 }
 
+/* Marketing pages (.site) are authored in the dark brand palette. In light mode the same
+   tokens are remapped to a warm cream ground with navy type, so every class flips at once. */
+:root:not(.dark) .site {
+  --color-ink-950: #ede4d3;
+  --color-ink-900: #f8f3ea;
+  --color-ink-850: #fffdf8;
+  --color-ink-800: #f3ecdf;
+  --color-ink-700: #e8dfcf;
+  --color-ink-600: #dcd1bd;
+  --color-ink-500: #b5a993;
+
+  --color-cream: #0c142b;
+  --color-cream-dim: #2c3a57;
+  --color-mist: #5b6680;
+
+  --color-gold-200: #8a5d14;
+  --color-gold-300: #a06d1c;
+  --color-gold-400: #a87420;
+  --color-teal-300: #3d7579;
+  --color-teal-400: #3d7579;
+  --color-coral-400: #b4513c;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
