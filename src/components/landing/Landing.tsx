@@ -6,6 +6,25 @@ import { Orbits, SectionTitle, SiteFooter } from "@/components/site/chrome";
 import { GATES } from "@/content/roadmap";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
+
+const revealGroupVariants: Variants = {
+  hidden: {},
+  visible: (reduceMotion: boolean) => ({
+    transition: { delayChildren: reduceMotion ? 0 : 0.04, staggerChildren: reduceMotion ? 0 : 0.09 },
+  }),
+};
+
+const revealItemVariants: Variants = {
+  hidden: (reduceMotion: boolean) => ({ opacity: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : 22 }),
+  visible: (reduceMotion: boolean) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: reduceMotion ? 0 : 0.58, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+const revealViewport = { once: true, amount: 0.16 };
 
 /* Large soft colour fields behind the whole page, so sections blend into one another. */
 const WASHES: { top: string; left: string; size: number; rgb: string; a: number }[] = [
@@ -113,62 +132,63 @@ const result     = await veilora.execute(approval);`;
 
 export function Landing() {
   const plan = PLANS[0];
+  const reduceMotion = Boolean(useReducedMotion());
   return (
     <div className="site relative isolate overflow-hidden bg-ink-900 text-cream">
       <Washes />
       {/* Statement */}
       <section className="relative overflow-hidden px-5 py-24 sm:px-10 sm:py-32">
         <Orbits className="inset-0 h-full w-full opacity-80" />
-        <div className="relative mx-auto max-w-6xl">
-          <p className="eyebrow">Move quietly / Stay in control</p>
-          <p className="mt-6 max-w-4xl font-display text-4xl leading-[1.1] text-cream sm:text-6xl">
+        <motion.div className="relative mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.p className="eyebrow" variants={revealItemVariants} custom={reduceMotion}>Move quietly / Stay in control</motion.p>
+          <motion.p className="mt-6 max-w-4xl font-display text-4xl leading-[1.1] text-cream sm:text-6xl" variants={revealItemVariants} custom={reduceMotion}>
             Plan, protect and execute digital-asset actions privately, with <span className="text-brand-gradient">no single point of signing authority</span> and no blind movement
             of funds.
-          </p>
-          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-ink-600/60 bg-ink-600/40 sm:grid-cols-3">
+          </motion.p>
+          <motion.div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-ink-600/60 bg-ink-600/40 sm:grid-cols-3" variants={revealGroupVariants} custom={reduceMotion}>
             {[
               ["2 of 3", "keys to move anything"],
               ["0", "actions without a simulation you saw"],
               ["4663", "Robinhood Chain, first"],
             ].map(([v, l]) => (
-              <div key={l} className="bg-ink-900/75 px-6 py-7 backdrop-blur-sm">
+              <motion.div key={l} className="bg-ink-900/75 px-6 py-7 backdrop-blur-sm" variants={revealItemVariants} custom={reduceMotion}>
                 <p className="font-display text-5xl text-gold-300">{v}</p>
                 <p className="mt-1 text-sm text-mist">{l}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Control loop */}
       <section id="how-it-works" className="scroll-mt-10 px-5 py-24 sm:px-10">
-        <div className="mx-auto max-w-6xl">
-          <SectionTitle eyebrow="One explainable loop" title="Say what you want. Review what happens.">
+        <motion.div className="mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="One explainable loop" title="Say what you want. Review what happens.">
             Veilora turns a goal into a plan, shows you exactly what changes, and waits for your yes. Nothing moves without it.
-          </SectionTitle>
-          <ol className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+          </SectionTitle></motion.div>
+          <motion.ol className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-7" variants={revealGroupVariants} custom={reduceMotion}>
             {LOOP.map(([t, d], i) => (
-              <li key={t} className="panel relative p-5">
+              <motion.li key={t} className="panel relative p-5" variants={revealItemVariants} custom={reduceMotion}>
                 <span className="font-display text-3xl text-gold-400/80">{String(i + 1).padStart(2, "0")}</span>
                 <p className="mt-3 font-medium text-cream">{t}</p>
                 <p className="mt-1 text-sm leading-snug text-mist">{d}</p>
-              </li>
+              </motion.li>
             ))}
-          </ol>
-          <Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
+          </motion.ol>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
             See the full roadmap <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+          </Link></motion.div>
+        </motion.div>
       </section>
 
       {/* Live example */}
       <section className="px-5 py-24 sm:px-10">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.15fr]">
-          <SectionTitle eyebrow="Intent-based treasury control" title="From a sentence to a signed plan.">
+        <motion.div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.15fr]" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Intent-based treasury control" title="From a sentence to a signed plan.">
             Type the goal. Veilora parses it on your device, prices the route, simulates the balances, checks your policies and lists every party that will see something, before
             anything is signed.
-          </SectionTitle>
-          <div className="panel overflow-hidden">
+          </SectionTitle></motion.div>
+          <motion.div className="panel overflow-hidden" variants={revealItemVariants} custom={reduceMotion}>
             <div className="border-b border-ink-600/60 p-5">
               <p className="text-[11px] uppercase tracking-[0.18em] text-mist">Your goal</p>
               <p className="mt-2 font-display text-xl leading-snug text-cream">“{plan.goal}”</p>
@@ -213,20 +233,20 @@ export function Landing() {
                 Try it <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Three planes */}
       <section className="px-5 py-24 sm:px-10">
-        <div className="mx-auto max-w-6xl">
-          <SectionTitle eyebrow="Three planes, one product" title="Control. Privacy. Execution.">
+        <motion.div className="mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Three planes, one product" title="Control. Privacy. Execution.">
             The advantage isn't any single primitive. It's the integration: privacy protects the activity, Veilora controls the decision, the execution layer settles the approved
             plan, and a local receipt explains what happened.
-          </SectionTitle>
-          <div className="mt-14 grid gap-5 lg:grid-cols-3">
+          </SectionTitle></motion.div>
+          <motion.div className="mt-14 grid gap-5 lg:grid-cols-3" variants={revealGroupVariants} custom={reduceMotion}>
             {PLANES.map((p) => (
-              <article key={p.name} className="panel flex flex-col p-7">
+              <motion.article key={p.name} className="panel flex flex-col p-7" variants={revealItemVariants} custom={reduceMotion}>
                 <div className="flex items-center justify-between">
                   <span className="grid h-11 w-11 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/5 text-gold-300">
                     <p.icon className="h-5 w-5" />
@@ -244,20 +264,20 @@ export function Landing() {
                     </li>
                   ))}
                 </ul>
-              </article>
+              </motion.article>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Privacy model */}
       <section id="privacy" className="relative scroll-mt-10 overflow-hidden px-5 py-24 sm:px-10">
         <Orbits className="-right-40 top-0 h-[600px] w-[1200px] rotate-180 opacity-60" />
-        <div className="relative mx-auto max-w-6xl">
-          <SectionTitle eyebrow="Private by default where supported" title={<>Privacy as controls, <span className="italic text-gold-300">not a promise.</span></>}>
+        <motion.div className="relative mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Private by default where supported" title={<>Privacy as controls, <span className="italic text-gold-300">not a promise.</span></>}>
             Every layer says what it protects and what it doesn't. No “untraceable”, no “invisible to everyone”. Just specific mechanisms with stated limits.
-          </SectionTitle>
-          <div className="mt-14 overflow-x-auto">
+          </SectionTitle></motion.div>
+          <motion.div className="mt-14 overflow-x-auto" variants={revealItemVariants} custom={reduceMotion}>
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="text-[11px] uppercase tracking-[0.18em] text-mist">
@@ -276,34 +296,34 @@ export function Landing() {
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="mt-14 grid gap-5 md:grid-cols-2">
-            <div className="panel p-7">
+          </motion.div>
+          <motion.div className="mt-14 grid gap-5 md:grid-cols-2" variants={revealGroupVariants} custom={reduceMotion}>
+            <motion.div className="panel p-7" variants={revealItemVariants} custom={reduceMotion}>
               <p className="eyebrow">Clean provenance</p>
               <h3 className="mt-3 font-display text-3xl text-cream">Prove clean provenance without exposing your full book.</h3>
               <p className="mt-3 text-sm leading-relaxed text-mist">
                 Proofs show membership in a defined association set. Every proof lists its provider, set date, freshness, coverage, validity and what it reveals, plus what
                 happens if the provider is down.
               </p>
-            </div>
-            <div className="panel p-7">
+            </motion.div>
+            <motion.div className="panel p-7" variants={revealItemVariants} custom={reduceMotion}>
               <p className="eyebrow">Scoped view keys</p>
               <h3 className="mt-3 font-display text-3xl text-cream">Show your auditor one quarter. Not your life.</h3>
               <p className="mt-3 text-sm leading-relaxed text-mist">
                 Account, note, time-limited, tax-period and counterparty keys, each revocable where the scheme allows it, with a full history of who saw what.
               </p>
-            </div>
-          </div>
-        </div>
+            </motion.div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Custody */}
       <section className="px-5 py-24 sm:px-10">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
-          <SectionTitle eyebrow="Threshold self-custody" title="No single key can move your funds.">
+        <motion.div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Threshold self-custody" title="No single key can move your funds.">
             Your vault is split three ways. Any two shards sign; one alone can't. The co-signer enforces your policies and sees only what it must, and you can run it yourself.
-          </SectionTitle>
-          <div className="relative mx-auto aspect-square w-full max-w-[440px]">
+          </SectionTitle></motion.div>
+          <motion.div className="relative mx-auto aspect-square w-full max-w-[440px]" variants={revealItemVariants} custom={reduceMotion}>
             <div className="absolute inset-[14%] rounded-full border border-gold-400/25" />
             <div className="absolute inset-[30%] rounded-full border border-gold-400/10" />
             <div className="absolute inset-0 grid place-items-center">
@@ -314,45 +334,45 @@ export function Landing() {
               { icon: Server, label: "B · Policy co-signer", pos: "bottom-[6%] left-0" },
               { icon: Fingerprint, label: "C · Passkey recovery", pos: "bottom-[6%] right-0" },
             ].map((s) => (
-              <div key={s.label} className={cn("absolute flex flex-col items-center gap-2", s.pos)}>
+              <motion.div key={s.label} className={cn("absolute flex flex-col items-center gap-2", s.pos)} variants={revealItemVariants} custom={reduceMotion}>
                 <span className="grid h-14 w-14 place-items-center rounded-2xl border border-gold-400/50 bg-ink-850 text-gold-300 shadow-[0_0_40px_-8px_rgba(234,186,101,0.45)]">
                   <s.icon className="h-6 w-6" />
                 </span>
                 <span className="whitespace-nowrap text-xs text-cream-dim">{s.label}</span>
-              </div>
+              </motion.div>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Recipes */}
       <section className="px-5 py-24 sm:px-10">
-        <div className="mx-auto max-w-6xl">
-          <SectionTitle eyebrow="Shielded DeFi, as recipes" title="Step → Recipe → Combo.">
+        <motion.div className="mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Shielded DeFi, as recipes" title="Step → Recipe → Combo.">
             Composable workflows with one simulation and one approval. Each declares its contracts, fees, proof needs, failure behaviour and audit status.
-          </SectionTitle>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          </SectionTitle></motion.div>
+          <motion.div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-5" variants={revealGroupVariants} custom={reduceMotion}>
             {RECIPES.map((r) => (
-              <div key={r.id} className="panel p-5">
+              <motion.div key={r.id} className="panel p-5" variants={revealItemVariants} custom={reduceMotion}>
                 <p className="text-xs text-gold-400">Gate {r.gate}</p>
                 <p className="mt-2 font-medium leading-snug text-cream">{r.name}</p>
                 <p className="mt-2 text-xs text-mist">{r.steps.join(" → ")}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
-          <p className="mt-6 text-sm text-mist">
+          </motion.div>
+          <motion.p className="mt-6 text-sm text-mist" variants={revealItemVariants} custom={reduceMotion}>
             Tokenized stocks on Robinhood Chain are the long-term edge, and launch only once the asset and legal model are verified.
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
       </section>
 
       {/* Roadmap */}
       <section id="roadmap" className="scroll-mt-10 px-5 py-24 sm:px-10">
-        <div className="mx-auto max-w-6xl">
-          <SectionTitle eyebrow="Launch strategy" title="Earn trust one gate at a time." />
-          <ol className="mt-12 border-l border-gold-400/30">
+        <motion.div className="mx-auto max-w-6xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Launch strategy" title="Earn trust one gate at a time." /></motion.div>
+          <motion.ol className="mt-12 border-l border-gold-400/30" variants={revealGroupVariants} custom={reduceMotion}>
             {GATES.map((g) => (
-              <li key={g.n} className="relative pb-10 pl-8 last:pb-0">
+              <motion.li key={g.n} className="relative pb-10 pl-8 last:pb-0" variants={revealItemVariants} custom={reduceMotion}>
                 <span className={cn("absolute -left-[7px] top-1.5 h-3.5 w-3.5 rounded-full border-2", g.n === 1 ? "border-gold-300 bg-gold-400" : "border-gold-400/50 bg-ink-900")} />
                 <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                   <p className="font-display text-3xl text-cream">
@@ -361,47 +381,47 @@ export function Landing() {
                   <span className={cn("text-xs uppercase tracking-[0.2em]", g.n === 1 ? "text-gold-300" : "text-mist")}>{g.status}</span>
                 </div>
                 <p className="mt-2 max-w-3xl text-sm text-mist">{g.items.join(" · ")}</p>
-              </li>
+              </motion.li>
             ))}
-          </ol>
-          <Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
+          </motion.ol>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><Link to="/roadmap" className="mt-12 inline-flex items-center gap-2 text-sm font-medium text-gold-300 hover:text-gold-200">
             See the full roadmap <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+          </Link></motion.div>
+        </motion.div>
       </section>
 
       {/* Developers */}
       <section id="developers" className="px-5 py-24 sm:px-10">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.2fr]">
-          <SectionTitle eyebrow="Developer SDK" title="Plans, simulations, policies, approvals.">
+        <motion.div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1fr_1.2fr]" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.div variants={revealItemVariants} custom={reduceMotion}><SectionTitle eyebrow="Developer SDK" title="Plans, simulations, policies, approvals.">
             A layered SDK, so you don't need every privacy primitive to build on Veilora: core, intent, simulation, privacy, policy, adapters and observability.
-          </SectionTitle>
-          <pre className="panel overflow-x-auto p-6 font-mono text-[12.5px] leading-relaxed text-cream-dim">
+          </SectionTitle></motion.div>
+          <motion.pre className="panel overflow-x-auto p-6 font-mono text-[12.5px] leading-relaxed text-cream-dim" variants={revealItemVariants} custom={reduceMotion}>
             <code>{SDK}</code>
-          </pre>
-        </div>
+          </motion.pre>
+        </motion.div>
       </section>
 
       {/* Closing CTA */}
       <section className="relative overflow-hidden px-5 py-32 text-center sm:px-10">
         <Orbits className="inset-0 h-full w-full" />
-        <div className="relative mx-auto max-w-4xl">
-          <img src="/brand/veilora-mark.png" alt="" className="mx-auto h-24 w-24" />
-          <h2 className="mt-8 font-display text-5xl font-semibold uppercase leading-[1.02] tracking-wide text-cream sm:text-7xl">
+        <motion.div className="relative mx-auto max-w-4xl" initial="hidden" whileInView="visible" viewport={revealViewport} variants={revealGroupVariants} custom={reduceMotion}>
+          <motion.img src="/brand/veilora-mark.png" alt="" className="mx-auto h-24 w-24" variants={revealItemVariants} custom={reduceMotion} />
+          <motion.h2 className="mt-8 font-display text-5xl font-semibold uppercase leading-[1.02] tracking-wide text-cream sm:text-7xl" variants={revealItemVariants} custom={reduceMotion}>
             Think locally.
             <br />
             <span className="text-brand-gradient">Move deliberately.</span>
-          </h2>
-          <p className="eyebrow mt-8">Your strategy stays with you</p>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
+          </motion.h2>
+          <motion.p className="eyebrow mt-8" variants={revealItemVariants} custom={reduceMotion}>Your strategy stays with you</motion.p>
+          <motion.div className="mt-10 flex flex-wrap justify-center gap-3" variants={revealItemVariants} custom={reduceMotion}>
             <Link to="/app" className="inline-flex items-center gap-2 rounded-lg bg-gold-400 px-6 py-3 text-sm font-medium text-ink-900 hover:bg-gold-300">
               Launch the app <ArrowRight className="h-4 w-4" />
             </Link>
             <Link to="/whitepaper" className="inline-flex items-center gap-2 rounded-lg border border-cream/30 px-6 py-3 text-sm text-cream hover:border-gold-400 hover:text-gold-300">
               Read the whitepaper
             </Link>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       <SiteFooter />
