@@ -11,6 +11,14 @@ const HEADLINE = ["Shield", "Every", "Move"];
 const BG = "#0c142b";
 const GLOW = "#1b2b4a";
 const INK = "#f4ead8";
+// Soft colour fields blended over the navy base: [x, y, radius (of the longer side), rgb, alpha].
+const BLOBS: [number, number, number, string, number][] = [
+  [0.1, 0.12, 0.55, "106,157,161", 0.32], // teal, top left
+  [0.86, 0.08, 0.45, "234,186,101", 0.2], // gold, top right
+  [0.95, 0.72, 0.5, "219,107,85", 0.26], // coral, right
+  [0.18, 0.92, 0.55, "139,61,59", 0.4], // wine, bottom left
+  [0.55, 1.05, 0.4, "237,163,92", 0.14], // amber, bottom centre
+];
 const FOV = 30;
 const CAM_Z = 10;
 
@@ -217,6 +225,19 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
   let H = 1;
   let dpr = 1;
 
+  const grain = document.createElement("canvas");
+  grain.width = grain.height = 128;
+  {
+    const g = grain.getContext("2d")!;
+    const img = g.createImageData(128, 128);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = Math.random() * 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 10;
+    }
+    g.putImageData(img, 0, 0);
+  }
+
   function drawHeadline() {
     const cw = Math.round(W * dpr);
     const ch = Math.round(H * dpr);
@@ -227,15 +248,41 @@ export function createGlassScene(canvas: HTMLCanvasElement, onModelLoaded: () =>
       bgTex.dispose();
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = BG;
+    const base = ctx.createLinearGradient(0, 0, 0, H);
+    base.addColorStop(0, "#091024");
+    base.addColorStop(1, BG);
+    ctx.fillStyle = base;
     ctx.fillRect(0, 0, W, H);
 
     const mobile = isMobile(W, H);
-    const glow = ctx.createRadialGradient(W * 0.5, H * 0.47, 0, W * 0.5, H * 0.47, Math.max(W, H) * 0.6);
+    const R = Math.max(W, H);
+    for (const [x, y, r, rgb, a] of BLOBS) {
+      const g = ctx.createRadialGradient(W * x, H * y, 0, W * x, H * y, R * r);
+      g.addColorStop(0, `rgba(${rgb},${a})`);
+      g.addColorStop(0.45, `rgba(${rgb},${a * 0.45})`);
+      g.addColorStop(1, `rgba(${rgb},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Navy pool behind the headline keeps the type legible over the colour.
+    const glow = ctx.createRadialGradient(W * 0.5, H * 0.47, 0, W * 0.5, H * 0.47, R * 0.42);
     glow.addColorStop(0, GLOW);
-    glow.addColorStop(1, BG);
+    glow.addColorStop(1, "rgba(27,43,74,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
+
+    // Fine grain to stop the gradients banding.
+    ctx.fillStyle = ctx.createPattern(grain, "repeat")!;
+    ctx.fillRect(0, 0, W, H);
+
+    // Fade the bottom edge into the landing page colour so the two sections meet seamlessly.
+    const fade = ctx.createLinearGradient(0, H * 0.8, 0, H);
+    fade.addColorStop(0, "rgba(12,20,43,0)");
+    fade.addColorStop(1, BG);
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, H * 0.8, W, H * 0.2);
+
     let fs = Math.min(H * 0.21, W * (mobile ? 0.21 : 0.118));
     ctx.font = `800 ${fs}px Poppins`;
     const widest = Math.max(...HEADLINE.map((l) => ctx.measureText(l).width));

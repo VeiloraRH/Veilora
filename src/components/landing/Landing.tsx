@@ -6,6 +6,38 @@ import { Orbits, SectionTitle, SiteFooter } from "@/components/site/chrome";
 import { GATES } from "@/content/roadmap";
 import { cn } from "@/lib/utils";
 
+/* Large soft colour fields behind the whole page, so sections blend into one another. */
+const WASHES: { top: string; left: string; size: number; rgb: string; a: number }[] = [
+  { top: "-4%", left: "-20%", size: 900, rgb: "139,61,59", a: 0.32 }, // wine, continues the hero's bottom-left
+  { top: "6%", left: "60%", size: 800, rgb: "219,107,85", a: 0.16 }, // coral
+  { top: "18%", left: "-25%", size: 950, rgb: "106,157,161", a: 0.18 }, // teal
+  { top: "32%", left: "55%", size: 900, rgb: "234,186,101", a: 0.12 }, // gold
+  { top: "46%", left: "-15%", size: 850, rgb: "139,61,59", a: 0.22 }, // wine
+  { top: "58%", left: "62%", size: 900, rgb: "106,157,161", a: 0.16 }, // teal
+  { top: "72%", left: "-20%", size: 900, rgb: "237,163,92", a: 0.12 }, // amber
+  { top: "84%", left: "40%", size: 1000, rgb: "219,107,85", a: 0.18 }, // coral, under the closing CTA
+];
+
+function Washes() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      {WASHES.map((w) => (
+        <div
+          key={w.top}
+          className="absolute"
+          style={{
+            top: w.top,
+            left: w.left,
+            width: `min(${w.size}px, 140vw)`,
+            aspectRatio: "1",
+            background: `radial-gradient(closest-side, rgba(${w.rgb},${w.a}), rgba(${w.rgb},${w.a * 0.4}) 45%, rgba(${w.rgb},0))`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 const LOOP = [
   ["Describe", "Say the goal in plain words."],
   ["Simulate", "See the before and after."],
@@ -67,7 +99,8 @@ const result     = await veilora.execute(approval);`;
 export function Landing() {
   const plan = PLANS[0];
   return (
-    <div className="bg-ink-900 text-cream">
+    <div className="relative isolate overflow-hidden bg-ink-900 text-cream">
+      <Washes />
       {/* Statement */}
       <section className="relative overflow-hidden px-5 py-24 sm:px-10 sm:py-32">
         <Orbits className="inset-0 h-full w-full opacity-80" />
@@ -83,7 +116,7 @@ export function Landing() {
               ["0", "actions without a simulation you saw"],
               ["4663", "Robinhood Chain, first"],
             ].map(([v, l]) => (
-              <div key={l} className="bg-ink-900 px-6 py-7">
+              <div key={l} className="bg-ink-900/75 px-6 py-7 backdrop-blur-sm">
                 <p className="font-display text-5xl text-gold-300">{v}</p>
                 <p className="mt-1 text-sm text-mist">{l}</p>
               </div>
