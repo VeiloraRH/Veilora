@@ -8,12 +8,22 @@ import {
   getWalletAudit,
   type WalletMetadata,
 } from "./api";
-import { decryptDeviceKey, deviceKeyMatchesAddress, encryptDeviceKey } from "./deviceKeyVault";
+import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
 import { generatePrivateKey, privateKeyToAddress } from "viem/accounts";
+import { getAddress } from "viem";
 
 const STORAGE_KEY = "veilora:wallet_address";
 const ENCRYPTED_DEVICE_KEY = "veilora:shardA:encrypted";
 const LEGACY_DEVICE_KEY = "veilora:shardA:privateKey";
+
+function deviceKeyMatchesAddress(privateKey: string, address: string): boolean {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey) || !/^0x[0-9a-fA-F]{40}$/.test(address)) return false;
+  try {
+    return privateKeyToAddress(privateKey as `0x${string}`).toLowerCase() === getAddress(address).toLowerCase();
+  } catch {
+    return false;
+  }
+}
 
 interface NetworkInfo {
   blockNumber: string;

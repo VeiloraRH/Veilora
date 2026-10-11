@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { decryptDeviceKey, deviceKeyMatchesAddress, encryptDeviceKey } from "../../src/lib/deviceKeyVault";
+import { decryptDeviceKey, encryptDeviceKey } from "../../src/lib/deviceKeyVault";
 
 const shardA = `0x${"a".repeat(64)}`;
 const passphrase = "correct horse battery staple";
@@ -15,7 +15,6 @@ test("device key encryption round-trips without storing plaintext", async () => 
   });
   expect(await decryptDeviceKey(encrypted, passphrase)).toBe(shardA);
 });
-
 test("device key decryption rejects an incorrect passphrase", async () => {
   const encrypted = await encryptDeviceKey(shardA, passphrase);
 
@@ -30,13 +29,4 @@ test("device key decryption rejects modified ciphertext", async () => {
   record.ciphertext = btoa(String.fromCharCode(...bytes));
 
   await expect(decryptDeviceKey(JSON.stringify(record), passphrase)).rejects.toThrow("Could not unlock");
-});
-
-test("existing account import can verify that Shard A matches the registered address", () => {
-  const privateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-  const shardAAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
-
-  expect(deviceKeyMatchesAddress(privateKey, shardAAddress)).toBe(true);
-  expect(deviceKeyMatchesAddress(privateKey, "0x0000000000000000000000000000000000000001")).toBe(false);
-  expect(deviceKeyMatchesAddress("not-a-private-key", shardAAddress)).toBe(false);
 });

@@ -1,5 +1,3 @@
-import { privateKeyToAddress } from "viem/accounts";
-
 const ENCRYPTION_VERSION = 1;
 const PBKDF2_ITERATIONS = 310_000;
 const encoder = new TextEncoder();
@@ -33,15 +31,6 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 export function validateDevicePassphrase(passphrase: string): string | null {
   if (passphrase.length < 12) return "Use a passphrase with at least 12 characters.";
   return null;
-}
-
-export function deviceKeyMatchesAddress(privateKey: string, address: string): boolean {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey) || !/^0x[0-9a-fA-F]{40}$/.test(address)) return false;
-  try {
-    return privateKeyToAddress(privateKey as `0x${string}`).toLowerCase() === address.toLowerCase();
-  } catch {
-    return false;
-  }
 }
 
 export function requestNewDevicePassphrase(): string | null {
