@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
-import { requestNewDevicePassphrase, validateDevicePassphrase } from "@/lib/deviceKeyVault";
+import { validateDevicePassphrase } from "@/lib/deviceKeyVault";
+import { DevicePassphraseDialog } from "@/components/app/DevicePassphraseDialog";
 
 function CoinUSDG({ className }: { className?: string }) {
   return (
@@ -101,10 +102,13 @@ export function OnboardingScreen() {
   const [backupOpen, setBackupOpen] = useState(false);
   const [createdDetails, setCreatedDetails] = useState<CreatedAccountDetails | null>(null);
   const [hasWrittenDown, setHasWrittenDown] = useState(false);
+  const [passphraseOpen, setPassphraseOpen] = useState(false);
 
   const handleCreate = async () => {
-    const passphrase = requestNewDevicePassphrase();
-    if (!passphrase) return;
+    setPassphraseOpen(true);
+  };
+
+  const handleCreateWithPassphrase = async (passphrase: string) => {
     setLoading(true);
     try {
       const res = await createAccount(passphrase);
@@ -112,7 +116,7 @@ export function OnboardingScreen() {
       setHasWrittenDown(false);
       setBackupOpen(true);
     } catch (err: any) {
-      alert(err?.message || "Failed to create smart account");
+      throw new Error(err?.message || "Failed to create smart account");
     } finally {
       setLoading(false);
     }
@@ -480,6 +484,13 @@ export function OnboardingScreen() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DevicePassphraseDialog
+        open={passphraseOpen}
+        onOpenChange={setPassphraseOpen}
+        onSubmit={handleCreateWithPassphrase}
+        busy={loading}
+      />
     </div>
   );
 }

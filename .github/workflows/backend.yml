@@ -6,11 +6,36 @@ on:
   pull_request:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  pull-requests: read
 
 jobs:
+  changes:
+    name: Backend change filter
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+      - name: Report filtered result
+        run: |
+          if [ "${{ steps.filter.outputs.backend }}" = "true" ]; then
+            echo "Backend files changed; backend CI will run."
+          else
+            echo "No backend/ changes; backend tests and deployment jobs will be skipped."
+          fi
+
   test:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -45,9 +70,12 @@ jobs:
       - run: bun test
 
   build-push:
-    needs: test
-    if: github.event_name == 'push'
+    needs: [changes, test]
+    if: github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - id: image
@@ -66,8 +94,10 @@ jobs:
             ${{ steps.image.outputs.name }}:${{ github.sha }}
 
   release:
-    needs: build-push
-    if: github.event_name == 'push'
+    needs: [changes, build-push]
+    if: github.event_name == 'push' && needs.changes.outputs.backend == 'true'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,8 +116,8 @@ jobs:
           generate_release_notes: true
 
   deploy:
-    needs: build-push
-    if: github.event_name == 'push'
+    needs: [changes, build-push]
+    if: github.event_name == 'push' && needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render deployment when configured

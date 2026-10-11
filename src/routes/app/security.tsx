@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { KeyBackupModal } from "@/components/app/KeyBackupModal";
-import { requestNewDevicePassphrase } from "@/lib/deviceKeyVault";
+import { DevicePassphraseDialog } from "@/components/app/DevicePassphraseDialog";
 import {
   Badge,
   Button,
@@ -55,9 +55,11 @@ export function SecurityScreen() {
   const [unfreezeSubmitting, setUnfreezeSubmitting] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [passphraseOpen, setPassphraseOpen] = useState(false);
+  const [passphraseAction, setPassphraseAction] = useState<"create" | "import" | null>(null);
+  const [passphraseBusy, setPassphraseBusy] = useState(false);
 
   const [viewKeyModalOpen, setViewKeyModalOpen] = useState(false);
   const [importKeyModalOpen, setImportKeyModalOpen] = useState(false);
@@ -134,28 +136,12 @@ export function SecurityScreen() {
     }
   };
 
-  const handleCreateAccountSubmit = async () => {
-    const passphrase = requestNewDevicePassphrase();
-    if (!passphrase) return;
-    setCreateSubmitting(true);
-    try {
-      const newAcc = await createAccount(passphrase);
-      setCreateModalOpen(false);
-      setCreatedAccount(newAcc);
-      setShowBackupModal(true);
-    } catch (err: any) {
-      setStatusModal({
-        open: true,
-        type: "error",
-        title: "Creation Failed",
-        message: err?.message || "Failed to create account. Please try again.",
-      });
-    } finally {
-      setCreateSubmitting(false);
-    }
+  const handleCreateAccountSubmit = () => {
+    setPassphraseAction("create");
+    setPassphraseOpen(true);
   };
 
-  const handleImportKeySubmit = async () => {
+  const handleImportKeySubmit = () => {
     const clean = importKeyInput.trim();
     if (!/^0x[0-9a-fA-F]{64}$/.test(clean)) {
       setStatusModal({
@@ -166,23 +152,34 @@ export function SecurityScreen() {
       });
       return;
     }
-    const passphrase = requestNewDevicePassphrase();
-    if (!passphrase) return;
+    setPassphraseAction("import");
+    setPassphraseOpen(true);
+  };
+
+  const handlePassphraseSubmit = async (passphrase: string) => {
+    if (!passphraseAction) return;
+    setPassphraseBusy(true);
     try {
-      if (!wallet?.shardA) throw new Error("Load a registered Veilora wallet before importing its Shard A key.");
-      await importDeviceKey(clean, passphrase, wallet.shardA);
-    } catch (err) {
-      setStatusModal({ open: true, type: "error", title: "Key Import Failed", message: err instanceof Error ? err.message : "Could not encrypt key." });
-      return;
+      if (passphraseAction === "create") {
+        const newAcc = await createAccount(passphrase);
+        setCreateModalOpen(false);
+        setCreatedAccount(newAcc);
+        setShowBackupModal(true);
+      } else {
+        if (!wallet?.shardA) throw new Error("Load a registered Veilora wallet before importing its Shard A key.");
+        await importDeviceKey(importKeyInput.trim(), passphrase, wallet.shardA);
+        setImportKeyModalOpen(false);
+        setImportKeyInput("");
+        setStatusModal({
+          open: true,
+          type: "success",
+          title: "Device Key Imported",
+          message: "Shard A is now saved in this browser and ready to sign intents.",
+        });
+      }
+    } finally {
+      setPassphraseBusy(false);
     }
-    setImportKeyModalOpen(false);
-    setImportKeyInput("");
-    setStatusModal({
-      open: true,
-      type: "success",
-      title: "Device Key Imported",
-      message: "Shard A is now saved in this browser and ready to sign intents.",
-    });
   };
 
   const shards = [
@@ -498,16 +495,16 @@ export function SecurityScreen() {
             <Button
               variant="outline"
               onClick={() => setCreateModalOpen(false)}
-              disabled={createSubmitting}
+              disabled={passphraseBusy}
             >
               Cancel
             </Button>
             <Button
               variant="primary"
               onClick={handleCreateAccountSubmit}
-              disabled={createSubmitting}
+              disabled={passphraseBusy}
             >
-              {createSubmitting ? "Generating…" : "Generate Account"}
+              Generate Account
             </Button>
           </>
         }
@@ -536,6 +533,18 @@ export function SecurityScreen() {
           setCreatedAccount(null);
           clearLatestRecoveryKey();
         }}
+      />
+
+      <DevicePassphraseDialog
+        open={passphraseOpen}
+        onOpenChange={(open) => {
+          setPassphraseOpen(open);
+          if (!open) setPassphraseAction(null);
+        }}
+        onSubmit={handlePassphraseSubmit}
+        busy={passphraseBusy}
+        title={passphraseAction === "import" ? "Encrypt your imported key" : "Protect this device key"}
+        description={passphraseAction === "import" ? "Choose a passphrase to encrypt Shard A before saving it in this browser." : undefined}
       />
 
       {/* MODAL 6: View Local Device Key */}

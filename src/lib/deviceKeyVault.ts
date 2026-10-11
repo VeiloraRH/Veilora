@@ -33,23 +33,6 @@ export function validateDevicePassphrase(passphrase: string): string | null {
   return null;
 }
 
-export function requestNewDevicePassphrase(): string | null {
-  const passphrase = window.prompt("Create a device-key passphrase (at least 12 characters). It stays on this device.");
-  if (passphrase === null) return null;
-  const error = validateDevicePassphrase(passphrase);
-  if (error) {
-    window.alert(error);
-    return null;
-  }
-  const confirmation = window.prompt("Confirm your device-key passphrase.");
-  if (confirmation === null) return null;
-  if (confirmation !== passphrase) {
-    window.alert("Passphrases do not match.");
-    return null;
-  }
-  return passphrase;
-}
-
 export async function encryptDeviceKey(privateKey: string, passphrase: string): Promise<string> {
   const error = validateDevicePassphrase(passphrase);
   if (error) throw new Error(error);

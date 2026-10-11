@@ -9,8 +9,9 @@ import {
 import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { Button, Field, StatusModal, inputClass } from "@/components/ui";
 import { KeyBackupModal } from "./KeyBackupModal";
+import { DevicePassphraseDialog } from "./DevicePassphraseDialog";
 import { cn } from "@/lib/utils";
-import { requestNewDevicePassphrase, validateDevicePassphrase } from "@/lib/deviceKeyVault";
+import { validateDevicePassphrase } from "@/lib/deviceKeyVault";
 
 interface OnboardingModalProps {
   open: boolean;
@@ -29,6 +30,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   const [existingStep, setExistingStep] = useState(0);
   const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
   const [showBackupModal, setShowBackupModal] = useState(false);
+  const [passphraseOpen, setPassphraseOpen] = useState(false);
 
   const [statusModal, setStatusModal] = useState<{
     open: boolean;
@@ -57,21 +59,16 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     }
   };
 
-  const handleCreateNew = async () => {
-    const passphrase = requestNewDevicePassphrase();
-    if (!passphrase) return;
+  const handleCreateNew = () => {
+    setPassphraseOpen(true);
+  };
+
+  const handleCreateWithPassphrase = async (passphrase: string) => {
     setSubmitting(true);
     try {
       const res = await createAccount(passphrase);
       setCreatedAccount(res);
       setShowBackupModal(true);
-    } catch (err: any) {
-      setStatusModal({
-        open: true,
-        type: "error",
-        title: "Account Creation Failed",
-        message: err?.message || "Could not generate smart account. Please try again.",
-      });
     } finally {
       setSubmitting(false);
     }
@@ -382,6 +379,12 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
         open={showBackupModal}
         accountDetails={createdAccount}
         onConfirm={handleBackupConfirm}
+      />
+      <DevicePassphraseDialog
+        open={passphraseOpen}
+        onOpenChange={setPassphraseOpen}
+        onSubmit={handleCreateWithPassphrase}
+        busy={submitting}
       />
     </>
   );
