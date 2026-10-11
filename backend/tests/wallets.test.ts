@@ -7,25 +7,35 @@ describe("Threshold Wallets & Co-signing API", () => {
   let walletAddress: string;
   let shardAPrivateKey: `0x${string}`;
   let shardAAddress: `0x${string}`;
+  let shardCAddress: `0x${string}`;
   let shardBPrivateKey: `0x${string}`;
   let shardBAddress: `0x${string}`;
+
+  test("POST /v1/wallets refuses server-side generation of user-held shards", async () => {
+    const res = await request(app).post("/v1/wallets").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("Client-generated Shard A and Shard C");
+  });
 
   test("POST /v1/wallets registers a new deterministic 2-of-3 threshold wallet", async () => {
     const shardA = generateShardKey();
     shardAPrivateKey = shardA.privateKey;
     shardAAddress = shardA.address;
+    shardCAddress = generateShardKey().address;
 
     const res = await request(app)
       .post("/v1/wallets")
       .send({
         shardAAddress,
+        shardCAddress,
       });
 
     expect(res.status).toBe(201);
     expect(res.body.address).toBeString();
     expect(res.body.shardA.toLowerCase()).toBe(shardAAddress.toLowerCase());
     expect(res.body.shardB).toBeString();
-    expect(res.body.shardC).toBeString();
+    expect(res.body.shardC.toLowerCase()).toBe(shardCAddress.toLowerCase());
+    expect(res.body.generatedShards).toBeUndefined();
     expect(res.body.threshold).toBe(2);
     expect(res.body.chainId).toBe(4663);
     expect(res.body.apiKey).toBeString();

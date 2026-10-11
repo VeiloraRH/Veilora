@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Clock,
-  Globe,
   Loader2,
   Shield,
   PiggyBank,
@@ -20,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useWallet, downloadRecoveryBackup, type CreatedAccountDetails } from "@/lib/walletContext";
+import { requestNewDevicePassphrase, validateDevicePassphrase } from "@/lib/deviceKeyVault";
 
 function CoinUSDG({ className }: { className?: string }) {
   return (
@@ -87,10 +87,14 @@ function CoinWaves({ className }: { className?: string }) {
 }
 
 export function OnboardingScreen() {
-  const { createAccount, setWalletAddress } = useWallet();
+  const { createAccount, connectExistingWallet } = useWallet();
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importAddr, setImportAddr] = useState("");
+  const [importKey, setImportKey] = useState("");
+  const [importPassphrase, setImportPassphrase] = useState("");
+  const [importPassphraseConfirm, setImportPassphraseConfirm] = useState("");
+  const [importStep, setImportStep] = useState(0);
   const [importError, setImportError] = useState<string | null>(null);
 
   // Success backup modal state
@@ -99,9 +103,11 @@ export function OnboardingScreen() {
   const [hasDownloaded, setHasDownloaded] = useState(false);
 
   const handleCreate = async () => {
+    const passphrase = requestNewDevicePassphrase();
+    if (!passphrase) return;
     setLoading(true);
     try {
-      const res = await createAccount();
+      const res = await createAccount(passphrase);
       setCreatedDetails(res);
       // Auto-trigger the recovery backup download
       downloadRecoveryBackup({
@@ -120,16 +126,49 @@ export function OnboardingScreen() {
     }
   };
 
-  const handleImportSubmit = (e: React.FormEvent) => {
+  const handleImportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = importAddr.trim();
-    if (!/^0x[0-9a-fA-F]{40}$/.test(clean)) {
-      setImportError("Please enter a valid Robinhood Chain address (0x...)");
+    if (importStep === 0) {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(clean)) {
+        setImportError("Please enter a valid Robinhood Chain address (0x...)");
+        return;
+      }
+      setImportError(null);
+      setImportStep(1);
       return;
     }
-    setImportError(null);
-    setWalletAddress(clean);
-    setImportOpen(false);
+    if (importStep === 1) {
+      if (!/^0x[0-9a-fA-F]{64}$/.test(importKey.trim())) {
+        setImportError("Enter the 32-byte private key for this account's Shard A.");
+        return;
+      }
+      setImportError(null);
+      setImportStep(2);
+      return;
+    }
+    const passphraseError = validateDevicePassphrase(importPassphrase);
+    if (passphraseError) {
+      setImportError(passphraseError);
+      return;
+    }
+    if (importPassphrase !== importPassphraseConfirm) {
+      setImportError("Passphrases do not match.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await connectExistingWallet(clean, importKey.trim(), importPassphrase);
+      setImportOpen(false);
+      setImportStep(0);
+      setImportKey("");
+      setImportPassphrase("");
+      setImportPassphraseConfirm("");
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Could not import this Veilora account.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -152,7 +191,7 @@ export function OnboardingScreen() {
             </div>
 
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300">
-              <Globe className="h-3.5 w-3.5 text-[#eaba65]" />
+              <img src="/robinhood-logo.png" alt="" className="h-4 w-4 object-contain" />
               <span>Robinhood Chain</span>
             </div>
           </div>
@@ -322,48 +361,65 @@ export function OnboardingScreen() {
       </div>
 
       {/* ================= IMPORT WALLET DIALOG (shadcn) ================= */}
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+      <Dialog open={importOpen} onOpenChange={(open) => {
+        setImportOpen(open);
+        if (!open) {
+          setImportStep(0);
+          setImportKey("");
+          setImportPassphrase("");
+          setImportPassphraseConfirm("");
+          setImportError(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-md bg-card border-border text-foreground">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground">
-              Import Existing Smart Account
+              {importStep === 0 ? "Step 1 of 3 · Find your account" : importStep === 1 ? "Step 2 of 3 · Verify your key" : "Step 3 of 3 · Protect your key"}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              Enter your counterfactual smart account address on Robinhood Chain.
+              {importStep === 0 ? "Enter the Veilora smart account address you want to reconnect." : importStep === 1 ? "Enter its Shard A key. We verify it against the registered account." : "Choose a passphrase. It encrypts Shard A on this device and is never saved or sent."}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleImportSubmit} className="space-y-4 py-2">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">
-                Account Address (0x...)
-              </label>
-              <Input
-                type="text"
-                placeholder="0x9412...5a45"
-                value={importAddr}
-                onChange={(e) => setImportAddr(e.target.value)}
-                className="bg-muted/50 border-border text-foreground placeholder:text-muted-foreground font-mono text-sm"
-              />
+              {importStep === 0 ? (
+                <>
+                  <label className="text-xs font-medium text-foreground">Veilora Account Address</label>
+                  <Input type="text" placeholder="0x…" value={importAddr} onChange={(e) => setImportAddr(e.target.value)} className="bg-muted/50 border-border text-foreground placeholder:text-muted-foreground font-mono text-sm" />
+                </>
+              ) : importStep === 1 ? (
+                <>
+                  <div className="rounded-lg border border-border bg-muted/40 p-3">
+                    <p className="text-[11px] text-muted-foreground">Account</p>
+                    <p className="mt-1 break-all font-mono text-xs text-foreground">{importAddr}</p>
+                  </div>
+                  <label className="text-xs font-medium text-foreground">Shard A Private Key</label>
+                  <Input type="password" autoComplete="off" placeholder="0x…" value={importKey} onChange={(e) => setImportKey(e.target.value)} className="bg-muted/50 border-border text-foreground placeholder:text-muted-foreground font-mono text-sm" />
+                  <p className="text-xs text-muted-foreground">Your key is checked against the wallet before it is saved.</p>
+                </>
+              ) : (
+                <>
+                  <label className="text-xs font-medium text-foreground">Device-key Passphrase</label>
+                  <Input type="password" autoComplete="new-password" value={importPassphrase} onChange={(e) => setImportPassphrase(e.target.value)} className="bg-muted/50 border-border text-foreground" />
+                  <label className="text-xs font-medium text-foreground">Confirm Passphrase</label>
+                  <Input type="password" autoComplete="new-password" value={importPassphraseConfirm} onChange={(e) => setImportPassphraseConfirm(e.target.value)} className="bg-muted/50 border-border text-foreground" />
+                  <p className="text-xs text-muted-foreground">Use at least 12 characters. You’ll need it to unlock the key after a reload.</p>
+                </>
+              )}
               {importError && (
                 <p className="text-xs text-rose-500 font-medium">{importError}</p>
               )}
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setImportOpen(false)}
+              <Button type="button" variant="outline" onClick={() => importStep > 0 ? setImportStep(importStep - 1) : setImportOpen(false)}
                 className="border-border bg-transparent text-foreground hover:bg-muted"
               >
-                Cancel
+                {importStep > 0 ? "Back" : "Cancel"}
               </Button>
-              <Button
-                type="submit"
-                className="bg-[#eaba65] text-[#070d1e] hover:bg-[#dfaf58] font-semibold"
-              >
-                Connect Account
+              <Button type="submit" disabled={loading} className="bg-[#eaba65] text-[#070d1e] hover:bg-[#dfaf58] font-semibold">
+                {loading ? "Importing…" : importStep < 2 ? "Continue" : "Verify & Import"}
               </Button>
             </DialogFooter>
           </form>
@@ -399,7 +455,7 @@ export function OnboardingScreen() {
                 Shard A (Device Key)
               </div>
               <p className="text-muted-foreground">
-                Encrypted and saved directly in this browser's local storage.
+                Encrypted on this device using your passphrase. The passphrase is never saved.
               </p>
 
               <div className="flex items-center gap-2 font-semibold text-foreground pt-2">

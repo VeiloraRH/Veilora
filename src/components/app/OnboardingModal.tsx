@@ -10,6 +10,7 @@ import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { Button, Field, StatusModal, inputClass } from "@/components/ui";
 import { KeyBackupModal } from "./KeyBackupModal";
 import { cn } from "@/lib/utils";
+import { requestNewDevicePassphrase, validateDevicePassphrase } from "@/lib/deviceKeyVault";
 
 interface OnboardingModalProps {
   open: boolean;
@@ -17,11 +18,15 @@ interface OnboardingModalProps {
 }
 
 export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
-  const { createAccount, setWalletAddress } = useWallet();
+  const { createAccount, connectExistingWallet } = useWallet();
   const [slide, setSlide] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [existingMode, setExistingMode] = useState(false);
   const [existingAddr, setExistingAddr] = useState("");
+  const [existingKey, setExistingKey] = useState("");
+  const [existingPassphrase, setExistingPassphrase] = useState("");
+  const [existingPassphraseConfirm, setExistingPassphraseConfirm] = useState("");
+  const [existingStep, setExistingStep] = useState(0);
   const [createdAccount, setCreatedAccount] = useState<CreatedAccountDetails | null>(null);
   const [showBackupModal, setShowBackupModal] = useState(false);
 
@@ -53,9 +58,11 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
   };
 
   const handleCreateNew = async () => {
+    const passphrase = requestNewDevicePassphrase();
+    if (!passphrase) return;
     setSubmitting(true);
     try {
-      const res = await createAccount();
+      const res = await createAccount(passphrase);
       setCreatedAccount(res);
       setShowBackupModal(true);
     } catch (err: any) {
@@ -76,20 +83,39 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
     onClose();
   };
 
-  const handleConnectExisting = () => {
+  const handleConnectExisting = async () => {
     const clean = existingAddr.trim();
     if (!/^0x[0-9a-fA-F]{40}$/.test(clean)) return;
-
-    setWalletAddress(clean);
-    localStorage.setItem("veilora:onboarded", "true");
-    onClose();
-    setStatusModal({
-      open: true,
-      type: "success",
-      title: "Account Connected",
-      message: "Connected to your existing Veilora smart account on Robinhood Chain.",
-      details: `Address: ${clean}`,
-    });
+    if (existingStep === 0) {
+      setExistingStep(1);
+      return;
+    }
+    if (existingStep === 1) {
+      if (!/^0x[0-9a-fA-F]{64}$/.test(existingKey.trim())) {
+        setStatusModal({ open: true, type: "error", title: "Invalid Shard A", message: "Enter the 32-byte private key for this account's Shard A." });
+        return;
+      }
+      setExistingStep(2);
+      return;
+    }
+    const passphraseError = validateDevicePassphrase(existingPassphrase);
+    if (passphraseError || existingPassphrase !== existingPassphraseConfirm) {
+      setStatusModal({ open: true, type: "error", title: "Check Passphrase", message: passphraseError || "Passphrases do not match." });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await connectExistingWallet(clean, existingKey.trim(), existingPassphrase);
+      localStorage.setItem("veilora:onboarded", "true");
+      setExistingKey("");
+      setExistingPassphrase("");
+      setExistingPassphraseConfirm("");
+      onClose();
+    } catch (err) {
+      setStatusModal({ open: true, type: "error", title: "Import Failed", message: err instanceof Error ? err.message : "Could not import this account." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!open) return null;
@@ -138,7 +164,7 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                   <div className="rounded-xl border border-slate-200 dark:border-ink-700 bg-slate-50 dark:bg-ink-950/40 p-3 text-xs">
                     <div>
                       <p className="font-semibold text-slate-900 dark:text-cream">Shard A · Device Key</p>
-                      <p className="text-slate-500 dark:text-mist">Saved securely in your local browser storage.</p>
+                      <p className="text-slate-500 dark:text-mist">Encrypted on this device with a passphrase you choose.</p>
                     </div>
                   </div>
 
@@ -245,29 +271,53 @@ export function OnboardingModal({ open, onClose }: OnboardingModalProps) {
                   </div>
                 ) : (
                   <div className="space-y-3 pt-2">
-                    <Field label="Enter Existing Smart Account (0x…)">
-                      <input
-                        className={inputClass}
-                        placeholder="0x…"
-                        value={existingAddr}
-                        onChange={(e) => setExistingAddr(e.target.value)}
-                      />
-                    </Field>
+                    {existingStep === 0 ? (
+                      <Field label="Step 1 of 2 · Smart Account Address">
+                        <input className={inputClass} placeholder="0x…" value={existingAddr} onChange={(e) => setExistingAddr(e.target.value)} />
+                      </Field>
+                    ) : existingStep === 1 ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-mist">Step 2 of 3 · Enter Shard A. The key is checked against the registered wallet.</p>
+                        <p className="break-all rounded-lg border border-ink-700 bg-ink-950/40 p-3 font-mono text-xs text-cream">{existingAddr}</p>
+                        <Field label="Shard A Private Key">
+                          <input className={inputClass} type="password" autoComplete="off" placeholder="0x…" value={existingKey} onChange={(e) => setExistingKey(e.target.value)} />
+                        </Field>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-xs text-mist">Step 3 of 3 · Choose a passphrase. It encrypts Shard A on this device and is never sent to Veilora.</p>
+                        <Field label="Device-key Passphrase (12+ characters)">
+                          <input className={inputClass} type="password" autoComplete="new-password" value={existingPassphrase} onChange={(e) => setExistingPassphrase(e.target.value)} />
+                        </Field>
+                        <Field label="Confirm Passphrase">
+                          <input className={inputClass} type="password" autoComplete="new-password" value={existingPassphraseConfirm} onChange={(e) => setExistingPassphraseConfirm(e.target.value)} />
+                        </Field>
+                      </div>
+                    )}
 
                     <Button
                       variant="primary"
                       className="w-full bg-[#eaba65] text-slate-950 hover:bg-[#d8a855] font-semibold"
-                      disabled={!/^0x[0-9a-fA-F]{40}$/.test(existingAddr.trim())}
+                      disabled={submitting || (existingStep === 0 ? !/^0x[0-9a-fA-F]{40}$/.test(existingAddr.trim()) : existingStep === 1 ? !/^0x[0-9a-fA-F]{64}$/.test(existingKey.trim()) : !existingPassphrase || !existingPassphraseConfirm)}
                       onClick={handleConnectExisting}
                     >
-                      Connect Account
+                      {submitting ? "Importing…" : existingStep < 2 ? "Continue" : "Verify & Import"}
                     </Button>
 
                     <button
-                      onClick={() => setExistingMode(false)}
+                      onClick={() => {
+                        if (existingStep > 0) setExistingStep(existingStep - 1);
+                        else {
+                          setExistingMode(false);
+                          setExistingStep(0);
+                          setExistingKey("");
+                          setExistingPassphrase("");
+                          setExistingPassphraseConfirm("");
+                        }
+                      }}
                       className="w-full text-center text-xs text-slate-500 dark:text-mist hover:text-slate-900 dark:hover:text-cream transition-colors"
                     >
-                      Back to One-Click Account Creation
+                      {existingStep > 0 ? "Back" : "Back to One-Click Account Creation"}
                     </button>
                   </div>
                 )}

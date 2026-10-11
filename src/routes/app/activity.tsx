@@ -1,98 +1,126 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { ChevronDown, Download } from "lucide-react";
-import { RECEIPTS, type Receipt } from "@/demo/data";
-import { Badge, Button, KV, PageHeader, Tabs } from "@/components/ui";
-import { useMode } from "@/lib/mode";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
+import { Badge, Button, Card, KV, PageHeader } from "@/components/ui";
+import { useWallet } from "@/lib/walletContext";
+import { getWalletAudit } from "@/lib/api";
 
-export const Route = createFileRoute("/app/activity")({
-  component: ActivityScreen,
-});
+export const Route = createFileRoute("/app/activity")({ component: ActivityScreen });
 
-type Filter = "all" | "private" | "public" | "disclosure";
+type AuditRecord = {
+  id: string | number;
+  user_op_hash: string;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
 
-const STATUS_TONE = { settled: "teal", pending: "gold", refunded: "gold", blocked: "coral" } as const;
-const PRIVATE_KINDS: Receipt["kind"][] = ["shield", "unshield", "recipe", "receive"];
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
 
-function exportCsv() {
-  const cols: (keyof Receipt)[] = ["id", "time", "title", "kind", "status", "route", "fee", "proof", "provedOn", "commitment", "tx"];
-  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = [cols.join(","), ...RECEIPTS.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
+function exportCsv(records: AuditRecord[]) {
+  const cols: (keyof AuditRecord)[] = ["id", "created_at", "status", "user_op_hash", "metadata"];
+  const esc = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csv = [cols.join(","), ...records.map((record) => cols.map((key) => esc(typeof record[key] === "object" ? JSON.stringify(record[key]) : record[key])).join(","))].join("\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "veilora-receipts.csv";
-  a.click();
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "veilora-audit-events.csv";
+  anchor.click();
   URL.revokeObjectURL(url);
 }
 
 function ActivityScreen() {
-  const { mode } = useMode();
-  const [filter, setFilter] = useState<Filter>("all");
-  const [open, setOpen] = useState<string | null>(RECEIPTS[0].id);
-  const rows = RECEIPTS.filter((r) =>
-    filter === "all" ? true : filter === "private" ? PRIVATE_KINDS.includes(r.kind) : filter === "disclosure" ? r.kind === "disclosure" : !PRIVATE_KINDS.includes(r.kind) && r.kind !== "disclosure",
-  );
+  const { walletAddress } = useWallet();
+  const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRecords = useCallback(async () => {
+    if (!walletAddress) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await getWalletAudit(walletAddress);
+      setRecords(response.records);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load wallet audit events.");
+    } finally {
+      setLoading(false);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => { void loadRecords(); }, [loadRecords]);
 
   return (
     <>
       <PageHeader
-        eyebrow="Receipts"
-        title="A local record of what happened."
-        description="Every action saves a receipt on this device: the plan, the route, where the proof ran and the final commitment. Export it for an auditor when you choose to."
+        eyebrow="Audit events"
+        title="Co-signing activity from your wallet."
+        description="These events come from the Veilora backend audit log. It records Shard B approval or refusal events; it is not a complete on-chain transaction history."
         actions={
-          <Button variant="outline" onClick={exportCsv}>
-            <Download className="h-4 w-4" /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => void loadRecords()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+            <Button variant="outline" onClick={() => exportCsv(records)} disabled={!records.length}>
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+          </div>
         }
       />
-      <div className="mb-5">
-        <Tabs
-          value={filter}
-          onChange={setFilter}
-          items={[
-            { id: "all", label: "All" },
-            { id: "private", label: "Shielded" },
-            { id: "public", label: "Public" },
-            { id: "disclosure", label: "Disclosures" },
-          ]}
-        />
-      </div>
-      <ul className="space-y-3">
-        {rows.map((r) => {
-          const isOpen = open === r.id;
-          return (
-            <li key={r.id} className="panel overflow-hidden bg-white dark:bg-ink-900 border border-slate-200 dark:border-ink-700 shadow-sm">
-              <button onClick={() => setOpen(isOpen ? null : r.id)} className="flex w-full items-center gap-4 px-5 py-4 text-left">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-cream">{r.title}</p>
-                  <p className="text-xs text-slate-500 dark:text-mist">
-                    {r.time} · {r.route}
-                  </p>
+
+      {loading ? (
+        <Card className="p-6 text-sm text-mist">Loading audit events…</Card>
+      ) : error ? (
+        <Card className="space-y-4 p-6">
+          <div>
+            <h2 className="font-semibold text-slate-900 dark:text-cream">Could not load audit events</h2>
+            <p role="alert" className="mt-1 text-sm text-rose-600">{error}</p>
+          </div>
+          <Button variant="outline" onClick={() => void loadRecords()}>Try again</Button>
+        </Card>
+      ) : records.length === 0 ? (
+        <Card className="p-6">
+          <h2 className="font-semibold text-slate-900 dark:text-cream">No co-signing events yet</h2>
+          <p className="mt-1 text-sm text-mist">Shard B approvals and refusals for this wallet will appear here.</p>
+        </Card>
+      ) : (
+        <ul className="space-y-3">
+          {records.map((record) => {
+            const metadata = record.metadata ?? {};
+            const approved = record.status === "APPROVED";
+            return (
+              <li key={record.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-ink-700 dark:bg-ink-900">
+                <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 dark:text-cream">{approved ? "Shard B approved request" : "Shard B refused request"}</p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-mist">{formatDate(record.created_at)} · Event {record.id}</p>
+                  </div>
+                  <Badge tone={approved ? "teal" : "coral"}>{record.status}</Badge>
                 </div>
-                <Badge tone={STATUS_TONE[r.status]}>{r.status}</Badge>
-                <ChevronDown className={cn("h-4 w-4 shrink-0 text-slate-400 dark:text-mist transition-transform", isOpen && "rotate-180")} />
-              </button>
-              {isOpen && (
-                <div className="grid gap-x-8 border-t border-slate-100 dark:border-ink-700/60 px-5 py-3 sm:grid-cols-2">
+                <div className="grid gap-x-8 border-t border-slate-100 px-5 py-3 dark:border-ink-700/60 sm:grid-cols-2">
                   <div>
-                    <KV k="Receipt" v={r.id} mono />
-                    <KV k="Type" v={r.kind} />
-                    <KV k="Fee" v={r.fee} />
+                    <KV k="Request digest" v={record.user_op_hash} mono />
+                    {typeof metadata.target === "string" && <KV k="Target" v={metadata.target} mono />}
                   </div>
                   <div>
-                    <KV k="Proof" v={r.proof} />
-                    <KV k="Proved on" v={r.provedOn} />
-                    {mode === "control" && r.commitment && <KV k="Note commitment" v={r.commitment} mono />}
-                    {mode === "control" && r.tx && <KV k="Transaction" v={r.tx} mono />}
+                    {metadata.nonce !== undefined && <KV k="Nonce" v={String(metadata.nonce)} />}
+                    {typeof metadata.reason === "string" && <KV k="Reason" v={metadata.reason} />}
+                    {typeof metadata.timestamp === "string" && <KV k="Recorded at" v={formatDate(metadata.timestamp)} />}
                   </div>
                 </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }

@@ -8,8 +8,12 @@ import {
   getWalletAudit,
   type WalletMetadata,
 } from "./api";
+import { decryptDeviceKey, deviceKeyMatchesAddress, encryptDeviceKey } from "./deviceKeyVault";
+import { generatePrivateKey, privateKeyToAddress } from "viem/accounts";
 
 const STORAGE_KEY = "veilora:wallet_address";
+const ENCRYPTED_DEVICE_KEY = "veilora:shardA:encrypted";
+const LEGACY_DEVICE_KEY = "veilora:shardA:privateKey";
 
 interface NetworkInfo {
   blockNumber: string;
@@ -94,7 +98,11 @@ interface WalletContextType {
   }>;
   setWalletAddress: (address: string) => void;
   refresh: () => Promise<void>;
-  createAccount: () => Promise<CreatedAccountDetails>;
+  createAccount: (passphrase: string) => Promise<CreatedAccountDetails>;
+  unlockDeviceKey: (passphrase: string) => Promise<void>;
+  importDeviceKey: (privateKey: string, passphrase: string, expectedAddress?: string) => Promise<void>;
+  connectExistingWallet: (address: string, privateKey: string, passphrase: string) => Promise<void>;
+  deviceKeyUnlocked: boolean;
   clearLatestRecoveryKey: () => void;
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
@@ -113,8 +121,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [deviceKeyPresent, setDeviceKeyPresent] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem("veilora:shardA:privateKey"));
+    return Boolean(localStorage.getItem(ENCRYPTED_DEVICE_KEY) || localStorage.getItem(LEGACY_DEVICE_KEY));
   });
+  const [deviceKey, setDeviceKey] = useState<string | null>(null);
+  const [deviceKeyUnlocked, setDeviceKeyUnlocked] = useState(false);
   const [latestRecoveryKey, setLatestRecoveryKey] = useState<string | null>(null);
   const [auditTrail, setAuditTrail] = useState<Array<{
     id: string;
@@ -173,23 +183,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     loadWallet(walletAddress);
   }, [loadNetwork, loadWallet, walletAddress]);
 
-  const createAccount = async (): Promise<CreatedAccountDetails> => {
+  const createAccount = async (passphrase: string): Promise<CreatedAccountDetails> => {
     setLoading(true);
     try {
-      const res = await createWallet({});
+      // Generate user-held keys on this device. Only their public addresses go to the API.
+      const shardAPk = generatePrivateKey();
+      const shardCPk = generatePrivateKey();
+      const shardAAddress = privateKeyToAddress(shardAPk);
+      const shardCAddress = privateKeyToAddress(shardCPk);
+      const res = await createWallet({ shardAAddress, shardCAddress });
+
+      localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(shardAPk, passphrase));
+      localStorage.setItem("veilora:shardA:address", res.shardA);
+      localStorage.removeItem(LEGACY_DEVICE_KEY);
+      setDeviceKey(shardAPk);
+      setDeviceKeyUnlocked(true);
+      setDeviceKeyPresent(true);
+
       setWalletAddress(res.address);
       await loadWallet(res.address);
-
-      const shardAPk = res.generatedShards?.shardA?.privateKey;
-      const shardCPk = res.generatedShards?.shardC?.privateKey;
-
-      // RULE: Only store Shard A in browser local storage.
-      // NEVER store Shard C in local storage.
-      if (shardAPk) {
-        localStorage.setItem("veilora:shardA:privateKey", shardAPk);
-        localStorage.setItem("veilora:shardA:address", res.shardA);
-        setDeviceKeyPresent(true);
-      }
 
       // Shard C is held ONLY in memory for backup download
       if (shardCPk) {
@@ -214,7 +226,51 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const getStoredDeviceKey = () => {
-    return localStorage.getItem("veilora:shardA:privateKey");
+    return deviceKeyUnlocked ? deviceKey : null;
+  };
+
+  const unlockDeviceKey = async (passphrase: string) => {
+    const encrypted = localStorage.getItem(ENCRYPTED_DEVICE_KEY);
+    if (encrypted) {
+      const privateKey = await decryptDeviceKey(encrypted, passphrase);
+      setDeviceKey(privateKey);
+      setDeviceKeyUnlocked(true);
+      return;
+    }
+    const legacyKey = localStorage.getItem(LEGACY_DEVICE_KEY);
+    if (legacyKey) {
+      localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(legacyKey, passphrase));
+      localStorage.removeItem(LEGACY_DEVICE_KEY);
+      setDeviceKey(legacyKey);
+      setDeviceKeyUnlocked(true);
+      setDeviceKeyPresent(true);
+      return;
+    }
+    throw new Error("No device key is stored in this browser.");
+  };
+
+  const importDeviceKey = async (privateKey: string, passphrase: string, expectedAddress?: string) => {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) throw new Error("Enter a valid 32-byte private key.");
+    if (expectedAddress && !deviceKeyMatchesAddress(privateKey, expectedAddress)) {
+      throw new Error("This key does not match the account's registered Shard A.");
+    }
+    localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(privateKey, passphrase));
+    localStorage.removeItem(LEGACY_DEVICE_KEY);
+    setDeviceKey(privateKey);
+    setDeviceKeyUnlocked(true);
+    setDeviceKeyPresent(true);
+  };
+
+  const connectExistingWallet = async (address: string, privateKey: string, passphrase: string) => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) throw new Error("Enter a valid smart account address.");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) throw new Error("Enter a valid 32-byte Shard A private key.");
+    const metadata = await getWallet(address);
+    if (metadata.address.toLowerCase() !== address.toLowerCase()) throw new Error("The backend returned a different wallet address.");
+    if (!deviceKeyMatchesAddress(privateKey, metadata.shardA)) {
+      throw new Error("This key does not match Shard A registered for that Veilora account.");
+    }
+    await importDeviceKey(privateKey, passphrase, metadata.shardA);
+    setWalletAddress(address);
   };
 
   const freezeAccount = async (hours = 24, reason = "Emergency freeze") => {
@@ -230,12 +286,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const removeWallet = () => {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem("veilora:shardA:privateKey");
+    localStorage.removeItem(ENCRYPTED_DEVICE_KEY);
     localStorage.removeItem("veilora:shardA:address");
     localStorage.removeItem("veilora:onboarded");
     localStorage.removeItem("veilora:notes");
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);
+    setDeviceKey(null);
+    setDeviceKeyUnlocked(false);
     setLatestRecoveryKey(null);
     setAuditTrail([]);
   };
@@ -250,10 +309,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         error,
         auditTrail,
         deviceKeyPresent,
+        deviceKeyUnlocked,
         latestRecoveryKey,
         setWalletAddress,
         refresh,
         createAccount,
+        unlockDeviceKey,
+        importDeviceKey,
+        connectExistingWallet,
         clearLatestRecoveryKey,
         getStoredDeviceKey,
         freezeAccount,

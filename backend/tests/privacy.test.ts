@@ -1,6 +1,7 @@
 import { expect, test, describe } from "bun:test";
 import request from "supertest";
 import { app } from "../src/app";
+import { generateShardKey } from "../src/crypto";
 
 describe("Privacy Plane API (Notes, Provenance & View Keys)", () => {
   let noteCommitment: string;
@@ -56,7 +57,10 @@ describe("Privacy Plane API (Notes, Provenance & View Keys)", () => {
   });
 
   test("POST /v1/privacy/viewkeys & GET /v1/privacy/viewkeys/:token manages selective disclosure", async () => {
-    const walletRes = await request(app).post("/v1/wallets").send({});
+    const walletRes = await request(app).post("/v1/wallets").send({
+      shardAAddress: generateShardKey().address,
+      shardCAddress: generateShardKey().address,
+    });
     const testWallet = walletRes.body.address;
 
     const createRes = await request(app)

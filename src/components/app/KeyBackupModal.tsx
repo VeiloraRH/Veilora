@@ -78,11 +78,11 @@ export function KeyBackupModal({ open, accountDetails, onConfirm }: KeyBackupMod
                 <span>Shard A — Primary Device Key</span>
               </div>
               <span className="rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium">
-                Saved in browser
+                Encrypted on device
               </span>
             </div>
             <p className="text-muted-foreground">
-              Saved automatically in your browser's local storage for 1-click signing.
+              Encrypted with your device-key passphrase before being saved in this browser.
             </p>
             {accountDetails.shardAPrivateKey && (
               <div className="flex items-center justify-between rounded-lg bg-card border border-border p-2">

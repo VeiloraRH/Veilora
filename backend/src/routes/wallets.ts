@@ -29,30 +29,11 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
     let shardA = req.body.shardAAddress as `0x${string}` | undefined;
     let shardC = req.body.shardCAddress as `0x${string}` | undefined;
+    if (!shardA || !isAddress(shardA) || !shardC || !isAddress(shardC)) {
+      res.status(400).json({ error: "Client-generated Shard A and Shard C public addresses are required" });
+      return;
+    }
     const salt = BigInt(req.body.salt || 0);
-
-    const generatedShards: Record<string, { address: string; privateKey?: string }> = {};
-
-    // If client didn't supply Shard A (Device shard), generate one for onboarding convenience
-    if (!shardA) {
-      const generatedA = generateShardKey();
-      shardA = generatedA.address;
-      generatedShards.shardA = {
-        address: generatedA.address,
-        privateKey: generatedA.privateKey,
-      };
-    }
-
-    // If client didn't supply Shard C (Recovery/Passkey shard), generate one
-    if (!shardC) {
-      const generatedC = generateShardKey();
-      shardC = generatedC.address;
-      generatedShards.shardC = {
-        address: generatedC.address,
-        privateKey: generatedC.privateKey,
-      };
-    }
-
     shardA = getAddress(shardA);
     shardC = getAddress(shardC);
 
@@ -122,7 +103,6 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
       salt: salt.toString(),
       apiKey,
       isDeployed,
-      generatedShards: Object.keys(generatedShards).length > 0 ? generatedShards : undefined,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to create threshold wallet" });

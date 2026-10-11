@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useWallet, type CreatedAccountDetails } from "@/lib/walletContext";
 import { KeyBackupModal } from "@/components/app/KeyBackupModal";
+import { requestNewDevicePassphrase } from "@/lib/deviceKeyVault";
 import {
   Badge,
   Button,
@@ -36,6 +37,7 @@ export function SecurityScreen() {
     loading,
     deviceKeyPresent,
     getStoredDeviceKey,
+    importDeviceKey,
     freezeAccount,
     unfreezeAccount,
     createAccount,
@@ -132,9 +134,11 @@ export function SecurityScreen() {
   };
 
   const handleCreateAccountSubmit = async () => {
+    const passphrase = requestNewDevicePassphrase();
+    if (!passphrase) return;
     setCreateSubmitting(true);
     try {
-      const newAcc = await createAccount();
+      const newAcc = await createAccount(passphrase);
       setCreateModalOpen(false);
       setCreatedAccount(newAcc);
       setShowBackupModal(true);
@@ -150,9 +154,9 @@ export function SecurityScreen() {
     }
   };
 
-  const handleImportKeySubmit = () => {
+  const handleImportKeySubmit = async () => {
     const clean = importKeyInput.trim();
-    if (!clean.startsWith("0x") || clean.length < 64) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(clean)) {
       setStatusModal({
         open: true,
         type: "error",
@@ -161,7 +165,15 @@ export function SecurityScreen() {
       });
       return;
     }
-    localStorage.setItem("veilora:shardA:privateKey", clean);
+    const passphrase = requestNewDevicePassphrase();
+    if (!passphrase) return;
+    try {
+      if (!wallet?.shardA) throw new Error("Load a registered Veilora wallet before importing its Shard A key.");
+      await importDeviceKey(clean, passphrase, wallet.shardA);
+    } catch (err) {
+      setStatusModal({ open: true, type: "error", title: "Key Import Failed", message: err instanceof Error ? err.message : "Could not encrypt key." });
+      return;
+    }
     setImportKeyModalOpen(false);
     setImportKeyInput("");
     setStatusModal({
@@ -526,7 +538,7 @@ export function SecurityScreen() {
         open={viewKeyModalOpen}
         onClose={() => setViewKeyModalOpen(false)}
         title="Local Device Key (Shard A)"
-        description="Stored securely in your local browser storage to sign daily intents."
+        description="Encrypted on this device. Decrypted only while the device key is unlocked."
         actions={
           <Button variant="outline" onClick={() => setViewKeyModalOpen(false)}>
             Close
@@ -535,7 +547,7 @@ export function SecurityScreen() {
       >
         <div className="space-y-4 text-xs">
           <p className="text-mist leading-relaxed">
-            This private key is held locally on this device. Never share it with anyone.
+            This private key is decrypted in memory while unlocked. Never share it with anyone.
           </p>
           <div className="rounded-lg border border-ink-600 bg-ink-950/80 p-3 font-mono text-gold-200 break-all select-all">
             {getStoredDeviceKey() || "No key found in storage."}
@@ -582,7 +594,7 @@ export function SecurityScreen() {
             />
           </Field>
           <p className="text-xs text-mist">
-            The key will be stored securely in this browser's local storage.
+            The key will be encrypted with your passphrase before it is stored on this device.
           </p>
         </div>
       </Modal>

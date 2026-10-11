@@ -238,7 +238,6 @@ export async function createWallet(params: {
     salt: string;
     apiKey: string;
     isDeployed: boolean;
-    generatedShards?: Record<string, { address: string; privateKey?: string }>;
   }>("/v1/wallets", {
     method: "POST",
     body: JSON.stringify(params),
