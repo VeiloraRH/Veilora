@@ -4,9 +4,10 @@ import { useWallet } from './walletContext';
 import { readHoldings, quoteSwap } from './walletChain';
 import { ROBINHOOD_TOKEN_REGISTRY } from './tokens';
 import { API_BASE } from './api';
+import { getRpcOverride } from './rpcSettings';
 export function useHoldings() {
  const {walletAddress} = useWallet();
- return useQuery({queryKey:['holdings',walletAddress],queryFn:()=>readHoldings(getAddress(walletAddress)),enabled:!!walletAddress,refetchInterval:30000});
+ return useQuery({queryKey:['holdings',walletAddress,getRpcOverride() || 'veilora-gateway'],queryFn:()=>readHoldings(getAddress(walletAddress)),enabled:!!walletAddress,refetchInterval:30000});
 }
 export function usePortfolioValue() {
  const holdings=useHoldings();

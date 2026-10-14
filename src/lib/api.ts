@@ -1,9 +1,11 @@
+import { resolveRpcEndpoint } from './rpcSettings';
+
 export const API_BASE =
   ((import.meta as any).env?.VITE_API_URL as string) || "/api";
 const ROBINHOOD_RPC_PROXY = `${API_BASE.replace(/\/$/, "")}/v1/rpc`;
 
 async function rpcRequest(payload: unknown) {
-  const response = await fetch(ROBINHOOD_RPC_PROXY, {
+  const response = await fetch(resolveRpcEndpoint(ROBINHOOD_RPC_PROXY), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

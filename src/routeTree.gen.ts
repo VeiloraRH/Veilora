@@ -21,6 +21,7 @@ import { Route as AppBridgeRouteImport } from './routes/app/bridge'
 import { Route as AppMarketRouteImport } from './routes/app/market'
 import { Route as AppRulesRouteImport } from './routes/app/rules'
 import { Route as AppSecurityRouteImport } from './routes/app/security'
+import { Route as AppSettingsRouteImport } from './routes/app/settings'
 import { Route as AppSwapRouteImport } from './routes/app/swap'
 
 const IndexRoute = IndexRouteImport.update({
@@ -83,6 +84,11 @@ const AppSecurityRoute = AppSecurityRouteImport.update({
   path: '/security',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppSwapRoute = AppSwapRouteImport.update({
   id: '/swap',
   path: '/swap',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
 }
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app': typeof AppIndexRoute
 }
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
+  '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
 }
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/app/market'
     | '/app/rules'
     | '/app/security'
+    | '/app/settings'
     | '/app/swap'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/app/market'
     | '/app/rules'
     | '/app/security'
+    | '/app/settings'
     | '/app/swap'
     | '/app'
   id:
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/app/market'
     | '/app/rules'
     | '/app/security'
+    | '/app/settings'
     | '/app/swap'
     | '/app/'
   fileRoutesById: FileRoutesById
@@ -276,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSecurityRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/swap': {
       id: '/app/swap'
       path: '/swap'
@@ -292,6 +311,7 @@ interface AppRouteRouteChildren {
   AppMarketRoute: typeof AppMarketRoute
   AppRulesRoute: typeof AppRulesRoute
   AppSecurityRoute: typeof AppSecurityRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppSwapRoute: typeof AppSwapRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -302,6 +322,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppMarketRoute: AppMarketRoute,
   AppRulesRoute: AppRulesRoute,
   AppSecurityRoute: AppSecurityRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppSwapRoute: AppSwapRoute,
   AppIndexRoute: AppIndexRoute,
 }

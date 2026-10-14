@@ -248,6 +248,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("veilora:shardA:address");
     localStorage.removeItem("veilora:onboarded");
     localStorage.removeItem("veilora:notes");
+    localStorage.removeItem("veilora:rpc:url");
     localStorage.removeItem("veilora:view_keys");
     localStorage.removeItem(`veilora:veily:credential:${walletAddress.toLowerCase()}`);
     localStorage.removeItem(`veilora:veily:history:${walletAddress.toLowerCase()}`);

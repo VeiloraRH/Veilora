@@ -1,12 +1,19 @@
-import { createPublicClient, http, defineChain, erc20Abi, parseAbi, encodeAbiParameters, encodeFunctionData, keccak256, stringToHex, getAddress, parseUnits, formatUnits, type Address, type Hex } from 'viem';
+import { createPublicClient, custom, defineChain, erc20Abi, parseAbi, encodeAbiParameters, encodeFunctionData, keccak256, stringToHex, getAddress, parseUnits, formatUnits, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { API_BASE, cosignTransaction, broadcastTransaction } from './api';
 import { WALLET_TOKENS, type WalletToken } from './tokens';
+import { resolveRpcEndpoint } from './rpcSettings';
 
 export const EXPLORER = 'https://robinhoodchain.blockscout.com';
 export const ROBINHOOD_RPC_PROXY = `${API_BASE.replace(/\/$/, '')}/v1/rpc`;
 export const chain = defineChain({ id: 4663, name: 'Robinhood Chain', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [ROBINHOOD_RPC_PROXY] } } });
-export const chainClient = createPublicClient({ chain, transport: http(ROBINHOOD_RPC_PROXY, { batch: true }) });
+export const chainClient = createPublicClient({ chain, transport: custom({ request: async ({ method, params }) => {
+ const response = await fetch(resolveRpcEndpoint(ROBINHOOD_RPC_PROXY), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params: params ?? [] }) });
+ if (!response.ok) throw new Error(`Robinhood Chain RPC returned HTTP ${response.status}.`);
+ const result = await response.json() as { result?: unknown; error?: { message?: string } };
+ if (result.error) throw new Error(result.error.message || 'Robinhood Chain RPC request failed.');
+ return result.result;
+} }) });
 // Same deployed Uniswap contracts and fee-tier search used by Curtain's operator.
 export const SWAP_ROUTER = getAddress('0xcaf681a66d020601342297493863e78c959e5cb2');
 const V3_QUOTER = getAddress('0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7');
