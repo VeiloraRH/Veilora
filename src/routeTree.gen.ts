@@ -16,6 +16,7 @@ import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
 import { Route as AppMarketRouteImport } from './routes/app/market'
+import { Route as AppRulesRouteImport } from './routes/app/rules'
 import { Route as AppSecurityRouteImport } from './routes/app/security'
 import { Route as AppSwapRouteImport } from './routes/app/swap'
 
@@ -54,6 +55,11 @@ const AppMarketRoute = AppMarketRouteImport.update({
   path: '/market',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppRulesRoute = AppRulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppSecurityRoute = AppSecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
+  '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
+  '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app': typeof AppIndexRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/whitepaper': typeof WhitepaperRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
+  '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
   '/app/swap': typeof AppSwapRoute
   '/app/': typeof AppIndexRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/app/activity'
     | '/app/market'
+    | '/app/rules'
     | '/app/security'
     | '/app/swap'
     | '/app/'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/app/activity'
     | '/app/market'
+    | '/app/rules'
     | '/app/security'
     | '/app/swap'
     | '/app'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/app/activity'
     | '/app/market'
+    | '/app/rules'
     | '/app/security'
     | '/app/swap'
     | '/app/'
@@ -191,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMarketRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/rules': {
+      id: '/app/rules'
+      path: '/rules'
+      fullPath: '/app/rules'
+      preLoaderRoute: typeof AppRulesRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/security': {
       id: '/app/security'
       path: '/security'
@@ -211,6 +230,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppMarketRoute: typeof AppMarketRoute
+  AppRulesRoute: typeof AppRulesRoute
   AppSecurityRoute: typeof AppSecurityRoute
   AppSwapRoute: typeof AppSwapRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -219,6 +239,7 @@ interface AppRouteRouteChildren {
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppMarketRoute: AppMarketRoute,
+  AppRulesRoute: AppRulesRoute,
   AppSecurityRoute: AppSecurityRoute,
   AppSwapRoute: AppSwapRoute,
   AppIndexRoute: AppIndexRoute,

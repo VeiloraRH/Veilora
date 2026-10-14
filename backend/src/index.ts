@@ -2,6 +2,7 @@ import "dotenv/config";
 import { assertEncryptionKeyConfigured } from "./crypto";
 import { app } from "./app";
 import { migrate } from "./db/migrate";
+import { startRulesEvaluator } from "./rules/evaluator";
 
 const port = Number(process.env.PORT ?? 3001);
 
@@ -22,6 +23,11 @@ async function start() {
   app.listen(port, () => {
     console.log(`[veilora-backend] API server listening on http://localhost:${port}`);
   });
+
+  if (process.env.DATABASE_URL && process.env.RULES_EVALUATOR !== "off") {
+    startRulesEvaluator();
+    console.log("[veilora-backend] Wallet Rules evaluator started");
+  }
 }
 
 void start();

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { healthRouter } from "./routes/health";
 import { walletsRouter } from "./routes/wallets";
 import { relayerRouter } from "./routes/relayer";
+import { rulesRouter } from "./routes/rules";
 
 export const app = express();
 
@@ -52,7 +53,7 @@ app.use((request, response, next) => {
   }
 
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-request-id");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-request-id, x-veilora-timestamp, x-veilora-signature");
 
   if (request.method === "OPTIONS") {
     response.status(204).end();
@@ -63,5 +64,6 @@ app.use((request, response, next) => {
 
 // Mount Routes
 app.use("/health", healthRouter);
+app.use("/v1/wallets/:address/rules", rulesRouter);
 app.use("/v1/wallets", walletsRouter);
 app.use("/v1/relayer", relayerRouter);

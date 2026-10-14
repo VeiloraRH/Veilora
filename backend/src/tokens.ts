@@ -49,7 +49,7 @@ export const ROBINHOOD_TOKEN_REGISTRY: Record<string, RobinhoodToken> = {
   TSLA: { symbol: "TSLA", name: "Tesla • Robinhood Token", address: getAddress("0x322F0929c4625eD5bAd873c95208D54E1c003b2d"), decimals: 18 },
   TSM: { symbol: "TSM", name: "Taiwan Semiconductor • Robinhood Token", address: getAddress("0x58FfE4a942d3885bAa22D7520691F611EF09e7AA"), decimals: 18 },
   UPS: { symbol: "UPS", name: "United Parcel Service • Robinhood Token", address: getAddress("0xf23250dac154D05Bb671CB0d0eBEf3c635c79CE2"), decimals: 18 },
-  USDG: { symbol: "USDG", name: "Global Dollar", address: getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"), decimals: 18 },
+  USDG: { symbol: "USDG", name: "Global Dollar", address: getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"), decimals: 6 },
   USO: { symbol: "USO", name: "United States Oil Fund • Robinhood Token", address: getAddress("0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344"), decimals: 18 },
   VTI: { symbol: "VTI", name: "Vanguard Total Stock Market • Robinhood Token", address: getAddress("0x0594134DF3f171a354D9C85eBD65b7A6148F6D09"), decimals: 18 },
   XLK: { symbol: "XLK", name: "Technology Select Sector SPDR • Robinhood Token", address: getAddress("0x15Cd20759CE7F3285c29A319dE2D1A2e098c6f43"), decimals: 18 },
