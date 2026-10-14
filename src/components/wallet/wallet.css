@@ -93,3 +93,4 @@
 .tx-flags{display:grid;gap:5px}.tx-flags li{display:flex;gap:8px;font-size:11px;line-height:1.55;padding:7px 10px;border-radius:10px}.tx-flags svg{flex-shrink:0;margin-top:2px}.tx-flags .danger{background:#e2676712;color:#c34848}.tx-flags .warn{background:#c3974214;color:#a07628}.tx-flags .info{color:var(--w-muted,var(--muted-foreground))}
 .tx-explorer{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#3468f0}
 .wallet-swap-card .tx-preview{margin-top:-6px}
+.wallet-partial{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px;padding:10px 14px;border-radius:12px;background:#c3974214;color:#a07628;font-size:11.5px;line-height:1.5}.wallet-partial .wallet-soft-button{padding:7px 12px;flex-shrink:0}

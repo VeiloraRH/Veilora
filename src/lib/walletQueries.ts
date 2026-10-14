@@ -24,11 +24,13 @@ export function usePortfolioValue() {
 }
 export type WalletTransaction={id:string;hash:string;timestamp:string;direction:'sent'|'received'|'contract';symbol:string;amount:string;from:string;to:string;status:'confirmed'|'failed'|'pending'};
 type ExplorerItem={hash?:string;transaction_hash?:string;timestamp?:string;from?:{hash?:string};to?:{hash?:string};value?:string;status?:string;result?:string;error?:string|null;success?:boolean;index?:number;log_index?:number;total?:{value?:string;decimals?:string};token?:{symbol?:string;decimals?:string}};
+/** History rows; `partial` is set when some history types could not be loaded and the list is incomplete. */
+export type TransactionList=WalletTransaction[]&{partial?:boolean};
 export function useTransactions() {
  const {walletAddress}=useWallet();
- return useQuery({queryKey:['transactions',walletAddress],enabled:!!walletAddress,staleTime:30000,retry:1,queryFn:async({signal})=> {
+ return useQuery({queryKey:['transactions',walletAddress],enabled:!!walletAddress,staleTime:30000,retry:1,structuralSharing:false,queryFn:async({signal}):Promise<TransactionList>=> {
   const wallet=walletAddress.toLowerCase();
-  const rows=await Promise.all(['transactions','token-transfers','internal-transactions'].map(async kind=> {
+  const loadKind=async(kind:string)=> {
    let cursor: Record<string,string> | null=null;
    const result: WalletTransaction[]=[];
    const seen=new Set<string>();
@@ -50,7 +52,14 @@ export function useTransactions() {
     if(cursor) {const key=JSON.stringify(cursor); if(seen.has(key)) throw new Error('History pagination stalled. Please refresh.'); seen.add(key);}
    } while(cursor && !signal.aborted);
    return result;
-  }));
-  return rows.flat().sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp));
+  };
+  // One explorer hiccup should not blank the whole list: retry a failed type once, then show what loaded.
+  const kinds=['transactions','token-transfers','internal-transactions'];
+  const settled=await Promise.all(kinds.map(async kind=>{try{return await loadKind(kind);}catch{if(signal.aborted)return null;await new Promise(r=>setTimeout(r,1500));try{return await loadKind(kind);}catch{return null;}}}));
+  const loaded=settled.filter((rows):rows is WalletTransaction[]=>rows!==null);
+  if(!loaded.length) throw new Error('Transaction history is temporarily unavailable. Your transactions are still on-chain.');
+  const list:TransactionList=loaded.flat().sort((a,b)=>Date.parse(b.timestamp)-Date.parse(a.timestamp));
+  list.partial=loaded.length<kinds.length;
+  return list;
  }});
 }
