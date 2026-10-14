@@ -23,6 +23,7 @@ const DESTINATIONS = [
   { chainId: 8453, name: 'Base', explorer: 'https://basescan.org', assets: [
     { symbol: 'ETH', currency: NATIVE, decimals: 18 },
     { symbol: 'USDC', currency: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', decimals: 6 },
+    { symbol: 'cbBTC', name: 'Coinbase Wrapped BTC', currency: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', decimals: 8 },
   ] },
   { chainId: 1, name: 'Ethereum', explorer: 'https://etherscan.io', assets: [
     { symbol: 'ETH', currency: NATIVE, decimals: 18 },
