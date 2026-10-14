@@ -10,6 +10,7 @@ import { onrampRouter } from "./routes/onramp";
 import { explainRouter, walletExplainRouter } from "./routes/explain";
 import { veilyRouter } from "./routes/veily";
 import { bridgeRouter } from "./routes/bridge";
+import { rpcRouter } from "./routes/rpc";
 
 export const app = express();
 
@@ -21,17 +22,20 @@ app.use((request, response, next) => {
   const requestId = request.header("x-request-id") ?? randomUUID();
   const startedAt = performance.now();
   response.setHeader("x-request-id", requestId);
-  response.on("finish", () => {
-    console.info(
-      JSON.stringify({
-        duration_ms: Math.round(performance.now() - startedAt),
-        method: request.method,
-        path: request.path,
-        request_id: requestId,
-        status: response.statusCode,
-      })
-    );
-  });
+  // RPC payloads can reveal wallet interests and addresses; do not persist request metadata for them.
+  if (request.path !== "/v1/rpc") {
+    response.on("finish", () => {
+      console.info(
+        JSON.stringify({
+          duration_ms: Math.round(performance.now() - startedAt),
+          method: request.method,
+          path: request.path,
+          request_id: requestId,
+          status: response.statusCode,
+        })
+      );
+    });
+  }
   next();
 });
 
@@ -80,3 +84,4 @@ app.use("/v1/wallets", walletsRouter);
 app.use("/v1/relayer", relayerRouter);
 app.use("/v1/veily", veilyRouter);
 app.use("/v1/bridge", bridgeRouter);
+app.use("/v1/rpc", rpcRouter);

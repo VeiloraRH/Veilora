@@ -1,5 +1,16 @@
 export const API_BASE =
   ((import.meta as any).env?.VITE_API_URL as string) || "/api";
+const ROBINHOOD_RPC_PROXY = `${API_BASE.replace(/\/$/, "")}/v1/rpc`;
+
+async function rpcRequest(payload: unknown) {
+  const response = await fetch(ROBINHOOD_RPC_PROXY, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`RPC proxy returned ${response.status}`);
+  return response.json();
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`;
@@ -22,33 +33,24 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
-const ROBINHOOD_RPC = "https://rpc.mainnet.chain.robinhood.com";
 const USDG_CONTRACT = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
 
 export async function getOnChainBalances(address: string): Promise<{ eth: number; usdg: number }> {
   try {
     const cleanAddr = address.toLowerCase().replace("0x", "").padStart(64, "0");
     const [ethRes, usdgRes] = await Promise.all([
-      fetch(ROBINHOOD_RPC, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      rpcRequest({
           jsonrpc: "2.0",
           method: "eth_getBalance",
           params: [address, "latest"],
           id: 1,
         }),
-      }).then((r) => r.json()),
-      fetch(ROBINHOOD_RPC, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      rpcRequest({
           jsonrpc: "2.0",
           method: "eth_call",
           params: [{ to: USDG_CONTRACT, data: "0x70a08231" + cleanAddr }, "latest"],
           id: 2,
         }),
-      }).then((r) => r.json()),
     ]);
 
     const ethWei = BigInt(ethRes?.result || "0x0");
