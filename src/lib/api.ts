@@ -206,6 +206,26 @@ export interface QuorumStatus {
   recoveryPaths: { deviceAndCoSigner: "available"; recoveryKeyFreeze: "available"; recoveryKeyRotation: "available" | "planned" };
 }
 
+// ---------------------------------------------------------------------------
+// Add funds (card / bank via MoonPay)
+// ---------------------------------------------------------------------------
+
+export type OnrampAsset = "USDG" | "ETH";
+export interface OnrampConfig { enabled: boolean; provider: string; sandbox: boolean; assets: { asset: OnrampAsset; route: "direct" | "relay"; network: string }[] }
+export interface OnrampSession { sessionId: string; url: string; asset: OnrampAsset; route: "direct" | "relay"; network: string; depositAddress: string | null; timeEstimateSeconds: number | null }
+export interface OnrampDelivery { requestId: string | null; state: "waiting" | "delivering" | "delivered" | "refunded" | "failed"; amountOut: string | null; outTxHash: string | null; updatedAt: string | null }
+export interface OnrampSessionStatus { sessionId: string; asset: OnrampAsset; route: "direct" | "relay"; deliveries: OnrampDelivery[]; note: string | null }
+
+export async function getOnrampConfig() {
+  return request<OnrampConfig>("/v1/onramp/config");
+}
+export async function createOnrampSession(walletAddress: string, asset: OnrampAsset, fiatAmount?: number) {
+  return request<OnrampSession>("/v1/onramp/session", { method: "POST", body: JSON.stringify({ walletAddress, asset, fiatAmount }) });
+}
+export async function getOnrampSession(sessionId: string) {
+  return request<OnrampSessionStatus>(`/v1/onramp/session/${encodeURIComponent(sessionId)}`);
+}
+
 export async function getQuorumStatus(address: string) {
   return request<QuorumStatus>(`/v1/wallets/${encodeURIComponent(address)}/quorum`);
 }
