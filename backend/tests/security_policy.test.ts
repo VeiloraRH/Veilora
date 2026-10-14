@@ -55,4 +55,11 @@ describe("security boundaries", () => {
       BigInt(Math.floor(Date.now() / 1000) + 240),
     )).rejects.toThrow("not on Veilora's co-signing allowlist");
   });
+
+  test("allows revoking a token approval for any spender without touching limits", async () => {
+    const usdg = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
+    const revoke = (spender: string) => `0x095ea7b3${spender.slice(2).toLowerCase().padStart(64, "0")}${"0".repeat(64)}` as `0x${string}`;
+    await expect(enforceExecutionPolicy("0x1111111111111111111111111111111111111111", usdg, 0n, revoke("0x3333333333333333333333333333333333333333"), `0x${"22".repeat(32)}`, BigInt(Math.floor(Date.now() / 1000) + 240))).resolves.toBeUndefined();
+    await expect(enforceExecutionPolicy("0x1111111111111111111111111111111111111111", usdg, 0n, revoke("0x0000000000000000000000000000000000000000"), `0x${"33".repeat(32)}`, BigInt(Math.floor(Date.now() / 1000) + 240))).rejects.toThrow("revoke needs");
+  });
 });

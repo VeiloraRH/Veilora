@@ -217,8 +217,13 @@ export async function enforceExecutionPolicy(
     if (decoded.functionName === "approve") {
       if (value !== 0n) deny();
       const [spender, amount] = decoded.args as readonly [Address, bigint];
+      // Revoking (approving zero) can only remove permission, so it is allowed
+      // for any spender and does not count toward spending limits.
+      if (amount === 0n) {
+        if (!isAddress(spender) || spender.toLowerCase() === "0x0000000000000000000000000000000000000000") deny("revoke needs the spender's address");
+        return;
+      }
       if (!routeSpenders.has(spender.toLowerCase())) deny("token approvals are only allowed for Uniswap and Relay");
-      if (amount <= 0n) deny("the approval amount must be greater than zero");
       const balance = await publicClient.readContract({ address: target, abi: BALANCE_ABI, functionName: "balanceOf", args: [wallet] });
       const { symbol, decimals } = describeAsset(target);
       const policy = await query<{ per_transaction_percent: number }>("SELECT per_transaction_percent FROM wallet_spending_policies WHERE wallet_address = $1", [wallet.toLowerCase()]);

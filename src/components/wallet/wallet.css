@@ -117,3 +117,7 @@
 .recipient-loading{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted-foreground)}
 .recipient-ack{display:flex;align-items:flex-start;gap:9px;margin:12px 0 4px;padding:12px;border-radius:12px;background:#e267670d;font-size:12px;line-height:1.5;color:#c34848;cursor:pointer}.recipient-ack input{margin-top:3px;accent-color:#e26767}
 .wallet-dialog .recipient-check{margin:4px 0 12px}
+.approval-row{padding:16px 18px}.approval-row-main{display:flex;align-items:center;gap:14px}.approval-row-main strong{display:block;font-size:13px;font-weight:600}.approval-row-main strong span{font-weight:400;color:var(--w-muted)}.approval-row-main small{display:block;font-size:11px;color:var(--w-muted);margin-top:3px}.approval-row-main small a{color:var(--w-accent)}
+.approval-amount{text-align:right;flex-shrink:0}.approval-amount>span{display:block;font-size:13px;font-weight:500}.approval-amount>span.unlimited{color:#c34848}.approval-amount small{font-size:10px;color:var(--w-muted)}
+.approval-confirm{margin-top:14px;padding-top:14px;border-top:1px solid var(--w-line)}
+@media(max-width:640px){.approval-row-main{flex-wrap:wrap}.approval-row-main>.rule-button{width:100%;justify-content:center}}
