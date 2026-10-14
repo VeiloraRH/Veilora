@@ -51,7 +51,8 @@ export async function readHoldings(wallet: Address) {
 export type Holding = Awaited<ReturnType<typeof readHoldings>>[number];
 export const amountText = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
-export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+300) {
+// Leave a minute of headroom under the backend's five-minute limit for client/server clock skew.
+export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240) {
  const nonce = await chainClient.readContract({ address: wallet, abi: parseAbi(['function nonce() view returns (uint256)']), functionName: 'nonce' });
  if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Account nonce exceeds the supported range.');
  const typeHash = keccak256(stringToHex('VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)'));
