@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Copy, ExternalLink, KeyRound, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { formatUnits, getAddress, type Address, type Hex } from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getBridgeQuote, getBridgeStatus, type BridgeQuote } from '@/lib/api';
 import { useWallet } from '@/lib/walletContext';
 import { useHoldings } from '@/lib/walletQueries';
@@ -71,6 +73,9 @@ function BridgeScreen() {
   const [records, setRecords] = useState<BridgeRecord[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [quoteRefresh, setQuoteRefresh] = useState(0);
+  const [freshWallet, setFreshWallet] = useState<{ address: Address; privateKey: Hex } | null>(null);
+  const [freshWalletError, setFreshWalletError] = useState('');
+  const [copiedPrivateKey, setCopiedPrivateKey] = useState(false);
 
   const source = SOURCES.find((asset) => asset.symbol === sourceSymbol)!;
   const destinationChain = DESTINATIONS.find((chain) => chain.chainId === destinationChainId)!;
@@ -103,6 +108,28 @@ function BridgeScreen() {
     try { return rawAmount(amount, source.decimals); } catch { return null; }
   }, [amount, source.decimals]);
   const validRecipient = /^0x[\da-f]{40}$/i.test(recipient.trim()) && !/^0x0{40}$/i.test(recipient.trim());
+
+  function createFreshDestinationWallet() {
+    try {
+      const privateKey = generatePrivateKey();
+      const address = privateKeyToAccount(privateKey).address;
+      setFreshWallet({ address, privateKey });
+      setFreshWalletError('');
+      setCopiedPrivateKey(false);
+    } catch {
+      setFreshWalletError('Could not create a wallet in this browser. Check that secure browser randomness is available and try again.');
+    }
+  }
+
+  async function copyFreshPrivateKey() {
+    if (!freshWallet) return;
+    try {
+      await navigator.clipboard.writeText(freshWallet.privateKey);
+      setCopiedPrivateKey(true);
+    } catch {
+      setFreshWalletError('Clipboard access was blocked. Select and copy the private key manually.');
+    }
+  }
 
   useEffect(() => {
     setRecords(recordsFor(walletAddress));
@@ -269,6 +296,11 @@ function BridgeScreen() {
           <label className="wallet-bridge-field"><span>Destination network</span><select className="wallet-select" value={destinationChainId} onChange={(event) => setDestinationChainId(Number(event.target.value))}>{DESTINATIONS.map((chain) => <option key={chain.chainId} value={chain.chainId}>{chain.name}</option>)}</select></label>
           <div className="wallet-bridge-field"><span>Receive asset</span><button type="button" className="wallet-token-button wallet-bridge-token-choice" aria-label="Choose destination asset" onClick={() => setPicker('destination')}><TokenIcon token={destinationTokens.find((token) => token.symbol === destinationSymbol)!} size={25}/>{destinationSymbol}<ChevronDown size={14}/></button></div>
           <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
+          <div className="mt-3">
+            <button type="button" className="wallet-icon-button inline-flex items-center gap-2 px-3" onClick={createFreshDestinationWallet}><KeyRound size={15}/> Create a fresh destination wallet</button>
+            <p className="mt-2 text-[10px] leading-5 text-muted-foreground">Generated in this browser. Its private key is shown once and is never saved by Veilora.</p>
+            {freshWalletError && !freshWallet && <p role="alert" className="wallet-error mt-2">{freshWalletError}</p>}
+          </div>
           {recipient && !validRecipient && <p className="wallet-error">Enter a valid EVM address. Funds go to this exact address on {destinationChain.name}.</p>}
           <p className="wallet-bridge-custody"><ShieldCheck size={16} /> Destination funds go to the address you provide and are controlled by that address on {destinationChain.name}.</p>
           <button className="wallet-primary-button mt-5" disabled={!validRecipient || !!busy} onClick={() => setStep(3)}>Review route <ArrowRight size={17} /></button>
@@ -299,5 +331,27 @@ function BridgeScreen() {
     </section>
     <TokenPicker open={picker === 'source'} onClose={() => setPicker(null)} onPick={(token) => { setSourceSymbol(token.symbol as 'ETH' | 'USDG'); setAmount(''); }} tokens={sourceTokens} description="Assets on Robinhood Chain" />
     <TokenPicker open={picker === 'destination'} onClose={() => setPicker(null)} onPick={(token) => setDestinationSymbol(token.symbol)} tokens={destinationTokens} description={`Assets available on ${destinationChain.name}`} />
+    <Dialog open={!!freshWallet} onOpenChange={(open) => { if (!open) setFreshWallet(null); }}>
+      <DialogContent className="wallet-dialog sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Save your fresh wallet key</DialogTitle>
+          <DialogDescription>This key controls the destination wallet. Veilora does not store or recover it. Anyone who gets it can take the wallet’s funds.</DialogDescription>
+        </DialogHeader>
+        {freshWallet && <>
+          <div className="space-y-2 rounded-xl bg-muted p-3">
+            <span className="block text-[10px] text-muted-foreground">Wallet address</span>
+            <code className="block break-all text-xs">{freshWallet.address}</code>
+          </div>
+          <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <span className="block text-[10px] font-medium text-amber-700 dark:text-amber-300">Private key · shown once</span>
+            <code className="block select-all break-all font-mono text-xs leading-5">{freshWallet.privateKey}</code>
+          </div>
+          {freshWalletError && <p role="alert" className="wallet-error">{freshWalletError}</p>}
+          <button type="button" className="wallet-icon-button w-full justify-center gap-2 rounded-xl border" onClick={() => void copyFreshPrivateKey()}><Copy size={15}/>{copiedPrivateKey ? 'Copied private key' : 'Copy private key'}</button>
+          <button type="button" className="wallet-primary-button w-full justify-center" onClick={() => { setRecipient(freshWallet.address); setFreshWallet(null); setFreshWalletError(''); }}>I’ve saved the private key, use this address</button>
+          <button type="button" className="wallet-icon-button w-full justify-center" onClick={() => { setFreshWallet(null); setFreshWalletError(''); }}>Discard this wallet</button>
+        </>}
+      </DialogContent>
+    </Dialog>
   </>;
 }
