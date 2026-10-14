@@ -94,3 +94,6 @@
 .tx-explorer{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#3468f0}
 .wallet-swap-card .tx-preview{margin-top:-6px}
 .wallet-partial{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px;padding:10px 14px;border-radius:12px;background:#c3974214;color:#a07628;font-size:11.5px;line-height:1.5}.wallet-partial .wallet-soft-button{padding:7px 12px;flex-shrink:0}
+.wallet-tx-row{cursor:pointer}.wallet-tx-row:focus-visible{outline:2px solid #3468f0;outline-offset:-2px}
+.wallet-explain-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin-right:4px;border-radius:20px;background:var(--w-soft);color:var(--w-accent);font-size:10.5px;white-space:nowrap;vertical-align:middle;transition:background .18s}.wallet-explain-chip:hover{background:#3468f026}
+@media(max-width:640px){.wallet-explain-chip span{display:none}.wallet-explain-chip{padding:7px}}
