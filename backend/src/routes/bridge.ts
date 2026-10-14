@@ -63,14 +63,21 @@ bridgeRouter.get("/status/:requestId", async (req, res) => {
   }
   try {
     const raw = await relayRequest(`/intents/status/v3?requestId=${encodeURIComponent(requestId)}`);
+    const hashes = (...values: unknown[]) => [...new Set(values.flatMap((value) =>
+      Array.isArray(value) ? value.filter((hash): hash is string => typeof hash === "string" && /^0x[\da-f]{64}$/i.test(hash)) : [],
+    ))];
+    const updatedAt = typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt)
+      ? new Date(raw.updatedAt).toISOString()
+      : typeof raw.updatedAt === "string" ? raw.updatedAt : null;
     res.json({
       success: true,
       status: {
         status: typeof raw.status === "string" ? raw.status : "unknown",
-        inTxHashes: Array.isArray(raw.inTxHashes) ? raw.inTxHashes : [],
-        outTxHashes: Array.isArray(raw.outTxHashes) ? raw.outTxHashes : [],
-        refundTxHashes: Array.isArray(raw.refundTxHashes) ? raw.refundTxHashes : [],
-        updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
+        inTxHashes: hashes(raw.inTxHashes),
+        // Relay v3 uses `txHashes` for destination transactions.
+        outTxHashes: hashes(raw.outTxHashes, raw.txHashes),
+        refundTxHashes: hashes(raw.refundTxHashes),
+        updatedAt,
       },
     });
   } catch (error) {

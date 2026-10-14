@@ -39,8 +39,8 @@ const SOURCES = [
 ] as const;
 type BridgeRecord = {
   requestId: string; chainId: number; chainName: string; explorer: string; sourceSymbol: string; amount: string;
-  outputSymbol: string; outputAmount: string; recipient: string; sourceHash?: string; status: string;
-  destinationHashes: string[]; updatedAt?: string;
+  outputSymbol: string; outputAmount: string; recipient: string; approvalHash?: string; sourceHash?: string; status: string;
+  error?: string; destinationHashes: string[]; updatedAt?: string;
 };
 const storageKey = (wallet: string) => `veilora:bridge:tracking:${wallet.toLowerCase()}`;
 const recordsFor = (wallet: string): BridgeRecord[] => {
@@ -142,11 +142,15 @@ function BridgeScreen() {
   };
 
   const refreshRecord = async (record: BridgeRecord) => {
+    if (['action_required', 'rejected'].includes(record.status.toLowerCase())) return;
     const result = await getBridgeStatus(record.requestId);
     const status = result.status;
+    const relayStatus = status.status.toLowerCase();
+    const noDeposit = !record.sourceHash && !status.inTxHashes.length && !['success', 'completed', 'failure', 'failed', 'refund', 'refunded'].includes(relayStatus);
     const updated: BridgeRecord = {
       ...record,
-      status: status.status,
+      status: noDeposit ? 'check_required' : status.status,
+      error: noDeposit ? record.error || 'No source deposit is linked to this request. Check wallet activity before trying again.' : record.error,
       destinationHashes: status.outTxHashes,
       updatedAt: status.updatedAt || undefined,
     };
@@ -157,7 +161,7 @@ function BridgeScreen() {
   const refreshAll = async () => {
     if (!records.length || refreshing) return;
     setRefreshing(true);
-    await Promise.allSettled(records.filter((record) => !['success', 'completed', 'failure', 'failed', 'refund', 'refunded'].includes(record.status.toLowerCase())).map(refreshRecord));
+    await Promise.allSettled(records.filter((record) => !['success', 'completed', 'failure', 'failed', 'refund', 'refunded', 'action_required', 'rejected'].includes(record.status.toLowerCase())).map(refreshRecord));
     setRefreshing(false);
   };
 
@@ -179,45 +183,57 @@ function BridgeScreen() {
     if (!sameQuote) { setError('This quote no longer matches your selections. Request a fresh quote.'); return; }
 
     setError('');
+    const address = getAddress(walletAddress) as Address;
+    let trackingRecord: BridgeRecord = {
+      requestId: quote.requestId,
+      chainId: destinationChainId,
+      chainName: destinationChain.name,
+      explorer: destinationChain.explorer,
+      sourceSymbol,
+      amount,
+      outputSymbol: destination.symbol,
+      outputAmount: outputSummary(quote.amountOut, quote.outputDecimals, quote.outputSymbol),
+      recipient: recipient.trim(),
+      status: 'preparing',
+      destinationHashes: [],
+    };
+    const saveTracking = () => persistRecords([trackingRecord, ...recordsFor(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
+    saveTracking();
+    let sourceHash: string | undefined;
     try {
-      const address = getAddress(walletAddress) as Address;
-      let sourceHash: string | undefined;
-      let trackingRecord: BridgeRecord | null = null;
       for (const tx of quote.steps) {
         if (Date.now() >= quote.expiresAt) throw new Error('The quote expired. Request a fresh quote before continuing.');
         setBusy(tx.id === 'approve' ? 'Approving source token…' : 'Submitting bridge deposit…');
-        if (tx.id === 'deposit') {
-          trackingRecord = {
-            requestId: quote.requestId,
-            chainId: destinationChainId,
-            chainName: destinationChain.name,
-            explorer: destinationChain.explorer,
-            sourceSymbol,
-            amount,
-            outputSymbol: destination.symbol,
-            outputAmount: outputSummary(quote.amountOut, quote.outputDecimals, quote.outputSymbol),
-            recipient: recipient.trim(),
-            status: 'submitting',
-            destinationHashes: [],
-          };
-          persistRecords([trackingRecord, ...recordsFor(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
-        }
+        trackingRecord = { ...trackingRecord, status: tx.id === 'deposit' ? 'submitting' : 'approving' };
+        saveTracking();
         const hash = await executeWalletCall(address, key as Hex, getAddress(tx.to), BigInt(tx.value), tx.data as Hex);
-        if (tx.id === 'deposit') {
+        if (tx.id === 'approve') {
+          trackingRecord = { ...trackingRecord, approvalHash: hash };
+          saveTracking();
+        } else if (tx.id === 'deposit') {
           sourceHash = hash;
-          trackingRecord = { ...trackingRecord!, sourceHash, status: 'submitted' };
-          persistRecords([trackingRecord, ...recordsFor(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
+          trackingRecord = { ...trackingRecord, sourceHash, status: 'submitted', error: undefined };
+          saveTracking();
         }
       }
       setBusy('Tracking delivery…');
-      if (trackingRecord) await refreshRecord(trackingRecord).catch(() => undefined);
+      await refreshRecord(trackingRecord).catch(() => undefined);
       void cache.invalidateQueries({ queryKey: ['holdings'] });
       void cache.invalidateQueries({ queryKey: ['transactions'] });
       setStep(4);
       setAmount('');
       setQuote(null);
     } catch (cause) {
-      setError(cause instanceof Error ? `${cause.message} Check wallet activity before trying again.` : 'Bridge submission failed. Check wallet activity before trying again.');
+      const message = cause instanceof Error ? cause.message : 'Bridge submission failed.';
+      const policyDenied = /policy denied|daily.{0,30}limit|per.transaction.{0,30}limit|spending limit/i.test(message);
+      trackingRecord = {
+        ...trackingRecord,
+        status: policyDenied && !sourceHash ? 'action_required' : 'check_required',
+        error: message,
+        ...(sourceHash ? { sourceHash } : {}),
+      };
+      saveTracking();
+      setError(`${message}${trackingRecord.approvalHash && !sourceHash ? ' The approval transaction succeeded, but the bridge deposit did not. Check the Bridge activity entry before retrying.' : ' Check wallet activity before trying again.'}`);
     } finally {
       setBusy('');
     }
@@ -279,7 +295,7 @@ function BridgeScreen() {
     </div>
     <section className="wallet-bridge-history">
       <div className="wallet-section-heading"><h2>Bridge activity</h2><button className="wallet-icon-button" onClick={() => void refreshAll()} disabled={refreshing || !records.length} aria-label="Refresh bridge status"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button></div>
-      {!records.length ? <div className="wallet-panel wallet-bridge-empty"><span>↗</span><div><strong>No bridge activity yet</strong><p>Your recent cross-chain transfers will appear here.</p></div></div> : <div className="wallet-panel wallet-bridge-records">{records.map((record) => { const normalized = record.status.toLowerCase(); const statusClass = ['success', 'completed'].includes(normalized) ? 'confirmed' : ['failure', 'failed', 'refund', 'refunded'].includes(normalized) ? 'failed' : 'pending'; return <article key={record.requestId} className="wallet-bridge-record"><div className="wallet-bridge-record-icon"><ArrowUpRight size={18} /></div><div className="wallet-bridge-record-main"><strong>{record.amount} {record.sourceSymbol} <ArrowRight size={13} /> {record.chainName} {record.outputSymbol}</strong><small>To {shortAddress(record.recipient)} · {record.outputAmount}</small></div><span className={`wallet-status ${statusClass}`}>{record.status}</span><div className="wallet-bridge-record-links">{record.sourceHash && <a href={`https://robinhoodchain.blockscout.com/tx/${record.sourceHash}`} target="_blank" rel="noreferrer">Source <ExternalLink size={13} /></a>}{record.destinationHashes.map((hash) => <a key={hash} href={`${record.explorer}/tx/${hash}`} target="_blank" rel="noreferrer">Destination <ExternalLink size={13} /></a>)}<button onClick={() => void refreshRecord(record)}>Refresh status</button></div></article>;})}</div>}
+      {!records.length ? <div className="wallet-panel wallet-bridge-empty"><span>↗</span><div><strong>No bridge activity yet</strong><p>Your recent cross-chain transfers will appear here.</p></div></div> : <div className="wallet-panel wallet-bridge-records">{records.map((record) => { const normalized = record.status.toLowerCase(); const statusClass = ['success', 'completed'].includes(normalized) ? 'confirmed' : ['failure', 'failed', 'refund', 'refunded', 'action_required', 'rejected'].includes(normalized) ? 'failed' : 'pending'; const statusLabel = normalized === 'action_required' ? 'Blocked by co-signer' : normalized === 'check_required' ? 'Check wallet activity' : record.status; return <article key={record.requestId} className="wallet-bridge-record"><div className="wallet-bridge-record-icon"><ArrowUpRight size={18} /></div><div className="wallet-bridge-record-main"><strong>{record.amount} {record.sourceSymbol} <ArrowRight size={13} /> {record.chainName} {record.outputSymbol}</strong><small>To {shortAddress(record.recipient)} · {record.outputAmount}</small>{record.error && <small className="wallet-error">{record.error}</small>}</div><span className={`wallet-status ${statusClass}`}>{statusLabel}</span><div className="wallet-bridge-record-links">{record.approvalHash && <a href={`https://robinhoodchain.blockscout.com/tx/${record.approvalHash}`} target="_blank" rel="noreferrer">Approval <ExternalLink size={13} /></a>}{record.sourceHash && <a href={`https://robinhoodchain.blockscout.com/tx/${record.sourceHash}`} target="_blank" rel="noreferrer">Source <ExternalLink size={13} /></a>}{record.destinationHashes.map((hash) => <a key={hash} href={`${record.explorer}/tx/${hash}`} target="_blank" rel="noreferrer">Destination <ExternalLink size={13} /></a>)}<button onClick={() => void refreshRecord(record)}>Refresh status</button></div></article>;})}</div>}
     </section>
     <TokenPicker open={picker === 'source'} onClose={() => setPicker(null)} onPick={(token) => { setSourceSymbol(token.symbol as 'ETH' | 'USDG'); setAmount(''); }} tokens={sourceTokens} description="Assets on Robinhood Chain" />
     <TokenPicker open={picker === 'destination'} onClose={() => setPicker(null)} onPick={(token) => setDestinationSymbol(token.symbol)} tokens={destinationTokens} description={`Assets available on ${destinationChain.name}`} />
