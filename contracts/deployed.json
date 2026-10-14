@@ -6,5 +6,10 @@
   "factoryDeploymentTx": "0x9928fa42dc1ea69393a528d338e7b97c22e7c6d7d31d19d3e8532f8dab2ed6bb",
   "factoryRuntimeCodeHash": "0x1a2dfb88985b80eab40611b2294bbe6692b7335677dc42ce24ef43ecd81a5cfc",
   "usdgToken": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
-  "deployedAt": "2026-10-11T15:37:33.000Z"
+  "deployedAt": "2026-10-11T15:37:33.000Z",
+  "escrowFactory": "0x5e091ec36B3CBcA0Be42F88881FaeB3A5658C6c1",
+  "escrowFactoryDeploymentTx": "0x6128ae544fca3504043372a4c18c79436ecc1a7b0bfeaad5c74718c88149965d",
+  "escrowFactoryRuntimeCodeHash": "0xe04b66fc89642ae36cf6a663d5c72d5f25265367425be679ad670c43a0c26f4a",
+  "escrowFactoryDeployer": "0x695d8E941e68D3ea39c14C43745286b5729E8CD7",
+  "escrowFactoryDeployedAt": "2026-10-14T08:51:34.508Z"
 }
