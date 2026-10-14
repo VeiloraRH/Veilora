@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { createGlassScene, type GlassScene } from "./glass-scene";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
+import { ContractAddress } from "@/components/site/ContractAddress";
 import { useTheme } from "@/lib/theme";
 import "./hero.css";
 
@@ -78,6 +79,11 @@ export function GlassHero() {
           <br />
           Stay in <strong>control.</strong>
         </p>
+
+        <div className="contract-address">
+          <span className="contract-label">Contract</span>
+          <ContractAddress className="contract-links" />
+        </div>
 
         <div className="cta-row">
           <Link to="/app" className="cta">Plan your first move</Link>

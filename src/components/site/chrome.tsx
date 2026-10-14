@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
+import { ContractAddress } from "./ContractAddress";
 
 /* Thin gold orbit lines, echoing the brand banners. */
 export function Orbits({ className }: { className?: string }) {
@@ -114,6 +115,10 @@ export function SiteFooter() {
             App
           </Link>
         </nav>
+      </div>
+      <div className="mx-auto mt-7 flex max-w-6xl flex-col gap-2 border-t border-ink-600/40 pt-5 text-mist sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-[11px] uppercase tracking-[0.16em]">Contract address</span>
+        <ContractAddress className="sm:justify-end" />
       </div>
       <p className="mx-auto mt-8 max-w-6xl text-xs leading-relaxed text-mist/70">
         Veilora is in development. Token support, price sources and service availability can vary; verify transaction details before signing. Network transactions are public.

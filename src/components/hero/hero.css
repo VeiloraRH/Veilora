@@ -174,6 +174,25 @@
 }
 .hero .tagline strong { font-weight: 700; display: block; }
 
+/* Contract address and explorer shortcut. */
+.hero .contract-address {
+  position: absolute;
+  left: var(--pad-x);
+  bottom: 22px;
+  display: grid;
+  gap: 6px;
+  max-width: min(700px, calc(100% - 2 * var(--pad-x)));
+  color: var(--fg);
+  pointer-events: auto;
+}
+.hero .contract-label { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; opacity: .65; }
+.hero .contract-links { gap: 6px 14px; }
+.hero .contract-links code { font-size: 11px; }
+.hero .contract-links button,
+.hero .contract-links a { color: var(--fg); text-decoration: none; }
+.hero .contract-links button:hover,
+.hero .contract-links a:hover { color: var(--gold); }
+
 /* CTA ROW (button → line → giant outlined "07" bleeding off the right edge) */
 .hero .cta-row {
   position: absolute;
@@ -232,6 +251,7 @@
 @media (max-width: 900px), (max-aspect-ratio: 1/1) {
   .hero .arrows { left: auto; right: var(--pad-x); top: 15%; transform: translateY(-50%); gap: 14px; }
   .hero .tagline { bottom: clamp(150px, 20vh, 220px); }
+  .hero .contract-address { bottom: 86px; }
   .hero .cta-row { left: var(--pad-x); right: -3vw; top: auto; bottom: 24px; transform: none; }
   .hero .count { font-size: clamp(120px, 22vw, 200px); }
 }
