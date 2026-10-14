@@ -5,8 +5,8 @@ import { Landing } from "@/components/landing/Landing";
 export const Route = createFileRoute("/")({
   component: () => (
     <>
-      <GlassHero />
-      <Landing />
+      <GlassHero locale="en" />
+      <Landing locale="en" />
     </>
   ),
 });

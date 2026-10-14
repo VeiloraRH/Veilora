@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { ContractAddress } from "./ContractAddress";
+import { t, type Locale } from "@/lib/locale";
 
 /* Thin gold orbit lines, echoing the brand banners. */
 export function Orbits({ className }: { className?: string }) {
@@ -93,9 +94,9 @@ export function SiteHeader() {
   );
 }
 
-export function SiteFooter() {
+export function SiteFooter({ locale = "en" }: { locale?: Locale } = {}) {
   return (
-    <footer className="border-t border-ink-600/60 px-5 py-10 sm:px-10">
+    <footer className="border-t border-ink-600/60 px-5 py-10 sm:px-10" lang={locale === "zh" ? "zh-CN" : "en"}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Wordmark />
@@ -103,25 +104,25 @@ export function SiteFooter() {
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-mist">
           <a href="/#wallet" className="hover:text-gold-300">
-            Product
+            {t(locale, "Product")}
           </a>
           <Link to="/roadmap" className="hover:text-gold-300">
-            Roadmap
+            {t(locale, "Roadmap")}
           </Link>
           <Link to="/whitepaper" className="hover:text-gold-300">
-            Whitepaper
+            {t(locale, "Whitepaper")}
           </Link>
           <Link to="/app" className="hover:text-gold-300">
-            App
+            {t(locale, "App")}
           </Link>
         </nav>
       </div>
       <div className="mx-auto mt-7 flex max-w-6xl flex-col gap-2 border-t border-ink-600/40 pt-5 text-mist sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-[11px] uppercase tracking-[0.16em]">Contract address</span>
+        <span className="text-[11px] uppercase tracking-[0.16em]">{t(locale, "Contract address")}</span>
         <ContractAddress className="sm:justify-end" />
       </div>
       <p className="mx-auto mt-8 max-w-6xl text-xs leading-relaxed text-mist/70">
-        Veilora is in development. Token support, price sources and service availability can vary; verify transaction details before signing. Network transactions are public.
+        {t(locale, "Veilora is in development. Token support, price sources and service availability can vary; verify transaction details before signing. Network transactions are public.")}
       </p>
     </footer>
   );

@@ -3,12 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { createGlassScene, type GlassScene } from "./glass-scene";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { ContractAddress } from "@/components/site/ContractAddress";
+import { t, type Locale } from "@/lib/locale";
 import { useTheme } from "@/lib/theme";
 import "./hero.css";
 
 const DOTS = [0, 1, 2];
 
-export function GlassHero() {
+export function GlassHero({ locale = "en" }: { locale?: Locale }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<GlassScene | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -31,7 +32,7 @@ export function GlassHero() {
   }, [theme]);
 
   return (
-    <section className="hero" id="hero" data-theme={theme}>
+    <section className="hero" id="hero" data-theme={theme} lang={locale === "zh" ? "zh-CN" : "en"}>
       <canvas id="scene" ref={canvasRef} aria-label="Rotatable glass cube. Drag to rotate." />
       <div className="ui">
         <h1 className="sr-only">Veilora: own every move</h1>
@@ -41,10 +42,11 @@ export function GlassHero() {
             <span>Veilora</span>
           </a>
           <ul className="nav-links">
-            <li><a href="#wallet">Wallet</a></li>
-            <li><Link to="/roadmap">Roadmap</Link></li>
-            <li><Link to="/whitepaper">Whitepaper</Link></li>
-            <li><Link to="/app">Launch App</Link></li>
+            <li><a href="#wallet">{t(locale, "Wallet")}</a></li>
+            <li><Link to="/roadmap">{t(locale, "Roadmap")}</Link></li>
+            <li><Link to="/whitepaper">{t(locale, "Whitepaper")}</Link></li>
+            <li><Link to="/app">{t(locale, "Launch App")}</Link></li>
+            <li><Link to={locale === "zh" ? "/" : "/zh"} lang={locale === "zh" ? "en" : "zh-CN"} aria-label={locale === "zh" ? "Switch to English" : "切换到中文"} className="language-link">{locale === "zh" ? "EN" : "中文"}</Link></li>
             <li className="theme-li"><ThemeToggle className="hero-toggle" /></li>
           </ul>
         </header>
@@ -67,7 +69,7 @@ export function GlassHero() {
             <button
               key={i}
               className={i === activeDot ? "dot active" : "dot"}
-              aria-label={`Slide ${i + 1}`}
+              aria-label={locale === "zh" ? `第 ${i + 1} 页` : `Slide ${i + 1}`}
               aria-current={i === activeDot}
               onClick={() => setActiveDot(i)}
             />
@@ -75,18 +77,18 @@ export function GlassHero() {
         </nav>
 
         <p className="tagline">
-          Move quietly.
+          {t(locale, "Move quietly.")}
           <br />
-          Stay in <strong>control.</strong>
+          {t(locale, "Stay in")} <strong>{t(locale, "control.")}</strong>
         </p>
 
         <div className="contract-address">
-          <span className="contract-label">Contract</span>
+          <span className="contract-label">{t(locale, "Contract")}</span>
           <ContractAddress className="contract-links" />
         </div>
 
         <div className="cta-row">
-          <Link to="/app" className="cta">Plan your first move</Link>
+          <Link to="/app" className="cta">{t(locale, "Plan your first move")}</Link>
           <span className="cta-line" />
           <span className="count" aria-hidden="true">01</span>
         </div>

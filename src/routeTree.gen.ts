@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
+import { Route as ZhRouteImport } from './routes/zh'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
 import { Route as AppMarketRouteImport } from './routes/app/market'
@@ -38,6 +39,11 @@ const RoadmapRoute = RoadmapRouteImport.update({
 const WhitepaperRoute = WhitepaperRouteImport.update({
   id: '/whitepaper',
   path: '/whitepaper',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ZhRoute = ZhRouteImport.update({
+  id: '/zh',
+  path: '/zh',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteRouteWithChildren
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/app': typeof AppRouteRouteWithChildren
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/roadmap'
     | '/whitepaper'
+    | '/zh'
     | '/app/activity'
     | '/app/market'
     | '/app/rules'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/'
     | '/roadmap'
     | '/whitepaper'
+    | '/zh'
     | '/app/activity'
     | '/app/market'
     | '/app/rules'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/roadmap'
     | '/whitepaper'
+    | '/zh'
     | '/app/activity'
     | '/app/market'
     | '/app/rules'
@@ -150,6 +162,7 @@ export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   RoadmapRoute: typeof RoadmapRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  ZhRoute: typeof ZhRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -180,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/whitepaper'
       fullPath: '/whitepaper'
       preLoaderRoute: typeof WhitepaperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/zh': {
+      id: '/zh'
+      path: '/zh'
+      fullPath: '/zh'
+      preLoaderRoute: typeof ZhRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/': {
@@ -254,6 +274,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   RoadmapRoute: RoadmapRoute,
   WhitepaperRoute: WhitepaperRoute,
+  ZhRoute: ZhRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
