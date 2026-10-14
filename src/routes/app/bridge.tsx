@@ -15,6 +15,7 @@ import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
+import { ContactBook } from '@/components/wallet/ContactBook';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
 
@@ -308,6 +309,7 @@ function BridgeScreen() {
           <label className="wallet-bridge-field"><span>Destination network</span><select className="wallet-select" value={destinationChainId} onChange={(event) => setDestinationChainId(Number(event.target.value))}>{DESTINATIONS.map((chain) => <option key={chain.chainId} value={chain.chainId}>{chain.name}</option>)}</select></label>
           <div className="wallet-bridge-field"><span>Receive asset</span><button type="button" className="wallet-token-button wallet-bridge-token-choice" aria-label="Choose destination asset" onClick={() => setPicker('destination')}><TokenIcon token={destinationTokens.find((token) => token.symbol === destinationSymbol)!} size={25}/>{destinationSymbol}<ChevronDown size={14}/></button></div>
           <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
+          <div className="mt-3"><ContactBook wallet={walletAddress} address={recipient} onSelect={setRecipient} /></div>
           <div className="mt-3">
             <button type="button" className="wallet-bridge-fresh-button" onClick={createFreshDestinationWallet}><KeyRound size={14}/> Create a fresh destination wallet</button>
             <p className="mt-2 text-[10px] leading-5 text-muted-foreground">Generated in this browser. Its private key is shown once and is never saved by Veilora.</p>
