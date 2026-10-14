@@ -297,7 +297,7 @@ function BridgeScreen() {
           <div className="wallet-bridge-field"><span>Receive asset</span><button type="button" className="wallet-token-button wallet-bridge-token-choice" aria-label="Choose destination asset" onClick={() => setPicker('destination')}><TokenIcon token={destinationTokens.find((token) => token.symbol === destinationSymbol)!} size={25}/>{destinationSymbol}<ChevronDown size={14}/></button></div>
           <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
           <div className="mt-3">
-            <button type="button" className="wallet-icon-button inline-flex items-center gap-2 px-3" onClick={createFreshDestinationWallet}><KeyRound size={15}/> Create a fresh destination wallet</button>
+            <button type="button" className="wallet-bridge-fresh-button" onClick={createFreshDestinationWallet}><KeyRound size={14}/> Create a fresh destination wallet</button>
             <p className="mt-2 text-[10px] leading-5 text-muted-foreground">Generated in this browser. Its private key is shown once and is never saved by Veilora.</p>
             {freshWalletError && !freshWallet && <p role="alert" className="wallet-error mt-2">{freshWalletError}</p>}
           </div>
