@@ -31,6 +31,17 @@ export function GlassHero({ locale = "en" }: { locale?: Locale }) {
     sceneRef.current?.setTheme(theme);
   }, [theme]);
 
+  useEffect(() => {
+    const previousTitle = document.title;
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+    if (locale === "zh") document.title = "Veilora — Robinhood Chain 阈值自托管钱包";
+    return () => {
+      document.title = previousTitle;
+      document.documentElement.lang = previousLanguage;
+    };
+  }, [locale]);
+
   return (
     <section className="hero" id="hero" data-theme={theme} lang={locale === "zh" ? "zh-CN" : "en"}>
       <canvas id="scene" ref={canvasRef} aria-label="Rotatable glass cube. Drag to rotate." />

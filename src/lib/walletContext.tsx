@@ -249,6 +249,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("veilora:onboarded");
     localStorage.removeItem("veilora:notes");
     localStorage.removeItem("veilora:view_keys");
+    localStorage.removeItem(`veilora:veily:credential:${walletAddress.toLowerCase()}`);
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);

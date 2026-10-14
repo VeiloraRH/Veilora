@@ -71,6 +71,26 @@ export async function getHealth() {
   return request<{ status: string; timestamp: string; version: string }>("/health");
 }
 
+export type VeilyMode = "hosted" | "byok";
+export type VeilyProvider = "groq" | "openai" | "anthropic";
+export type VeilyAction = { screen: "dashboard" | "market" | "swap" | "history" | "rules"; token?: string };
+export interface VeilyMessage { role: "user" | "assistant"; content: string; actions?: VeilyAction[] }
+
+export async function askVeily(payload: {
+  walletAddress: string;
+  requestId: string;
+  timestamp: number;
+  mode: VeilyMode;
+  messages: VeilyMessage[];
+  context: string;
+  provider?: VeilyProvider;
+  model?: string;
+  apiKey?: string;
+  shardASignature: string;
+}): Promise<{ answer: string; actions: VeilyAction[]; provider: string; model: string }> {
+  return request("/v1/veily/chat", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export async function getRelayerStatus() {
   return request<{
     network: { chainId: number; rpcHost: string; blockNumber: string; gasPriceGwei: string };
