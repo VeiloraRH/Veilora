@@ -38,6 +38,16 @@ export const bridgeDestinations = [
       { symbol: "USDT", name: "Tether USD", currency: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", decimals: 6 },
     ],
   },
+  {
+    chainId: 56,
+    name: "BNB Chain",
+    assets: [
+      { symbol: "ETH", name: "Binance-Peg Ethereum Token", currency: "0x2170ed0880ac9a755fd29b2688956bd959f933f8", decimals: 18 },
+      { symbol: "BNB", name: "BNB", currency: NATIVE_CURRENCY, decimals: 18, native: true },
+      { symbol: "USDC", name: "Binance-Peg USD Coin", currency: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", decimals: 18 },
+      { symbol: "USDT", name: "Tether USD", currency: "0x55d398326f99059ff775485246999027b3197955", decimals: 18 },
+    ],
+  },
 ] as const;
 
 type BridgeInput = {
