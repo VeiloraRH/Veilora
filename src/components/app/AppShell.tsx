@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { LayoutDashboard, ChartNoAxesCombined, ArrowLeftRight, ArrowUpDown, History, Workflow, Search, Moon, Sun, ChevronDown, Copy, ShieldCheck, LogOut, Wallet, Check } from 'lucide-react';
+import { LayoutDashboard, ChartNoAxesCombined, ArrowLeftRight, Cable, History, Workflow, Search, Moon, Sun, ChevronDown, Copy, ShieldCheck, LogOut, Wallet, Check } from 'lucide-react';
 import { useWallet } from '@/lib/walletContext';
 import { useTheme } from '@/lib/theme';
 import { Logo } from '@/components/ui';
@@ -10,7 +10,7 @@ import { shortAddress } from '@/components/wallet/WalletUI';
 import { useWalletRules } from '@/lib/rulesApi';
 import { VeilyAssistant } from './VeilyAssistant';
 import '@/components/wallet/wallet.css';
-const navigation=[{to:'/app',label:'Dashboard',icon:LayoutDashboard},{to:'/app/market',label:'Market',icon:ChartNoAxesCombined},{to:'/app/swap',label:'Swap',icon:ArrowLeftRight},{to:'/app/bridge',label:'Bridge',icon:ArrowUpDown},{to:'/app/rules',label:'Rules',icon:Workflow},{to:'/app/activity',label:'History',icon:History}] as const;
+const navigation=[{to:'/app',label:'Dashboard',icon:LayoutDashboard},{to:'/app/market',label:'Market',icon:ChartNoAxesCombined},{to:'/app/swap',label:'Swap',icon:ArrowLeftRight},{to:'/app/bridge',label:'Bridge',icon:Cable},{to:'/app/rules',label:'Rules',icon:Workflow},{to:'/app/activity',label:'History',icon:History}] as const;
 export function AppShell({children}:{children:ReactNode}) {
  const {walletAddress,removeWallet}=useWallet();
  const {theme,toggleTheme}=useTheme();

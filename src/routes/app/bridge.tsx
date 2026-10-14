@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, Clock3, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { formatUnits, getAddress, type Address, type Hex } from 'viem';
 import { getBridgeQuote, getBridgeStatus, type BridgeQuote } from '@/lib/api';
 import { useWallet } from '@/lib/walletContext';
 import { useHoldings } from '@/lib/walletQueries';
 import { executeWalletCall, rawAmount } from '@/lib/walletChain';
 import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI';
+import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
@@ -50,6 +51,7 @@ function BridgeScreen() {
   const [sourceSymbol, setSourceSymbol] = useState<'ETH' | 'USDG'>('ETH');
   const [destinationChainId, setDestinationChainId] = useState<number>(8453);
   const [destinationSymbol, setDestinationSymbol] = useState('ETH');
+  const [picker, setPicker] = useState<'source' | 'destination' | null>(null);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState(1);
@@ -65,6 +67,20 @@ function BridgeScreen() {
   const source = SOURCES.find((asset) => asset.symbol === sourceSymbol)!;
   const destinationChain = DESTINATIONS.find((chain) => chain.chainId === destinationChainId)!;
   const destination = destinationChain.assets.find((asset) => asset.symbol === destinationSymbol) || destinationChain.assets[0];
+  const destinationTokens: WalletToken[] = destinationChain.assets.map((asset) => {
+    const known = ROBINHOOD_TOKEN_REGISTRY[asset.symbol];
+    return {
+      symbol: asset.symbol,
+      name: known?.name || (asset.symbol === 'ETH' ? 'Ether' : asset.symbol === 'USDC' ? 'USD Coin' : 'Tether USD'),
+      address: asset.currency as Address,
+      decimals: asset.decimals,
+      logo: known?.logo || `/tokens/${asset.symbol.toLowerCase()}.svg`,
+      stock: false,
+      native: asset.symbol === 'ETH',
+      category: 'crypto',
+    };
+  });
+  const sourceTokens = [ROBINHOOD_TOKEN_REGISTRY.ETH, ROBINHOOD_TOKEN_REGISTRY.USDG];
   const sourceToken = ROBINHOOD_TOKEN_REGISTRY[sourceSymbol] as WalletToken;
   const balance = holdings.data?.find((holding) => holding.token.symbol === sourceSymbol)?.raw;
   const policyCap = balance == null ? null : sourceSymbol === 'ETH'
@@ -196,6 +212,7 @@ function BridgeScreen() {
   }
 
   const formattedBalance = balance == null ? '—' : Number(formatUnits(balance, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
+  const formattedPolicyCap = policyCap == null ? '—' : Number(formatUnits(policyCap, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
   const fees = quote ? feeSummary(quote.fees) : [];
   const lastDeposit = records[0];
 
@@ -212,19 +229,17 @@ function BridgeScreen() {
           <div className="wallet-swap-box">
             <div className="wallet-swap-caption"><span>You send</span><span>Balance: {formattedBalance} {sourceSymbol}</span></div>
             <div className="wallet-swap-input"><input aria-label="Bridge amount" placeholder="0.00" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
-              <select className="wallet-token-select" aria-label="Source asset" value={sourceSymbol} onChange={(event) => { setSourceSymbol(event.target.value as 'ETH' | 'USDG'); setAmount(''); setQuote(null); }}>
-                {SOURCES.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol}</option>)}
-              </select>
+              <button type="button" className="wallet-token-button" aria-label="Choose source asset" onClick={() => setPicker('source')}><TokenIcon token={sourceToken} size={24}/>{sourceSymbol}<ChevronDown size={14}/></button>
             </div>
-            <div className="wallet-percentages">{[25, 50, 75, 100].map((part) => <button key={part} disabled={policyCap == null || !!busy} onClick={() => policyCap != null && setAmount(formatUnits(policyCap * BigInt(part) / 100n, source.decimals))}>{part === 100 ? 'Max' : `${part}%`}</button>)}</div>
+            <div className="wallet-percentages">{[25, 50, 75, 100].map((part) => <button key={part} disabled={policyCap == null || !!busy} onClick={() => policyCap != null && setAmount(formatUnits(policyCap * BigInt(part) / 100n, source.decimals))}>{part === 100 ? `Max ${formattedPolicyCap}` : `${part}%`}</button>)}</div>
           </div>
-          <p className="wallet-bridge-limit">Bridge amounts are subject to Veilora’s daily signing policy. Max reflects up to 20% of your current balance and may be lower after earlier activity today.</p>
+          <p className="wallet-bridge-limit">Available balance: {formattedBalance} {sourceSymbol}. Max under the current 20% signing cap: {formattedPolicyCap} {sourceSymbol}. Earlier spending today may reduce the amount the co-signer approves.</p>
           <button className="wallet-primary-button mt-5" disabled={!amountRaw || balance == null || policyCap == null || !!busy || amountRaw > policyCap} onClick={() => setStep(2)}>Choose destination <ArrowRight size={17} /></button>
         </>}
         {step === 2 && <>
           <div className="wallet-bridge-heading"><button className="wallet-icon-button" aria-label="Back" onClick={() => setStep(1)}><ArrowLeft size={17} /></button><div><h2>Where should it arrive?</h2><p className="wallet-bridge-intro">Enter an address that can receive the selected asset.</p></div></div>
           <label className="wallet-bridge-field"><span>Destination network</span><select className="wallet-select" value={destinationChainId} onChange={(event) => setDestinationChainId(Number(event.target.value))}>{DESTINATIONS.map((chain) => <option key={chain.chainId} value={chain.chainId}>{chain.name}</option>)}</select></label>
-          <label className="wallet-bridge-field"><span>Receive asset</span><select className="wallet-select" value={destinationSymbol} onChange={(event) => setDestinationSymbol(event.target.value)}>{destinationChain.assets.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol}</option>)}</select></label>
+          <div className="wallet-bridge-field"><span>Receive asset</span><button type="button" className="wallet-token-button wallet-bridge-token-choice" aria-label="Choose destination asset" onClick={() => setPicker('destination')}><TokenIcon token={destinationTokens.find((token) => token.symbol === destinationSymbol)!} size={25}/>{destinationSymbol}<ChevronDown size={14}/></button></div>
           <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
           {recipient && !validRecipient && <p className="wallet-error">Enter a valid EVM address. Funds go to this exact address on {destinationChain.name}.</p>}
           <p className="wallet-bridge-custody"><ShieldCheck size={16} /> Destination funds go to the address you provide and are controlled by that address on {destinationChain.name}.</p>
@@ -254,5 +269,7 @@ function BridgeScreen() {
       <div className="wallet-section-heading"><h2>Bridge activity</h2><button className="wallet-icon-button" onClick={() => void refreshAll()} disabled={refreshing || !records.length} aria-label="Refresh bridge status"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button></div>
       {!records.length ? <div className="wallet-panel wallet-bridge-empty"><span>↗</span><div><strong>No bridge activity yet</strong><p>Your recent cross-chain transfers will appear here.</p></div></div> : <div className="wallet-panel wallet-bridge-records">{records.map((record) => { const normalized = record.status.toLowerCase(); const statusClass = ['success', 'completed'].includes(normalized) ? 'confirmed' : ['failure', 'failed', 'refund', 'refunded'].includes(normalized) ? 'failed' : 'pending'; return <article key={record.requestId} className="wallet-bridge-record"><div className="wallet-bridge-record-icon"><ArrowUpRight size={18} /></div><div className="wallet-bridge-record-main"><strong>{record.amount} {record.sourceSymbol} <ArrowRight size={13} /> {record.chainName} {record.outputSymbol}</strong><small>To {shortAddress(record.recipient)} · {record.outputAmount}</small></div><span className={`wallet-status ${statusClass}`}>{record.status}</span><div className="wallet-bridge-record-links">{record.sourceHash && <a href={`https://robinhoodchain.blockscout.com/tx/${record.sourceHash}`} target="_blank" rel="noreferrer">Source <ExternalLink size={13} /></a>}{record.destinationHashes.map((hash) => <a key={hash} href={`${record.explorer}/tx/${hash}`} target="_blank" rel="noreferrer">Destination <ExternalLink size={13} /></a>)}<button onClick={() => void refreshRecord(record)}>Refresh status</button></div></article>;})}</div>}
     </section>
+    <TokenPicker open={picker === 'source'} onClose={() => setPicker(null)} onPick={(token) => { setSourceSymbol(token.symbol as 'ETH' | 'USDG'); setAmount(''); }} tokens={sourceTokens} description="Assets on Robinhood Chain" />
+    <TokenPicker open={picker === 'destination'} onClose={() => setPicker(null)} onPick={(token) => setDestinationSymbol(token.symbol)} tokens={destinationTokens} description={`Assets available on ${destinationChain.name}`} />
   </>;
 }
