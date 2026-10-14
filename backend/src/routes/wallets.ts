@@ -25,6 +25,7 @@ import {
 import { buildBlockscoutHistoryUrl } from "../blockscout";
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
 import { enforceExecutionPolicy } from "../txPolicy";
+import { safeFeeOverrides } from "../feePolicy";
 
 export const walletsRouter = Router();
 
@@ -104,6 +105,43 @@ async function readCounterfactualAddress(
   );
 }
 
+async function deployV2Account(
+  address: `0x${string}`,
+  shardA: `0x${string}`,
+  shardB: `0x${string}`,
+  shardC: `0x${string}`,
+  salt: bigint,
+): Promise<boolean> {
+  if (!relayerClient || !relayerAccount) throw new Error("Account deployment is unavailable: the backend gas payer is not configured");
+  const code = await publicClient.getCode({ address });
+  if (code && code !== "0x") return true;
+  const reservation = await query(
+    `INSERT INTO relayer_deployment_budget (utc_day, deployment_count)
+     VALUES ((now() AT TIME ZONE 'UTC')::date, 1)
+     ON CONFLICT (utc_day) DO UPDATE
+       SET deployment_count = relayer_deployment_budget.deployment_count + 1
+       WHERE relayer_deployment_budget.deployment_count < $1
+     RETURNING deployment_count`,
+    [DAILY_SPONSORED_DEPLOYMENT_LIMIT],
+  );
+  if (!reservation.rows.length) throw new Error("Daily sponsored wallet deployment limit reached");
+  const block = await publicClient.getBlock({ blockTag: "latest" });
+  const estimate = await publicClient.estimateFeesPerGas().catch(async () => ({ gasPrice: await publicClient.getGasPrice() }));
+  const { reservePrice: _reservePrice, ...feeFields } = safeFeeOverrides(block.baseFeePerGas, estimate);
+  const hash = await relayerClient.writeContract({
+    address: V2_FACTORY_ADDRESS,
+    abi: veiloraFactoryV2Abi,
+    functionName: "createAccount",
+    args: [shardA, shardB, shardC, salt],
+    ...feeFields,
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") throw new Error(`Account deployment transaction reverted (${hash})`);
+  const deployedCode = await publicClient.getCode({ address });
+  if (!deployedCode || deployedCode === "0x") throw new Error("Deployment succeeded but the account has no on-chain code");
+  return true;
+}
+
 /**
  * POST /v1/wallets
  * Registers or computes a deterministic 2-of-3 threshold wallet.
@@ -145,12 +183,31 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
       res.status(403).json({ error: "Registration signature does not match Shard A" });
       return;
     }
-    const duplicateRequest = await query(
-      "SELECT address FROM wallets WHERE registration_request_id = $1",
+    const duplicateRequest = await query<{
+      address: string; factory_address: string; account_version: number; salt: string;
+      shard_a_address: string; shard_b_address: string; shard_b_encrypted: string; shard_c_address: string;
+    }>(
+      "SELECT address,factory_address,account_version,salt,shard_a_address,shard_b_address,shard_b_encrypted,shard_c_address FROM wallets WHERE registration_request_id = $1",
       [requestId],
     );
     if (duplicateRequest.rows.length) {
-      res.status(409).json({ error: "This wallet registration request has already been used" });
+      const existing = duplicateRequest.rows[0];
+      if (existing.shard_a_address.toLowerCase() !== shardA.toLowerCase() ||
+          existing.shard_c_address.toLowerCase() !== shardC.toLowerCase() ||
+          existing.salt !== salt.toString() || Number(existing.account_version) !== 2) {
+        res.status(409).json({ error: "This wallet registration request does not match its original account" });
+        return;
+      }
+      const apiKey = generateApiKey();
+      await query("UPDATE wallets SET api_key_hash=$2,updated_at=now() WHERE address=$1", [existing.address, hashApiKey(apiKey)]);
+      let isDeployed = false;
+      if (req.body.deployOnCreate === true) {
+        isDeployed = await deployV2Account(getAddress(existing.address), shardA, getAddress(existing.shard_b_address), shardC, salt);
+      } else {
+        const code = await publicClient.getCode({ address: getAddress(existing.address) });
+        isDeployed = Boolean(code && code !== "0x");
+      }
+      res.status(200).json({ address: getAddress(existing.address), chainId: CHAIN_ID, factoryAddress: getAddress(existing.factory_address), accountVersion: 2, shardA: getAddress(existing.shard_a_address), shardB: getAddress(existing.shard_b_address), shardC: getAddress(existing.shard_c_address), threshold: 2, salt: existing.salt, apiKey, isDeployed });
       return;
     }
 
@@ -173,53 +230,6 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         error: error instanceof Error ? error.message : "Could not retrieve the smart account address from Robinhood Chain",
       });
       return;
-    }
-
-    let isDeployed = false;
-    if (req.body.deployOnCreate === true) {
-      if (!relayerClient || !relayerAccount) {
-        res.status(503).json({ error: "Account deployment is unavailable: the backend gas payer is not configured" });
-        return;
-      }
-
-      const reservation = await query(
-        `INSERT INTO relayer_deployment_budget (utc_day, deployment_count)
-         VALUES ((now() AT TIME ZONE 'UTC')::date, 1)
-         ON CONFLICT (utc_day) DO UPDATE
-           SET deployment_count = relayer_deployment_budget.deployment_count + 1
-           WHERE relayer_deployment_budget.deployment_count < $1
-         RETURNING deployment_count`,
-        [DAILY_SPONSORED_DEPLOYMENT_LIMIT],
-      );
-      if (!reservation.rows.length) {
-        res.status(429).json({ error: "Daily sponsored wallet deployment limit reached" });
-        return;
-      }
-
-      try {
-        const code = await publicClient.getCode({ address: counterfactualAddress });
-        isDeployed = Boolean(code && code !== "0x");
-        if (!isDeployed) {
-          const deployHash = await relayerClient.writeContract({
-            address: V2_FACTORY_ADDRESS,
-            abi: veiloraFactoryV2Abi,
-            functionName: "createAccount",
-            args: [shardA, shardB.address, shardC, salt],
-          });
-          const receipt = await publicClient.waitForTransactionReceipt({ hash: deployHash });
-          if (receipt.status !== "success") {
-            throw new Error(`Account deployment transaction reverted (${deployHash})`);
-          }
-          const deployedCode = await publicClient.getCode({ address: counterfactualAddress });
-          isDeployed = Boolean(deployedCode && deployedCode !== "0x");
-          if (!isDeployed) throw new Error("Deployment transaction succeeded but the account has no on-chain code");
-        }
-      } catch (error) {
-        res.status(502).json({
-          error: error instanceof Error ? `Could not deploy the smart account: ${error.message}` : "Could not deploy the smart account",
-        });
-        return;
-      }
     }
 
     const apiKey = generateApiKey();
@@ -255,6 +265,16 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         requestId,
       ]
     );
+
+    let isDeployed = false;
+    if (req.body.deployOnCreate === true) {
+      try {
+        isDeployed = await deployV2Account(counterfactualAddress, shardA, shardB.address, shardC, salt);
+      } catch (error) {
+        res.status(502).json({ error: error instanceof Error ? `Could not deploy the smart account: ${error.message}` : "Could not deploy the smart account" });
+        return;
+      }
+    }
 
     res.status(201).json({
       address: counterfactualAddress,
@@ -346,17 +366,29 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
 
     let isDeployed = false;
     let onChainNonce = "0";
+    let syncedShardA = wallet.shard_a_address;
+    let syncedShardC = wallet.shard_c_address;
 
     try {
       const code = await publicClient.getCode({ address: getAddress(address) });
       isDeployed = Boolean(code && code !== "0x");
       if (isDeployed) {
-        const nonce = await publicClient.readContract({
-          address: getAddress(address),
-          abi: veiloraAccountAbi,
-          functionName: "nonce",
-        });
+        const [nonce, chainShardA, chainShardB, chainShardC] = await Promise.all([
+          publicClient.readContract({ address: getAddress(address), abi: veiloraAccountAbi, functionName: "nonce" }),
+          publicClient.readContract({ address: getAddress(address), abi: veiloraAccountAbi, functionName: "shardA" }),
+          publicClient.readContract({ address: getAddress(address), abi: veiloraAccountAbi, functionName: "shardB" }),
+          publicClient.readContract({ address: getAddress(address), abi: veiloraAccountAbi, functionName: "shardC" }),
+        ]);
         onChainNonce = nonce.toString();
+        // Trust rotation state only if the backend-held shard still matches.
+        // This keeps metadata aligned after a user rotates either personal key.
+        if (chainShardB.toLowerCase() === String(wallet.shard_b_address).toLowerCase()) {
+          syncedShardA = chainShardA;
+          syncedShardC = chainShardC;
+          if (syncedShardA.toLowerCase() !== String(wallet.shard_a_address).toLowerCase() || syncedShardC.toLowerCase() !== String(wallet.shard_c_address).toLowerCase()) {
+            await query("UPDATE wallets SET shard_a_address=$2,shard_c_address=$3,updated_at=now() WHERE address=$1", [address, syncedShardA.toLowerCase(), syncedShardC.toLowerCase()]);
+          }
+        }
       }
     } catch {
       // Fallback
@@ -365,11 +397,11 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
     res.json({
       address: getAddress(wallet.address),
       chainId: wallet.chain_id,
-      shardA: getAddress(wallet.shard_a_address),
+      shardA: getAddress(syncedShardA),
       factoryAddress: getAddress(wallet.factory_address || LEGACY_FACTORY_ADDRESS),
       accountVersion: Number(wallet.account_version) === 2 ? 2 : 1,
       shardB: getAddress(wallet.shard_b_address),
-      shardC: getAddress(wallet.shard_c_address),
+      shardC: getAddress(syncedShardC),
       threshold: wallet.threshold,
       isFrozen: freezeState.frozen,
       frozenUntil: freezeState.frozenUntil,
@@ -455,7 +487,7 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
       return;
     }
     try {
-      await enforceExecutionPolicy(getAddress(address), target, BigInt(value), data as `0x${string}`);
+      await enforceExecutionPolicy(getAddress(address), target, BigInt(value), data as `0x${string}`, digest, deadline);
     } catch (policyError) {
       await query(
         `INSERT INTO cosign_audit (wallet_address, user_op_hash, status, metadata)

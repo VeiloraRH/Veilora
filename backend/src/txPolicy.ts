@@ -9,7 +9,7 @@ import {
   type Hex,
 } from "viem";
 import { ESCROW_FACTORY_ADDRESS, publicClient } from "./config";
-import { query } from "./db/index";
+import { db, query } from "./db/index";
 import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
 
 export const NATIVE_ASSET = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
@@ -36,6 +36,8 @@ const WETH9_ABI = parseAbi(["function WETH9() view returns (address)"]);
 const BALANCE_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
 const escrowActionAbi = parseAbi(["function approveOutcome(bytes32 digest)"]);
 const escrowFactoryAbi = parseAbi(["function isEscrow(address escrow) view returns (bool)"]);
+const trustedEscrows = new Set<string>((process.env.VEILORA_TRUSTED_ESCROW_ADDRESSES || "")
+  .split(",").map((address) => address.trim().toLowerCase()).filter((address) => /^0x[\da-f]{40}$/.test(address)));
 
 /** Refuse to co-sign. A specific reason tells the user what to change; structural mismatches keep the generic message. */
 function deny(reason?: string): never {
@@ -49,7 +51,11 @@ function describeAsset(asset: string): { symbol: string; decimals: number } {
   return token ? { symbol: token.symbol, decimals: token.decimals } : { symbol: "this token", decimals: 18 };
 }
 function amountText(raw: bigint, decimals: number): string {
-  return Number(formatUnits(raw, decimals)).toLocaleString("en-US", { maximumFractionDigits: 6 });
+  const [whole, fraction = ""] = formatUnits(raw, decimals).split(".");
+  const exact = fraction ? `${whole}.${fraction.replace(/0+$/, "")}`.replace(/\.$/, "") : whole;
+  const [integer, decimal] = exact.split(".");
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return decimal ? `${grouped}.${decimal}` : grouped;
 }
 
 /** The daily-limit refusal, in the user's units: what is allowed, what is used, what this needs. */
@@ -66,7 +72,7 @@ function isSupportedToken(value: unknown): value is Address {
   return typeof value === "string" && isAddress(value) && tokenAddresses.has(value.toLowerCase());
 }
 
-async function reserveDailySpend(wallet: Address, asset: string, amount: bigint): Promise<void> {
+async function reserveDailySpend(wallet: Address, asset: string, amount: bigint, digest: Hex, deadline: bigint): Promise<void> {
   if (amount <= 0n) deny("the amount must be greater than zero");
   // Veilora's relayer pays gas for every execution, so the account's whole
   // balance counts; no ETH is held back for fees.
@@ -84,28 +90,96 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint)
     const { symbol, decimals } = describeAsset(asset);
     deny(`a single transaction can use up to ${amountText(maxTransactionSpend, decimals)} ${symbol} (${perTransactionPercent}% of your current balance). This needs ${amountText(amount, decimals)} ${symbol}`);
   }
-  const spentRow = await query<{ amount_wei: string }>(
-    `SELECT amount_wei::text FROM wallet_daily_spend
-     WHERE wallet_address = $1 AND utc_day = (now() AT TIME ZONE 'UTC')::date AND asset_address = $2`,
-    [wallet.toLowerCase(), asset],
-  );
-  const spentToday = BigInt(spentRow.rows[0]?.amount_wei ?? "0");
-  const balanceAtDayStart = spentToday > 0n ? balance + spentToday : balance;
-  const maxDailySpend = balanceAtDayStart * BigInt(dailyPercent) / 100n;
-  if (amount > maxDailySpend) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday, dailyPercent));
-  const result = await query(
-    `INSERT INTO wallet_daily_spend (wallet_address, utc_day, asset_address, amount_wei, daily_balance_wei)
-     VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, $3, $4)
-     ON CONFLICT (wallet_address, utc_day, asset_address) DO UPDATE
-       SET amount_wei = wallet_daily_spend.amount_wei + EXCLUDED.amount_wei,
-           daily_balance_wei = COALESCE(wallet_daily_spend.daily_balance_wei, EXCLUDED.daily_balance_wei),
-           updated_at = now()
-       WHERE wallet_daily_spend.amount_wei + EXCLUDED.amount_wei <=
-         COALESCE(wallet_daily_spend.daily_balance_wei, EXCLUDED.daily_balance_wei) * $5 / 100
-     RETURNING amount_wei`,
-    [wallet.toLowerCase(), asset, amount.toString(), balanceAtDayStart.toString(), dailyPercent],
-  );
-  if (!result.rows.length) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday, dailyPercent));
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const day = await client.query<{ utc_day: string }>("SELECT (now() AT TIME ZONE 'UTC')::date::text AS utc_day");
+    const utcDay = day.rows[0].utc_day;
+    await client.query(
+      `INSERT INTO wallet_daily_spend (wallet_address, utc_day, asset_address, amount_wei, daily_balance_wei)
+       VALUES ($1, $2, $3, 0, $4) ON CONFLICT (wallet_address, utc_day, asset_address) DO NOTHING`,
+      [wallet.toLowerCase(), utcDay, asset, balance.toString()],
+    );
+    const daily = await client.query<{ amount_wei: string; daily_balance_wei: string | null }>(
+      `SELECT amount_wei::text, daily_balance_wei::text FROM wallet_daily_spend
+       WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3 FOR UPDATE`,
+      [wallet.toLowerCase(), utcDay, asset],
+    );
+    const spentToday = BigInt(daily.rows[0].amount_wei);
+    const balanceAtDayStart = BigInt(daily.rows[0].daily_balance_wei ?? balance.toString());
+    const maxDailySpend = balanceAtDayStart * BigInt(dailyPercent) / 100n;
+    const existing = await client.query<{ amount_wei: string; status: string; active: boolean }>(
+      `SELECT amount_wei::text, status, expires_at > now() AS active FROM wallet_spend_reservations
+       WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3 AND execution_digest=$4 FOR UPDATE`,
+      [wallet.toLowerCase(), utcDay, asset, digest.toLowerCase()],
+    );
+    if (existing.rows[0] && existing.rows[0].status === "committed") {
+      if (BigInt(existing.rows[0].amount_wei) !== amount) deny();
+      await client.query("COMMIT");
+      return;
+    }
+    if (existing.rows[0]?.status === "reserved" && existing.rows[0].active) {
+      if (BigInt(existing.rows[0].amount_wei) !== amount) deny();
+      await client.query("COMMIT");
+      return;
+    }
+    const pending = await client.query<{ amount_wei: string }>(
+      `SELECT COALESCE(sum(amount_wei),0)::text AS amount_wei FROM wallet_spend_reservations
+       WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3 AND status='reserved' AND expires_at > now()`,
+      [wallet.toLowerCase(), utcDay, asset],
+    );
+    const reservedToday = BigInt(pending.rows[0].amount_wei);
+    if (spentToday + reservedToday + amount > maxDailySpend) {
+      deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday + reservedToday, dailyPercent));
+    }
+    await client.query(
+      `INSERT INTO wallet_spend_reservations (wallet_address,utc_day,asset_address,execution_digest,amount_wei,status,expires_at)
+       VALUES ($1,$2,$3,$4,$5,'reserved',to_timestamp($6)+interval '5 minutes')
+       ON CONFLICT (wallet_address,utc_day,asset_address,execution_digest) DO UPDATE
+         SET amount_wei=EXCLUDED.amount_wei,status='reserved',expires_at=EXCLUDED.expires_at,transaction_hash=NULL,updated_at=now()`,
+      [wallet.toLowerCase(), utcDay, asset, digest.toLowerCase(), amount.toString(), deadline.toString()],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/** Commit actual mined spend or release an unsubmitted/reverted reservation. */
+export async function settleDailySpend(wallet: Address, digest: Hex, succeeded: boolean, transactionHash?: Hex): Promise<void> {
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const reservation = await client.query<{ utc_day: string; asset_address: string; amount_wei: string; status: string }>(
+      `SELECT utc_day::text,asset_address,amount_wei::text,status FROM wallet_spend_reservations
+       WHERE wallet_address=$1 AND execution_digest=$2 AND status IN ('reserved','released') FOR UPDATE`,
+      [wallet.toLowerCase(), digest.toLowerCase()],
+    );
+    const row = reservation.rows[0];
+    if (!row) { await client.query("COMMIT"); return; }
+    if (!succeeded && row.status === "released") { await client.query("COMMIT"); return; }
+    if (succeeded) {
+      await client.query(
+        `UPDATE wallet_daily_spend SET amount_wei=amount_wei+$4,updated_at=now()
+         WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3`,
+        [wallet.toLowerCase(), row.utc_day, row.asset_address, row.amount_wei],
+      );
+    }
+    await client.query(
+      `UPDATE wallet_spend_reservations SET status=$3,transaction_hash=$4,updated_at=now()
+       WHERE wallet_address=$1 AND execution_digest=$2 AND status IN ('reserved','released')`,
+      [wallet.toLowerCase(), digest.toLowerCase(), succeeded ? "committed" : "released", transactionHash ?? null],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -118,12 +192,14 @@ export async function enforceExecutionPolicy(
   targetAddress: Address,
   value: bigint,
   data: Hex,
+  digest: Hex,
+  deadline: bigint,
 ): Promise<void> {
   const wallet = getAddress(walletAddress);
   const target = getAddress(targetAddress);
 
   if (data === "0x" && target !== wallet && value > 0n) {
-    await reserveDailySpend(wallet, NATIVE_ASSET, value);
+    await reserveDailySpend(wallet, NATIVE_ASSET, value, digest, deadline);
     return;
   }
 
@@ -135,7 +211,7 @@ export async function enforceExecutionPolicy(
       const [recipient, amount] = decoded.args as readonly [Address, bigint];
       if (!isAddress(recipient)) deny();
       if (recipient.toLowerCase() === wallet.toLowerCase()) deny("a transfer to your own account does nothing");
-      await reserveDailySpend(wallet, target, amount);
+      await reserveDailySpend(wallet, target, amount, digest, deadline);
       return;
     }
     if (decoded.functionName === "approve") {
@@ -160,6 +236,7 @@ export async function enforceExecutionPolicy(
     let decoded: ReturnType<typeof decodeFunctionData> | undefined;
     try { decoded = decodeFunctionData({ abi: escrowActionAbi, data }); } catch {}
     if (decoded?.functionName === "approveOutcome") {
+      if (!trustedEscrows.has(String(target).toLowerCase())) deny("this escrow has not been explicitly approved by Veilora");
       const verified = await publicClient.readContract({
         address: ESCROW_FACTORY_ADDRESS,
         abi: escrowFactoryAbi,
@@ -179,7 +256,7 @@ export async function enforceExecutionPolicy(
     if (hex.startsWith("0x49290c1c")) {
       if (!/^0x49290c1c[\da-f]{128}$/.test(hex) ||
           hex.slice(10, 74) !== wallet.slice(2).toLowerCase().padStart(64, "0") || value <= 0n) deny();
-      await reserveDailySpend(wallet, NATIVE_ASSET, value);
+      await reserveDailySpend(wallet, NATIVE_ASSET, value, digest, deadline);
       return;
     }
     if (hex.startsWith("0xe8017952")) {
@@ -188,7 +265,7 @@ export async function enforceExecutionPolicy(
           hex.slice(74, 138) !== USDG_ADDRESS.slice(2).toLowerCase().padStart(64, "0")) deny();
       const amount = BigInt(`0x${hex.slice(138, 202)}`);
       if (amount <= 0n) deny();
-      await reserveDailySpend(wallet, USDG_ADDRESS, amount);
+      await reserveDailySpend(wallet, USDG_ADDRESS, amount, digest, deadline);
       return;
     }
     return deny();
@@ -210,7 +287,7 @@ export async function enforceExecutionPolicy(
     if (recipient.toLowerCase() !== wallet.toLowerCase()) deny("swap output must go to your own account");
     const input = zeroForOne ? poolKey.currency0 : poolKey.currency1;
     if (!isSupportedToken(input)) deny();
-    await reserveDailySpend(wallet, input, amountIn);
+    await reserveDailySpend(wallet, input, amountIn, digest, deadline);
     return;
   }
 
@@ -256,7 +333,7 @@ export async function enforceExecutionPolicy(
         (inputAsset !== NATIVE_ASSET && value !== 0n) ||
         (swapRecipient.toLowerCase() === SWAP_ROUTER.toLowerCase() && (!didUnwrap || outputAsset.toLowerCase() !== weth.toLowerCase())) ||
         (didUnwrap && (swapRecipient.toLowerCase() !== SWAP_ROUTER.toLowerCase() || outputAsset.toLowerCase() !== weth.toLowerCase()))) deny();
-    await reserveDailySpend(wallet, inputAsset, inputAmount);
+    await reserveDailySpend(wallet, inputAsset, inputAmount, digest, deadline);
     return;
   }
 

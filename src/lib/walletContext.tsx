@@ -51,6 +51,7 @@ interface WalletContextType {
   setWalletAddress: (address: string) => void;
   refresh: () => Promise<void>;
   createAccount: (passphrase: string) => Promise<CreatedAccountDetails>;
+  completeAccountCreation: () => Promise<void>;
   unlockDeviceKey: (passphrase: string) => Promise<void>;
   importDeviceKey: (privateKey: string, passphrase: string, expectedAddress?: string) => Promise<void>;
   connectExistingWallet: (address: string, privateKey: string, passphrase: string) => Promise<void>;
@@ -77,6 +78,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [deviceKeyUnlocked, setDeviceKeyUnlocked] = useState(false);
   const [latestRecoveryKey, setLatestRecoveryKey] = useState<string | null>(null);
   const [pendingRecoveryDetails, setPendingRecoveryDetails] = useState<CreatedAccountDetails | null>(null);
+  const [pendingRegistration, setPendingRegistration] = useState<{
+    shardAPk: `0x${string}`; shardCPrivateKey: `0x${string}`; shardAAddress: string; shardCAddress: string;
+    requestId: string; timestamp: number; shardASignature: string;
+  } | null>(null);
   const [auditTrail, setAuditTrail] = useState<Array<{
     id: string;
     user_op_hash: string;
@@ -131,31 +136,47 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const timestamp = Math.floor(Date.now() / 1000);
       const message = `Veilora wallet registration\nversion:2\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:true\ntimestamp:${timestamp}\nrequest:${requestId}`;
       const shardASignature = await privateKeyToAccount(shardAPk).signMessage({ message });
-      const res = await createWallet({ accountVersion: 2, shardAAddress, shardCAddress, deployOnCreate: true, requestId, timestamp, shardASignature });
-
+      // Persist Shard A locally before any backend registration or deployment.
       localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(shardAPk, passphrase));
-      localStorage.setItem("veilora:shardA:address", res.shardA);
-      localStorage.setItem(ACCOUNT_VERSION_KEY(res.address), String(res.accountVersion));
+      localStorage.setItem("veilora:shardA:address", getAddress(shardAAddress));
       localStorage.removeItem(LEGACY_DEVICE_KEY);
       setDeviceKey(shardAPk);
       setDeviceKeyUnlocked(true);
       setDeviceKeyPresent(true);
-
       const details: CreatedAccountDetails = {
-        address: res.address,
-        shardA: res.shardA,
-        shardB: res.shardB,
-        shardC: res.shardC,
+        address: "",
+        shardA: getAddress(shardAAddress),
+        shardB: "",
+        shardC: getAddress(shardCAddress),
         shardAPrivateKey: shardAPk,
         shardCPrivateKey: shardCPk,
       };
-      // Keep the onboarding gate active until the user acknowledges the offline recovery key.
+      setPendingRegistration({ shardAPk, shardCPrivateKey: shardCPk, shardAAddress, shardCAddress, requestId, timestamp, shardASignature });
       setLatestRecoveryKey(shardCPk);
+      setPendingRecoveryDetails(details);
+      return details;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeAccountCreation = async () => {
+    if (!pendingRegistration) throw new Error("The pending account setup has expired. Start account creation again.");
+    if (!pendingRecoveryDetails?.shardCPrivateKey) throw new Error("The recovery key is no longer available. Start account creation again.");
+    setLoading(true);
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const message = `Veilora wallet registration\nversion:2\nshardA:${getAddress(pendingRegistration.shardAAddress)}\nshardC:${getAddress(pendingRegistration.shardCAddress)}\nsalt:0\ndeploy:true\ntimestamp:${timestamp}\nrequest:${pendingRegistration.requestId}`;
+      const shardASignature = await privateKeyToAccount(pendingRegistration.shardAPk).signMessage({ message });
+      const pending = { ...pendingRegistration, timestamp, shardASignature };
+      setPendingRegistration(pending);
+      const res = await createWallet({ accountVersion: 2, shardAAddress: pending.shardAAddress, shardCAddress: pending.shardCAddress, deployOnCreate: true, requestId: pending.requestId, timestamp, shardASignature });
+      localStorage.setItem("veilora:shardA:address", res.shardA);
+      localStorage.setItem(ACCOUNT_VERSION_KEY(res.address), String(res.accountVersion));
+      const details = { ...pendingRecoveryDetails, address: res.address, shardA: res.shardA, shardB: res.shardB, shardC: res.shardC };
       setPendingRecoveryDetails(details);
       setWalletAddress(res.address);
       await loadWallet(res.address);
-
-      return details;
     } finally {
       setLoading(false);
     }
@@ -164,6 +185,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const clearLatestRecoveryKey = () => {
     setLatestRecoveryKey(null);
     setPendingRecoveryDetails(null);
+    setPendingRegistration(null);
   };
 
   const getStoredDeviceKey = () => {
@@ -274,6 +296,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setWalletAddress,
         refresh,
         createAccount,
+        completeAccountCreation,
         unlockDeviceKey,
         importDeviceKey,
         connectExistingWallet,

@@ -13,6 +13,7 @@ describe("Threshold Wallets & Co-signing API", () => {
   let shardCAddress: `0x${string}`;
   let shardBPrivateKey: `0x${string}`;
   let shardBAddress: `0x${string}`;
+  let registrationBody: Record<string, unknown>;
 
   test("POST /v1/wallets refuses server-side generation of user-held shards", async () => {
     const res = await request(app).post("/v1/wallets").send({});
@@ -33,16 +34,15 @@ describe("Threshold Wallets & Co-signing API", () => {
     const shardASignature = await privateKeyToAccount(shardA.privateKey).signMessage({
       message: `Veilora wallet registration\nversion:2\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:false\ntimestamp:${timestamp}\nrequest:${requestId}`,
     });
-    const res = await request(app)
-      .post("/v1/wallets")
-      .send({
+    registrationBody = {
         accountVersion: 2,
         shardAAddress,
         shardCAddress,
         requestId,
         timestamp,
         shardASignature,
-      });
+      };
+    const res = await request(app).post("/v1/wallets").send(registrationBody);
 
     expect(res.status).toBe(201);
     expect(res.body.address).toBeString();
@@ -57,6 +57,13 @@ describe("Threshold Wallets & Co-signing API", () => {
 
     walletAddress = res.body.address;
     shardBAddress = res.body.shardB;
+  });
+
+  test("POST /v1/wallets safely retries a completed registration request", async () => {
+    const retry = await request(app).post("/v1/wallets").send(registrationBody);
+    expect(retry.status).toBe(200);
+    expect(retry.body.address.toLowerCase()).toBe(walletAddress.toLowerCase());
+    expect(retry.body.shardB.toLowerCase()).toBe(shardBAddress.toLowerCase());
   });
 
   test("GET /v1/wallets/:address returns wallet configuration and active status", async () => {

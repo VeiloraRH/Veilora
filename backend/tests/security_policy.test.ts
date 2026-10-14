@@ -17,6 +17,8 @@ describe("security boundaries", () => {
       "0x2222222222222222222222222222222222222222",
       0n,
       "0xdeadbeef",
+      `0x${"11".repeat(32)}`,
+      BigInt(Math.floor(Date.now() / 1000) + 240),
     )).rejects.toThrow("Shard B policy denied");
   });
 
@@ -37,7 +39,7 @@ describe("security boundaries", () => {
 
   test("explains daily-limit refusals in the user's units", () => {
     expect(dailyLimitMessage(NATIVE_ASSET, 2_000_000_000_000_000n, 798_748_000_000_000n, 0n))
-      .toBe("today's ETH limit is 0.000799 ETH (20% of your balance at the start of today's co-signed spending). This needs 0.002 ETH. The limit resets at 00:00 UTC.");
+      .toBe("today's ETH limit is 0.000798748 ETH (20% of your balance at the start of today's co-signed spending). This needs 0.002 ETH. The limit resets at 00:00 UTC.");
     expect(dailyLimitMessage("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", 50_000_000n, 100_000_000n, 80_000_000n))
       .toContain("80 USDG already used, 20 USDG left. This needs 50 USDG");
     expect(dailyLimitMessage(NATIVE_ASSET, 1n, 0n, 0n)).toBe("you have no ETH available to spend");
@@ -49,6 +51,8 @@ describe("security boundaries", () => {
       "0x2222222222222222222222222222222222222222",
       0n,
       "0xdeadbeef",
+      `0x${"22".repeat(32)}`,
+      BigInt(Math.floor(Date.now() / 1000) + 240),
     )).rejects.toThrow("not on Veilora's co-signing allowlist");
   });
 });

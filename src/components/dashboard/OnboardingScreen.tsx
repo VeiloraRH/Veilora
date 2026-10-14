@@ -88,7 +88,7 @@ function CoinWaves({ className }: { className?: string }) {
 }
 
 export function OnboardingScreen() {
-  const { createAccount, connectExistingWallet, clearLatestRecoveryKey, pendingRecoveryDetails } = useWallet();
+  const { createAccount, completeAccountCreation, connectExistingWallet, clearLatestRecoveryKey, pendingRecoveryDetails } = useWallet();
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importAddr, setImportAddr] = useState("");
@@ -101,6 +101,7 @@ export function OnboardingScreen() {
   // Success backup modal state
   const [backupOpen, setBackupOpen] = useState(false);
   const [hasWrittenDown, setHasWrittenDown] = useState(false);
+  const [creationError, setCreationError] = useState<string | null>(null);
   const [passphraseOpen, setPassphraseOpen] = useState(false);
 
   useEffect(() => {
@@ -118,6 +119,7 @@ export function OnboardingScreen() {
     setLoading(true);
     try {
       await createAccount(passphrase);
+      setCreationError(null);
     } catch (err: any) {
       throw new Error(err?.message || "Failed to create smart account");
     } finally {
@@ -436,10 +438,10 @@ export function OnboardingScreen() {
               <KeyRound className="h-6 w-6" />
             </div>
             <DialogTitle className="text-xl font-bold text-foreground">
-              Smart Account Created Successfully
+              {pendingRecoveryDetails?.address ? "Smart Account Created Successfully" : "Save your recovery key first"}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm">
-              Your 2-of-3 threshold smart account is ready on Robinhood Chain.
+              {pendingRecoveryDetails?.address ? "Your 2-of-3 threshold smart account is ready on Robinhood Chain." : "Write down Shard C and confirm before Veilora registers or deploys your account."}
             </DialogDescription>
           </DialogHeader>
 
@@ -447,7 +449,7 @@ export function OnboardingScreen() {
             <div className="rounded-xl bg-muted/60 border border-border p-4 space-y-2">
               <div className="text-xs text-muted-foreground font-medium">Smart Account Address</div>
               <div className="font-mono text-xs text-[#eaba65] break-all select-all">
-                {pendingRecoveryDetails?.address}
+                {pendingRecoveryDetails?.address || "Account address will appear after creation"}
               </div>
             </div>
 
@@ -468,24 +470,33 @@ export function OnboardingScreen() {
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 font-mono text-xs leading-6 break-all select-all text-foreground">
                 {pendingRecoveryDetails?.shardCPrivateKey}
               </div>
-              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+              {!pendingRecoveryDetails?.address && <label className="flex items-start gap-2 pt-1 cursor-pointer">
                 <input type="checkbox" checked={hasWrittenDown} onChange={(event) => setHasWrittenDown(event.target.checked)} className="mt-0.5" />
                 <span>I wrote down the recovery key and stored it somewhere safe offline.</span>
-              </label>
+              </label>}
             </div>
+            {creationError && <p role="alert" className="text-sm text-red-500">{creationError}</p>}
           </div>
 
           <DialogFooter className="pt-2">
             <Button
-              disabled={!hasWrittenDown}
-              onClick={() => {
+              disabled={loading || (!pendingRecoveryDetails?.address && !hasWrittenDown)}
+              onClick={async () => {
+                if (!pendingRecoveryDetails?.address) {
+                  setLoading(true);
+                  setCreationError(null);
+                  try { await completeAccountCreation(); }
+                  catch (err: any) { setCreationError(err?.message || "Account creation failed. Your recovery key is still visible; retry safely."); }
+                  finally { setLoading(false); }
+                  return;
+                }
                 localStorage.setItem("veilora:onboarded", "true");
                 setBackupOpen(false);
                 clearLatestRecoveryKey();
               }}
               className="w-full bg-[#eaba65] text-[#070d1e] hover:bg-[#dfaf58] font-semibold h-11"
             >
-              I wrote it down · Continue
+              {loading ? "Creating account…" : pendingRecoveryDetails?.address ? "Continue" : "I wrote it down · Create account"}
             </Button>
           </DialogFooter>
         </DialogContent>

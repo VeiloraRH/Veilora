@@ -15,12 +15,20 @@ import { veiloraFactoryAbi, veiloraFactoryV2Abi, veiloraAccountAbi } from "../ab
 import { db, query } from "../db/index";
 import { computeExecutionDigest, computeExecutionDigestV2 } from "../crypto";
 import { getFreezeState } from "../freeze";
+import { safeFeeOverrides } from "../feePolicy";
+import { settleDailySpend } from "../txPolicy";
 
 const MAX_EXECUTION_GAS = BigInt(process.env.RELAYER_MAX_EXECUTION_GAS || "1500000");
 const MAX_DEPLOYMENT_GAS = BigInt(process.env.RELAYER_MAX_DEPLOYMENT_GAS || "4000000");
 const DAILY_GAS_COST_LIMIT = parseEther(process.env.RELAYER_DAILY_GAS_BUDGET_ETH || "0.05");
 const WALLET_DAILY_GAS_COST_LIMIT = parseEther(process.env.RELAYER_WALLET_DAILY_GAS_BUDGET_ETH || "0.01");
 const DAILY_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
+
+async function relayerFeeOverrides() {
+  const block = await publicClient.getBlock({ blockTag: "latest" });
+  const estimate = await publicClient.estimateFeesPerGas().catch(async () => ({ gasPrice: await publicClient.getGasPrice() }));
+  return safeFeeOverrides(block.baseFeePerGas, estimate);
+}
 
 async function reserveGas(wallet: string, costWei: bigint): Promise<void> {
   const client = await db.connect();
@@ -111,6 +119,9 @@ relayerRouter.get("/status", async (_req: Request, res: Response): Promise<void>
  * Submits an authorized 2-of-3 threshold execution to Robinhood Chain.
  */
 relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<void> => {
+  let reservationWallet: `0x${string}` | undefined;
+  let reservationDigest: `0x${string}` | undefined;
+  let submittedTransaction = false;
   try {
     if (!relayerClient || !relayerAccount) {
       res.status(503).json({ error: "Backend relayer wallet is not configured" });
@@ -176,6 +187,8 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     const digest = accountVersion === 2
       ? computeExecutionDigestV2(cleanWallet, cleanTarget, numValue, hexData, numNonce, numDeadline, BigInt(CHAIN_ID))
       : computeExecutionDigest(cleanTarget, numValue, hexData, numNonce, numDeadline, BigInt(CHAIN_ID));
+    reservationWallet = cleanWallet;
+    reservationDigest = digest;
     const firstSignature = `0x${hexSignatures.slice(2, 132)}` as `0x${string}`;
     const secondSignature = `0x${hexSignatures.slice(132)}` as `0x${string}`;
     const [firstSigner, secondSigner] = await Promise.all([
@@ -215,10 +228,11 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       await publicClient.simulateContract(deployment);
       const deployGas = await publicClient.estimateContractGas(deployment);
       if (deployGas > MAX_DEPLOYMENT_GAS) { res.status(413).json({ error: "Wallet deployment exceeds the relayer gas limit" }); return; }
-      const deployGasPrice = await publicClient.getGasPrice();
-      await reserveGas(cleanWallet, deployGas * deployGasPrice);
+      const deployFees = await relayerFeeOverrides();
+      await reserveGas(cleanWallet, deployGas * deployFees.reservePrice);
       await reserveDeployment();
-      const deployTx = await relayerClient.writeContract({ ...deployment, gas: deployGas, gasPrice: deployGasPrice });
+      const { reservePrice: _deployReservePrice, ...deployFeeFields } = deployFees;
+      const deployTx = await relayerClient.writeContract({ ...deployment, gas: deployGas, ...deployFeeFields });
       const deployReceipt = await publicClient.waitForTransactionReceipt({ hash: deployTx });
       if (deployReceipt.status !== "success") throw new Error("Wallet deployment reverted");
       code = await publicClient.getCode({ address: cleanWallet });
@@ -239,14 +253,17 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     await publicClient.simulateContract(execution);
     const executionGas = await publicClient.estimateContractGas(execution);
     if (executionGas > MAX_EXECUTION_GAS) { res.status(413).json({ error: "Transaction exceeds the relayer gas limit" }); return; }
-    const executionGasPrice = await publicClient.getGasPrice();
-    await reserveGas(cleanWallet, executionGas * executionGasPrice);
-    const txHash = await relayerClient.writeContract({ ...execution, gas: executionGas, gasPrice: executionGasPrice });
+    const executionFees = await relayerFeeOverrides();
+    await reserveGas(cleanWallet, executionGas * executionFees.reservePrice);
+    const { reservePrice: _executionReservePrice, ...executionFeeFields } = executionFees;
+    const txHash = await relayerClient.writeContract({ ...execution, gas: executionGas, ...executionFeeFields });
+    submittedTransaction = true;
 
     console.log(`[Relayer] Execution Tx Hash: ${txHash}`);
 
     // Wait for receipt
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    await settleDailySpend(cleanWallet, digest, receipt.status === "success", txHash);
 
     res.json({
       success: receipt.status === "success",
@@ -258,6 +275,11 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       nonce: numNonce.toString(),
     });
   } catch (error: any) {
+    if (reservationWallet && reservationDigest && !submittedTransaction) {
+      await settleDailySpend(reservationWallet, reservationDigest, false).catch((settleError) => {
+        console.error("[Relayer] Could not release unused spend reservation:", settleError);
+      });
+    }
     console.error("[Relayer] Broadcast error:", error);
     res.status(error?.status || 500).json({
       error: error.message || "Failed to broadcast transaction on Robinhood Chain",
