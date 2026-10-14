@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Private } from './Private';
 import { AlertTriangle, ArrowDownLeft, ArrowUpRight, ExternalLink, Info, KeyRound, Loader2, ShieldAlert, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { explainCalls, explainTransaction, type ExplainFlag, type TxExplanation } from '@/lib/api';
@@ -15,7 +16,7 @@ export function Flags({flags}:{flags:ExplainFlag[]}) {
 export function ExplanationCard({e,step}:{e:TxExplanation;step?:string}) {
  return <div className="tx-explain">{step&&<span className="tx-step">{step}</span>}<strong className="tx-title">{e.title}</strong>
   <ul className="tx-summary">{e.summary.map(s=><li key={s}>{s}</li>)}</ul>
-  {e.effects.length>0&&<div className="tx-effects">{e.effects.map((x,i)=>{const Icon=x.direction==='in'?ArrowDownLeft:x.direction==='out'?ArrowUpRight:KeyRound;return <div key={i} className={`tx-effect ${x.direction}`}><Icon size={14}/><span>{x.direction==='in'?'You receive':x.direction==='out'?'You send':'Permission'}</span><b>{x.amount?`${x.direction==='out'?'−':x.direction==='in'?'+':''}${x.amount} ${x.asset}`:x.asset}</b>{x.counterparty&&<small>{short(x.counterparty)}</small>}</div>;})}</div>}
+  {e.effects.length>0&&<div className="tx-effects">{e.effects.map((x,i)=>{const Icon=x.direction==='in'?ArrowDownLeft:x.direction==='out'?ArrowUpRight:KeyRound;return <div key={i} className={`tx-effect ${x.direction}`}><Icon size={14}/><span>{x.direction==='in'?'You receive':x.direction==='out'?'You send':'Permission'}</span><b>{x.amount?<><Private>{`${x.direction==='out'?'−':x.direction==='in'?'+':''}${x.amount}`}</Private> {x.asset}</>:x.asset}</b>{x.counterparty&&<small>{short(x.counterparty)}</small>}</div>;})}</div>}
   <Flags flags={e.flags}/></div>;
 }
 

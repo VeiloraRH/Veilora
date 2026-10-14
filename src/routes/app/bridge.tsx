@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { Private } from '@/components/wallet/Private';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, Clock3, Copy, ExternalLink, KeyRound, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
@@ -293,13 +294,13 @@ function BridgeScreen() {
           <h2>Choose what to bridge</h2>
           <p className="wallet-bridge-intro">Select ETH or USDG held in your Veilora account on Robinhood Chain.</p>
           <div className="wallet-swap-box">
-            <div className="wallet-swap-caption"><span>You send</span><span>Balance: {formattedBalance} {sourceSymbol}</span></div>
+            <div className="wallet-swap-caption"><span>You send</span><span>Balance: <Private>{formattedBalance}</Private> {sourceSymbol}</span></div>
             <div className="wallet-swap-input"><input aria-label="Bridge amount" placeholder="0.00" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} />
               <button type="button" className="wallet-token-button" aria-label="Choose source asset" onClick={() => setPicker('source')}><TokenIcon token={sourceToken} size={24}/>{sourceSymbol}<ChevronDown size={14}/></button>
             </div>
-            <div className="wallet-percentages">{[25, 50, 75, 100].map((part) => <button key={part} disabled={policyCap == null || !!busy} onClick={() => policyCap != null && setAmount(formatUnits(policyCap * BigInt(part) / 100n, source.decimals))}>{part === 100 ? `Max ${formattedPolicyCap}` : `${part}%`}</button>)}</div>
+            <div className="wallet-percentages">{[25, 50, 75, 100].map((part) => <button key={part} disabled={policyCap == null || !!busy} onClick={() => policyCap != null && setAmount(formatUnits(policyCap * BigInt(part) / 100n, source.decimals))}>{part === 100 ? `Max $<Private>{formattedPolicyCap}</Private>` : `${part}%`}</button>)}</div>
           </div>
-          <p className="wallet-bridge-limit">Available balance: {formattedBalance} {sourceSymbol}. Max under your per-transaction and remaining daily limits: {formattedPolicyCap} {sourceSymbol}. Change these limits in Security.</p>
+          <p className="wallet-bridge-limit">Available balance: <Private>{formattedBalance}</Private> {sourceSymbol}. Max under your per-transaction and remaining daily limits: <Private>{formattedPolicyCap}</Private> {sourceSymbol}. Change these limits in Security.</p>
           <button className="wallet-primary-button mt-5" disabled={!amountRaw || balance == null || policyCap == null || !!busy || amountRaw > policyCap} onClick={() => setStep(2)}>Choose destination <ArrowRight size={17} /></button>
         </>}
         {step === 2 && <>
