@@ -99,7 +99,7 @@ function BridgeScreen() {
       name: 'name' in asset ? asset.name : known?.name || (asset.symbol === 'ETH' ? 'Ether' : asset.symbol === 'USDC' ? 'USD Coin' : 'Tether USD'),
       address: asset.currency as Address,
       decimals: asset.decimals,
-      logo: asset.symbol === 'BNB' ? 'https://assets.relay.link/icons/currencies/bnb.png' : known?.logo || `/tokens/${asset.symbol.toLowerCase()}.svg`,
+      logo: asset.symbol === 'BNB' ? '/tokens/bnb.png' : known?.logo || `/tokens/${asset.symbol.toLowerCase()}.svg`,
       stock: false,
       native: 'native' in asset ? asset.native : asset.currency === NATIVE,
       category: 'crypto',
