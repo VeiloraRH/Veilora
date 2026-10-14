@@ -250,6 +250,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("veilora:notes");
     localStorage.removeItem("veilora:view_keys");
     localStorage.removeItem(`veilora:veily:credential:${walletAddress.toLowerCase()}`);
+    const bridgeTrackingKey = `veilora:bridge:tracking:${walletAddress.toLowerCase()}`;
+    localStorage.removeItem(bridgeTrackingKey);
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);

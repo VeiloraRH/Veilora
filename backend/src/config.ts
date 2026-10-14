@@ -24,6 +24,8 @@ export const USDG_ADDRESS = getAddress(
   process.env.USDG_TOKEN_ADDRESS || "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
 );
 
+export const RELAY_LINK_API_KEY = process.env.RELAY_LINK_API_KEY;
+
 export const publicClient = createPublicClient({
   chain: robinhoodChain,
   transport: http(RPC_URL),

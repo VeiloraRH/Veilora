@@ -100,6 +100,53 @@ export async function getRelayerStatus() {
 }
 
 // ---------------------------------------------------------------------------
+// Relay cross-chain quotes and delivery tracking
+// ---------------------------------------------------------------------------
+
+export interface BridgeQuoteRequest {
+  ownerAddress: string;
+  recipient: string;
+  originCurrency: string;
+  destinationChainId: number;
+  destinationCurrency: string;
+  amount: string;
+}
+
+export interface BridgeQuote {
+  requestId: string;
+  input: BridgeQuoteRequest;
+  amountOut: string;
+  minimumAmountOut: string;
+  outputDecimals: number;
+  outputSymbol: string;
+  sourceDecimals: number;
+  sourceSymbol: string;
+  fees: Record<string, { amountFormatted?: string; amountUsd?: string; currency?: { symbol?: string } }>;
+  timeEstimate: number | null;
+  steps: Array<{ id: "approve" | "deposit"; to: string; data: `0x${string}`; value: string; chainId: number }>;
+  expiresAt: number;
+}
+
+export async function getBridgeQuote(input: BridgeQuoteRequest) {
+  return request<{ success: true; quote: BridgeQuote }>("/v1/bridge/quote", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export interface BridgeStatus {
+  status: string;
+  inTxHashes: string[];
+  outTxHashes: string[];
+  refundTxHashes: string[];
+  updatedAt: string | null;
+}
+
+export async function getBridgeStatus(requestId: string) {
+  return request<{ success: true; status: BridgeStatus }>(`/v1/bridge/status/${encodeURIComponent(requestId)}`);
+}
+
+// ---------------------------------------------------------------------------
 // 2-of-3 Threshold Custody & Co-signing
 // ---------------------------------------------------------------------------
 

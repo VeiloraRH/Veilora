@@ -14,8 +14,10 @@ import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
 const NATIVE_ASSET = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SWAP_ROUTER = getAddress("0xcaf681a66d020601342297493863e78c959e5cb2");
 const V4_ADAPTER = getAddress("0x2b50d96a0073baCe9e126fb012d46912298486F0");
+const RELAY_DEPOSITORY = getAddress("0x4cd00e387622c35bddb9b4c962c136462338bc31");
+const USDG_ADDRESS = getAddress("0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168");
 const tokenAddresses = new Set(Object.values(ROBINHOOD_TOKEN_REGISTRY).map((t) => t.address.toLowerCase()));
-const routeSpenders = new Set([SWAP_ROUTER.toLowerCase(), V4_ADAPTER.toLowerCase()]);
+const routeSpenders = new Set([SWAP_ROUTER.toLowerCase(), V4_ADAPTER.toLowerCase(), RELAY_DEPOSITORY.toLowerCase()]);
 const erc20Actions = parseAbi([
   "function transfer(address to,uint256 amount) returns (bool)",
   "function approve(address spender,uint256 amount) returns (bool)",
@@ -102,6 +104,29 @@ export async function enforceExecutionPolicy(
       if (!routeSpenders.has(spender.toLowerCase()) || amount <= 0n) deny();
       const balance = await publicClient.readContract({ address: target, abi: BALANCE_ABI, functionName: "balanceOf", args: [wallet] });
       if (amount > balance / 5n) deny();
+      return;
+    }
+    return deny();
+  }
+
+  // Relay's RHC depository accepts only a source owner, the exact asset and
+  // amount, plus Relay's 32-byte route payload. The route itself is separately
+  // checked against the live quote before the frontend asks Shard A to sign.
+  if (target === RELAY_DEPOSITORY) {
+    const hex = data.toLowerCase();
+    if (hex.startsWith("0x49290c1c")) {
+      if (!/^0x49290c1c[\da-f]{128}$/.test(hex) ||
+          hex.slice(10, 74) !== wallet.slice(2).toLowerCase().padStart(64, "0") || value <= 0n) deny();
+      await reserveDailySpend(wallet, NATIVE_ASSET, value);
+      return;
+    }
+    if (hex.startsWith("0xe8017952")) {
+      if (!/^0xe8017952[\da-f]{256}$/.test(hex) || value !== 0n ||
+          hex.slice(10, 74) !== wallet.slice(2).toLowerCase().padStart(64, "0") ||
+          hex.slice(74, 138) !== USDG_ADDRESS.slice(2).toLowerCase().padStart(64, "0")) deny();
+      const amount = BigInt(`0x${hex.slice(138, 202)}`);
+      if (amount <= 0n) deny();
+      await reserveDailySpend(wallet, USDG_ADDRESS, amount);
       return;
     }
     return deny();

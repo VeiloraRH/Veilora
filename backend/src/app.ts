@@ -5,6 +5,7 @@ import { walletsRouter } from "./routes/wallets";
 import { relayerRouter } from "./routes/relayer";
 import { rulesRouter } from "./routes/rules";
 import { veilyRouter } from "./routes/veily";
+import { bridgeRouter } from "./routes/bridge";
 
 export const app = express();
 
@@ -69,3 +70,4 @@ app.use("/v1/wallets/:address/rules", rulesRouter);
 app.use("/v1/wallets", walletsRouter);
 app.use("/v1/relayer", relayerRouter);
 app.use("/v1/veily", veilyRouter);
+app.use("/v1/bridge", bridgeRouter);

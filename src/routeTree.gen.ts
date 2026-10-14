@@ -16,6 +16,7 @@ import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as ZhRouteImport } from './routes/zh'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
+import { Route as AppBridgeRouteImport } from './routes/app/bridge'
 import { Route as AppMarketRouteImport } from './routes/app/market'
 import { Route as AppRulesRouteImport } from './routes/app/rules'
 import { Route as AppSecurityRouteImport } from './routes/app/security'
@@ -56,6 +57,11 @@ const AppActivityRoute = AppActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppBridgeRoute = AppBridgeRouteImport.update({
+  id: '/bridge',
+  path: '/bridge',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppMarketRoute = AppMarketRouteImport.update({
   id: '/market',
   path: '/market',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
+  '/app/bridge': typeof AppBridgeRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
+  '/app/bridge': typeof AppBridgeRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
+  '/app/bridge': typeof AppBridgeRoute
   '/app/market': typeof AppMarketRoute
   '/app/rules': typeof AppRulesRoute
   '/app/security': typeof AppSecurityRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
+    | '/app/bridge'
     | '/app/market'
     | '/app/rules'
     | '/app/security'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
+    | '/app/bridge'
     | '/app/market'
     | '/app/rules'
     | '/app/security'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
+    | '/app/bridge'
     | '/app/market'
     | '/app/rules'
     | '/app/security'
@@ -216,6 +228,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppActivityRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/bridge': {
+      id: '/app/bridge'
+      path: '/bridge'
+      fullPath: '/app/bridge'
+      preLoaderRoute: typeof AppBridgeRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/market': {
       id: '/app/market'
       path: '/market'
@@ -249,6 +268,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
+  AppBridgeRoute: typeof AppBridgeRoute
   AppMarketRoute: typeof AppMarketRoute
   AppRulesRoute: typeof AppRulesRoute
   AppSecurityRoute: typeof AppSecurityRoute
@@ -258,6 +278,7 @@ interface AppRouteRouteChildren {
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppActivityRoute: AppActivityRoute,
+  AppBridgeRoute: AppBridgeRoute,
   AppMarketRoute: AppMarketRoute,
   AppRulesRoute: AppRulesRoute,
   AppSecurityRoute: AppSecurityRoute,
