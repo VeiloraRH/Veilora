@@ -3,7 +3,7 @@ import request from "supertest";
 import { getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { app } from "../src/app";
-import { generateShardKey, signUserOpHash, computeExecutionDigest } from "../src/crypto";
+import { generateShardKey, signUserOpHash, computeExecutionDigestV2 } from "../src/crypto";
 
 describe("Threshold Wallets & Co-signing API", () => {
   let walletAddress: string;
@@ -31,11 +31,12 @@ describe("Threshold Wallets & Co-signing API", () => {
     const requestId = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const timestamp = Math.floor(Date.now() / 1000);
     const shardASignature = await privateKeyToAccount(shardA.privateKey).signMessage({
-      message: `Veilora wallet registration\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:false\ntimestamp:${timestamp}\nrequest:${requestId}`,
+      message: `Veilora wallet registration\nversion:2\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:false\ntimestamp:${timestamp}\nrequest:${requestId}`,
     });
     const res = await request(app)
       .post("/v1/wallets")
       .send({
+        accountVersion: 2,
         shardAAddress,
         shardCAddress,
         requestId,
@@ -51,6 +52,7 @@ describe("Threshold Wallets & Co-signing API", () => {
     expect(res.body.generatedShards).toBeUndefined();
     expect(res.body.threshold).toBe(2);
     expect(res.body.chainId).toBe(4663);
+    expect(res.body.accountVersion).toBe(2);
     expect(res.body.apiKey).toBeString();
 
     walletAddress = res.body.address;
@@ -78,7 +80,8 @@ describe("Threshold Wallets & Co-signing API", () => {
     const nonce = 0;
     const deadline = Math.floor(Date.now() / 1000) + 240;
 
-    const digest = computeExecutionDigest(
+    const digest = computeExecutionDigestV2(
+      walletAddress as `0x${string}`,
       target as `0x${string}`,
       BigInt(value),
       data as `0x${string}`,
@@ -171,7 +174,7 @@ describe("Threshold Wallets & Co-signing API", () => {
   test("POST /v1/wallets enforces the shared per-IP hourly registration limit", async () => {
     const ipSuffix = Array.from(crypto.getRandomValues(new Uint8Array(2))).join(".");
     const ip = `198.51.${ipSuffix}`;
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       const response = await request(app)
         .post("/v1/wallets")
         .set("X-Forwarded-For", ip)
