@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, History, Laptop, Server, Fingerprint } from "lucide-react";
 import { Logo } from "@/components/ui";
+import { InstallAppButton } from "@/components/app/InstallAppButton";
 import { Orbits, SectionTitle, SiteFooter } from "@/components/site/chrome";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { t, type Locale } from "@/lib/locale";
@@ -50,6 +51,7 @@ export function Landing({ locale = "en" }: { locale?: Locale }) {
             <Link to="/roadmap" className="inline-flex items-center gap-2 rounded-xl border border-cream/25 px-6 py-3 text-sm text-cream hover:border-gold-400">
               {copy("View roadmap")}
             </Link>
+            <InstallAppButton className="border-cream/25 text-cream hover:border-gold-400" />
           </motion.div>
           <motion.div className="mt-16 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" variants={group} custom={reduceMotion}>
             {features.map(({ icon: Icon, title, text }) => (

@@ -7,6 +7,7 @@ import type { Hex } from 'viem';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DevicePassphraseDialog } from '@/components/app/DevicePassphraseDialog';
 import { PageTitle, shortAddress } from '@/components/wallet/WalletUI';
+import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { getQuorumStatus } from '@/lib/api';
 import { useWallet } from '@/lib/walletContext';
 import { saveSpendingPolicy, useSpendingPolicy } from '@/lib/spendingPolicy';
@@ -22,11 +23,11 @@ export function RecoveryCenter() {
  const [flags,setFlags]=useState(()=>({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')}));
  const syncFlags=()=>setFlags({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')});
  const [dialog,setDialog]=useState<null|'drill'|'recovery-freeze'|'device-freeze'|'view-key'|'import-key'>(null);
- const [notice,setNotice]=useState('');const [error,setError]=useState('');
+ const [completion,setCompletion]=useState<CompletionNotice|null>(null);const [error,setError]=useState('');
  const q=quorum.data; const freeze=q?.freeze; const shardC=q?.onChain?.shardC??wallet?.shardC??'';
- const after=(message:string)=>{setDialog(null);setNotice(message);syncFlags();void quorum.refetch();void refresh();};
+ const after=(message:string,title='Security update complete')=>{setDialog(null);setCompletion({title,description:message});syncFlags();void quorum.refetch();void refresh();};
 
- function backup(){setError('');try{downloadDeviceKeyBackup(walletAddress,wallet?.shardA??'');syncFlags();setNotice('Encrypted backup downloaded. Keep it somewhere other than this device; you will need its passphrase to restore it.');}catch(e){setError(e instanceof Error?e.message:'Could not create the backup.');}}
+ function backup(){setError('');try{downloadDeviceKeyBackup(walletAddress,wallet?.shardA??'');syncFlags();setCompletion({title:'Encrypted backup downloaded',description:'Keep it somewhere other than this device. You will need its passphrase to restore it.'});}catch(e){setError(e instanceof Error?e.message:'Could not create the backup.');}}
  async function liftWithDevice(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}setError('');try{await unfreezeWithKey(walletAddress,key as Hex);after('Freeze lifted. The co-signer is signing again.');}catch(e){setError(e instanceof Error?e.message:'Could not lift the freeze.');}}
 
  const checks:Check[]=[
@@ -45,7 +46,6 @@ export function RecoveryCenter() {
  ] as const;
 
  return <><PageTitle title="Quorum & recovery" description="Which keys guard your account, and how you get back in if a device is lost." action={<button className="wallet-icon-button" aria-label="Refresh status" onClick={()=>{void quorum.refetch();void refresh();syncFlags();}}><RefreshCw size={18} className={quorum.isFetching?'animate-spin':''}/></button>}/>
- {notice&&<div className="wallet-notice" role="status">{notice}<button onClick={()=>setNotice('')} aria-label="Dismiss notification">×</button></div>}
  {error&&<p role="alert" className="wallet-error mb-5">{error}</p>}
  {freeze?.frozen&&<div className="rc-frozen" role="status"><Snowflake size={20}/><div><strong>Account frozen until {when(freeze.frozenUntil!)}</strong><p>{freeze.initiatedBy==='recovery'?'Set with your recovery key. Only the recovery key can lift it, so a stolen device cannot undo it.':'The co-signer refuses every request until it ends or you lift it.'}{freeze.reason&&` Reason: ${freeze.reason}.`}</p></div>{freeze.initiatedBy==='recovery'?<button className="rule-button" onClick={()=>setDialog('recovery-freeze')}><Unlock size={14}/>Lift with recovery key</button>:<button className="rule-button" disabled={!deviceKeyUnlocked} onClick={()=>void liftWithDevice()}><Unlock size={14}/>Lift freeze</button>}</div>}
 
@@ -69,12 +69,12 @@ export function RecoveryCenter() {
  <div className="rc-bottom"><section className="wallet-panel rc-emergency"><span className="rules-aside-icon"><Lock size={18}/></span><h3>Emergency freeze</h3><p>Stops Veilora’s co-signer from signing anything for up to 7 days. It cannot move or lock your on-chain assets; it removes the second signature every transaction needs.</p><div className="rc-shard-actions"><button className="rule-button" disabled={!deviceKeyUnlocked||freeze?.initiatedBy==='recovery'} onClick={()=>setDialog('device-freeze')}><Laptop size={14}/>Freeze with device key</button><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Fingerprint size={14}/>Use recovery key</button></div></section>
   <section className="wallet-panel rc-audit"><div className="rc-audit-head"><h3>Co-signer activity</h3>{q?.coSigner.lastApprovedAt&&<small>Last approved {when(q.coSigner.lastApprovedAt)}</small>}</div>{auditTrail.length===0?<p className="rc-muted">No co-signing requests yet. Every request Shard B approves or refuses appears here.</p>:<ul>{auditTrail.slice(0,6).map(r=><li key={r.id}><span className="font-mono">{shortAddress(r.user_op_hash)}</span><small>{when(r.created_at)}</small><span className={`wallet-status ${r.status==='APPROVED'?'confirmed':'failed'}`}>{r.status==='APPROVED'?'Approved':r.status.replace('REJECTED_','Refused · ').toLowerCase()}</span></li>)}</ul>}</section></div>
 
- {dialog==='drill'&&<DrillDialog shardC={shardC} onClose={()=>setDialog(null)} onPassed={()=>{writeFlag(walletAddress,'drill');after('Recovery key verified. Put it back somewhere safe and offline.');}}/>}
+ {dialog==='drill'&&<DrillDialog shardC={shardC} onClose={()=>setDialog(null)} onPassed={()=>{writeFlag(walletAddress,'drill');after('Put your recovery key back somewhere safe and offline.','Recovery key verified');}}/>}
  {dialog==='recovery-freeze'&&<RecoveryFreezeDialog wallet={walletAddress} shardC={shardC} frozenByRecovery={freeze?.initiatedBy==='recovery'} onClose={()=>setDialog(null)} onDone={after}/>}
  {dialog==='device-freeze'&&<DeviceFreezeDialog wallet={walletAddress} onClose={()=>setDialog(null)} onDone={after}/>}
  {dialog==='view-key'&&<ViewKeyDialog wallet={walletAddress} onClose={()=>{setDialog(null);syncFlags();}}/>}
  {dialog==='import-key'&&<ImportKeyDialog onClose={()=>setDialog(null)} onDone={after}/>}
- </>;
+ <CompletionDialog notice={completion} onClose={()=>setCompletion(null)}/></>;
 }
 
 function SpendingLimits() {
@@ -84,7 +84,7 @@ function SpendingLimits() {
  const [perTx, setPerTx] = useState(20);
  const [daily, setDaily] = useState(20);
  const [busy, setBusy] = useState(false);
- const [message, setMessage] = useState('');
+ const [completion, setCompletion] = useState<CompletionNotice|null>(null);
  const [error, setError] = useState('');
  useEffect(() => {
   if (policy.data) { setPerTx(policy.data.perTransactionPercent); setDaily(policy.data.dailyTotalPercent); }
@@ -92,11 +92,11 @@ function SpendingLimits() {
  async function save() {
   const key = getStoredDeviceKey();
   if (!key) { setError('Unlock your device key before changing spending limits.'); return; }
-  setBusy(true); setError(''); setMessage('');
+  setBusy(true); setError(''); setCompletion(null);
   try {
    const updated = await saveSpendingPolicy(walletAddress, key as Hex, perTx, daily);
    cache.setQueryData(['spending-policy', walletAddress], updated);
-   setMessage('Spending limits updated.');
+   setCompletion({title:'Spending limits updated',description:`The co-signer will now use your ${perTx}% per-transaction and ${daily}% daily limits.`});
   } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update spending limits.'); }
   finally { setBusy(false); }
  }
@@ -110,9 +110,9 @@ function SpendingLimits() {
    </div>
    {!deviceKeyUnlocked&&<p className="builder-hint mt-4">Unlock your device key to view and change these settings.</p>}
    {policy.isError&&<p role="alert" className="wallet-error mt-4">{policy.error instanceof Error?policy.error.message:'Could not load spending limits.'}</p>}
-   {error&&<p role="alert" className="wallet-error mt-4">{error}</p>}{message&&<p role="status" className="wallet-notice mt-4">{message}</p>}
+   {error&&<p role="alert" className="wallet-error mt-4">{error}</p>}
    <button className="wallet-primary-button mt-5" disabled={!deviceKeyUnlocked||busy||!policy.data|| (perTx===policy.data.perTransactionPercent&&daily===policy.data.dailyTotalPercent)} onClick={()=>void save()}>{busy?'Saving limits…':'Save spending limits'}</button>
-  </div>
+  </div><CompletionDialog notice={completion} onClose={()=>setCompletion(null)}/>
  </section>;
 }
 

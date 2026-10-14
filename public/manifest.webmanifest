@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Veilora Wallet",
+  "short_name": "Veilora",
+  "description": "A threshold self-custody wallet for Robinhood Chain.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#f7f8fc",
+  "icons": [
+    { "src": "/brand/veilora-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/veilora-mark.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -9,28 +9,29 @@ import { useWallet } from '@/lib/walletContext';
 import { WALLET_TOKENS, ROBINHOOD_TOKEN_REGISTRY as TOKENS } from '@/lib/tokens';
 import { EXPLORER, performSwap, planSwapCalls, quoteSwap, tokenBalance, type PlannedCall, type SwapQuote } from '@/lib/walletChain';
 import { SignPreview } from '@/components/wallet/TxExplanation';
+import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { createRule, describeAction, describeLimits, describeTrigger, hourLabel, useWalletRules, rawText, resolveExecution, setRuleStatus, WEEKDAY_NAMES, type RuleExecution, type RuleSpec, type RuleTrigger, type WalletRule } from '@/lib/rulesApi';
 export const Route=createFileRoute('/app/rules')({component:RulesScreen});
 
 function RulesScreen() {
- const rules=useWalletRules(); const [builder,setBuilder]=useState<RuleSpec|null>(null); const [review,setReview]=useState<RuleExecution|null>(null); const [notice,setNotice]=useState('');
+ const rules=useWalletRules(); const [builder,setBuilder]=useState<RuleSpec|null>(null); const [review,setReview]=useState<RuleExecution|null>(null); const [completion,setCompletion]=useState<CompletionNotice|null>(null);
  const pending=(rules.data?.executions??[]).filter(e=>e.status==='pending'); const history=(rules.data?.executions??[]).filter(e=>e.status!=='pending').slice(0,12);
  const live=(rules.data?.rules??[]).filter(r=>r.status==='active'||r.status==='paused'); const ended=(rules.data?.rules??[]).filter(r=>r.status==='revoked'||r.status==='expired');
  return <><PageTitle title="Wallet Rules" description="Set the conditions. Veilora prepares the move. You approve it." action={<button className="wallet-soft-button" onClick={()=>setBuilder(blankSpec())}><Plus size={15}/>New rule</button>}/>
- {notice&&<div className="wallet-notice" role="status">{notice}<button onClick={()=>setNotice('')} aria-label="Dismiss notification">×</button></div>}
  {rules.isError&&<p role="alert" className="wallet-error mb-5">{rules.error instanceof Error?rules.error.message:'Rules are unavailable right now.'}</p>}
  <div className="rules-layout"><div className="rules-main">
   <section><div className="wallet-section-heading"><h2>Waiting for you {pending.length>0&&<span className="rules-count">{pending.length}</span>}</h2></div>
    {pending.length?<div className="rules-stack">{pending.map(e=><ApprovalCard key={e.id} run={e} onReview={()=>setReview(e)}/>)}</div>:<div className="wallet-panel rules-quiet"><BellRing size={18}/><p>{rules.isPending?'Checking your rules…':'Nothing to approve. When a rule triggers, its prepared swap waits here for your yes.'}</p></div>}
   </section>
   <section><div className="wallet-section-heading"><h2>Your rules</h2></div>
-   {rules.isPending?<div className="wallet-panel wallet-empty"><Loader2 className="animate-spin"/><h3>Loading rules</h3></div>:live.length?<div className="rules-stack">{live.map(r=><RuleCard key={r.id} rule={r} onChanged={setNotice}/>)}</div>:<EmptyRules onStart={spec=>setBuilder(spec)}/>}
+   {rules.isPending?<div className="wallet-panel wallet-empty"><Loader2 className="animate-spin"/><h3>Loading rules</h3></div>:live.length?<div className="rules-stack">{live.map(r=><RuleCard key={r.id} rule={r} onChanged={message=>setCompletion({title:'Wallet Rule updated',description:message})}/>)}</div>:<EmptyRules onStart={spec=>setBuilder(spec)}/>}
   </section>
   {history.length>0&&<section><div className="wallet-section-heading"><h2>Recent runs</h2></div><div className="wallet-panel rules-history">{history.map(e=><HistoryRow key={e.id} run={e}/>)}</div></section>}
-  {ended.length>0&&<section><div className="wallet-section-heading"><h2>Ended</h2></div><div className="rules-stack">{ended.map(r=><RuleCard key={r.id} rule={r} onChanged={setNotice}/>)}</div></section>}
+  {ended.length>0&&<section><div className="wallet-section-heading"><h2>Ended</h2></div><div className="rules-stack">{ended.map(r=><RuleCard key={r.id} rule={r} onChanged={message=>setCompletion({title:'Wallet Rule updated',description:message})}/>)}</div></section>}
  </div><RulesAside/></div>
- {builder&&<RuleBuilder initial={builder} onClose={()=>setBuilder(null)} onCreated={name=>{setBuilder(null);setNotice(`“${name}” is live. You'll approve every run.`);}}/>}
- {review&&<ApprovalReview run={review} onClose={()=>setReview(null)} onDone={message=>{setReview(null);setNotice(message);}}/>}
+ {builder&&<RuleBuilder initial={builder} onClose={()=>setBuilder(null)} onCreated={name=>{setBuilder(null);setCompletion({title:'Wallet Rule created',description:`“${name}” is live. You’ll approve every run.`});}}/>}
+ {review&&<ApprovalReview run={review} onClose={()=>setReview(null)} onDone={message=>{setReview(null);setCompletion({title:message.startsWith('Declined')?'Run declined':'Rule run complete',description:message});}}/>}
+ <CompletionDialog notice={completion} onClose={()=>setCompletion(null)}/>
  </>;
 }
 

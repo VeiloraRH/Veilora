@@ -13,6 +13,7 @@ import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI
 import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
+import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
 
@@ -83,6 +84,7 @@ function BridgeScreen() {
   const [freshWallet, setFreshWallet] = useState<{ address: Address; privateKey: Hex } | null>(null);
   const [freshWalletError, setFreshWalletError] = useState('');
   const [copiedPrivateKey, setCopiedPrivateKey] = useState(false);
+  const [completion, setCompletion] = useState<CompletionNotice | null>(null);
 
   const source = SOURCES.find((asset) => asset.symbol === sourceSymbol)!;
   const destinationChain = DESTINATIONS.find((chain) => chain.chainId === destinationChainId)!;
@@ -254,9 +256,11 @@ function BridgeScreen() {
       await refreshRecord(trackingRecord).catch(() => undefined);
       void cache.invalidateQueries({ queryKey: ['holdings'] });
       void cache.invalidateQueries({ queryKey: ['transactions'] });
-      setStep(4);
+      setStep(1);
+      setRecipient('');
       setAmount('');
       setQuote(null);
+      setCompletion({ title: 'Bridge submitted', description: `Your source transaction is confirmed. Relay is processing delivery to ${destinationChain.name}.`, ...(sourceHash ? { href: `https://robinhoodchain.blockscout.com/tx/${sourceHash}`, linkLabel: 'View source transaction' } : {}) });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Bridge submission failed.';
       const policyDenied = /policy denied|daily.{0,30}limit|per.transaction.{0,30}limit|spending limit/i.test(message);
@@ -276,14 +280,13 @@ function BridgeScreen() {
   const formattedBalance = balance == null ? '—' : Number(formatUnits(balance, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
   const formattedPolicyCap = policyCap == null ? '—' : Number(formatUnits(policyCap, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
   const fees = quote ? feeSummary(quote.fees) : [];
-  const lastDeposit = records[0];
 
   return <>
     <PageTitle title="Bridge" description="Move ETH or USDG from Robinhood Chain to Base, Polygon, Ethereum, or BNB Chain." />
     <div className="wallet-bridge-layout">
       <section className="wallet-panel wallet-bridge-card">
         <div className="wallet-bridge-steps" aria-label="Bridge steps">
-          {[1, 2, 3].map((item) => <span key={item} className={step >= item && step < 4 ? 'active' : step === 4 && item === 3 ? 'active' : ''}>{step > item || step === 4 ? <Check size={13} /> : item}</span>)}
+          {[1, 2, 3].map((item) => <span key={item} className={step >= item ? 'active' : ''}>{step > item ? <Check size={13} /> : item}</span>)}
         </div>
         {step === 1 && <>
           <h2>Choose what to bridge</h2>
@@ -328,7 +331,6 @@ function BridgeScreen() {
             <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : 'Confirm bridge'}</button>}
           <p className="wallet-bridge-note"><ShieldCheck size={15} /> Source transaction is authorized by your Veilora threshold account. The destination address is outside Veilora unless it is itself a deployed Veilora account.</p>
         </>}
-        {step === 4 && <div className="wallet-bridge-success"><span><Check size={23} /></span><h2>Bridge submitted</h2><p>Your source transaction is confirmed. Relay is processing delivery to {destinationChain.name}.</p>{lastDeposit?.sourceHash && <a href={`https://robinhoodchain.blockscout.com/tx/${lastDeposit.sourceHash}`} target="_blank" rel="noreferrer">View source transaction <ExternalLink size={15} /></a>}<button className="wallet-primary-button mt-5" onClick={() => { setStep(1); setRecipient(''); }}>Start another bridge</button></div>}
       </section>
       <aside className="wallet-bridge-aside"><span><ArrowDown size={21} /></span><h3>Cross-chain, with a clear destination.</h3><p>Relay routes ETH or USDG from Robinhood Chain to Base, Polygon, Ethereum, or BNB Chain. BNB Chain destinations include ETH, BNB, USDC, and USDT.</p><small><Clock3 size={15} /> Network delivery can take several minutes. You can track the Relay status below.</small><small><ShieldCheck size={15} /> You review the destination address and minimum receive amount before signing.</small></aside>
     </div>
@@ -360,5 +362,6 @@ function BridgeScreen() {
         </>}
       </DialogContent>
     </Dialog>
+    <CompletionDialog notice={completion} onClose={() => setCompletion(null)} />
   </>;
 }
