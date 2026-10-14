@@ -24,6 +24,10 @@ export const USDG_ADDRESS = getAddress(
   process.env.USDG_TOKEN_ADDRESS || "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168"
 );
 
+export const ESCROW_FACTORY_ADDRESS = process.env.VEILORA_ESCROW_FACTORY_ADDRESS
+  ? getAddress(process.env.VEILORA_ESCROW_FACTORY_ADDRESS)
+  : undefined;
+
 export const RELAY_LINK_API_KEY = process.env.RELAY_LINK_API_KEY;
 
 export const publicClient = createPublicClient({

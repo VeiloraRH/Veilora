@@ -10,8 +10,9 @@
     "check": "tsc --noEmit",
     "test": "cd backend && bun test --timeout 30000",
     "backend:dev": "cd backend && bun run dev",
-    "compile:contracts": "bunx solc --bin --abi contracts/src/VeiloraAccount.sol contracts/src/VeiloraFactory.sol -o contracts/out",
+    "compile:contracts": "bun run contracts/script/compile.ts",
     "deploy:contracts": "bun run contracts/script/deploy.ts",
+    "deploy:escrow": "bun run contracts/script/deploy-escrow.ts",
     "push:origin": "git push origin main",
     "push:public": "python3 scripts/sync-public.py",
     "push:all": "bun run push:origin && bun run push:public"
@@ -48,6 +49,7 @@
     "@types/react-dom": "^19.0.3",
     "@types/three": "0.169.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "solc": "0.8.24",
     "tailwindcss": "^4.0.6",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"

@@ -8,7 +8,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { publicClient } from "./config";
+import { ESCROW_FACTORY_ADDRESS, publicClient } from "./config";
 import { query } from "./db/index";
 import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
 
@@ -34,6 +34,8 @@ const v4Abi = parseAbi([
 ]);
 const WETH9_ABI = parseAbi(["function WETH9() view returns (address)"]);
 const BALANCE_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
+const escrowActionAbi = parseAbi(["function approveOutcome(bytes32 digest)"]);
+const escrowFactoryAbi = parseAbi(["function isEscrow(address escrow) view returns (bool)"]);
 
 /** Refuse to co-sign. A specific reason tells the user what to change; structural mismatches keep the generic message. */
 function deny(reason?: string): never {
@@ -133,6 +135,23 @@ export async function enforceExecutionPolicy(
       return;
     }
     return deny();
+  }
+
+  // Smart-account parties authorize a specific EIP-712 outcome directly on a
+  // factory-created escrow. No other call to an escrow is co-signed here.
+  if (ESCROW_FACTORY_ADDRESS && value === 0n) {
+    let decoded: ReturnType<typeof decodeFunctionData> | undefined;
+    try { decoded = decodeFunctionData({ abi: escrowActionAbi, data }); } catch {}
+    if (decoded?.functionName === "approveOutcome") {
+      const verified = await publicClient.readContract({
+        address: ESCROW_FACTORY_ADDRESS,
+        abi: escrowFactoryAbi,
+        functionName: "isEscrow",
+        args: [target],
+      });
+      if (!verified) deny("outcome approvals are only allowed for verified Veilora escrows");
+      return;
+    }
   }
 
   // Relay's RHC depository accepts only a source owner, the exact asset and
