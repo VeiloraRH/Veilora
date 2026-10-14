@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Bot, Check, Clock3, KeyRound, LoaderCircle, MessageSquare, Send, Settings2, ShieldCheck, Sparkles, X } from "lucide-react";
+import { ArrowUpRight, Bot, Check, Clock3, History, KeyRound, LoaderCircle, MessageSquare, Plus, Send, Settings2, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { getAddress, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { motion, useReducedMotion } from "framer-motion";
@@ -12,9 +12,26 @@ import { useWallet } from "@/lib/walletContext";
 import { useHoldings } from "@/lib/walletQueries";
 
 const KEY_PREFIX = "veilora:veily:credential:";
+const HISTORY_PREFIX = "veilora:veily:history:";
+const MAX_CONVERSATIONS = 40;
 const DEFAULT_MODE: VeilyMode = "hosted";
 const models: Record<VeilyProvider, string> = { groq: "qwen/qwen3.8-27b", openai: "gpt-4o-mini", anthropic: "claude-3-5-haiku-latest" };
 const initialMessages: VeilyMessage[] = [{ role: "assistant", content: "Hi, I’m Veily. I can help you understand your wallet and find your way around Veilora. I can’t sign or execute transactions for you." }];
+type VeilyConversation = { id: string; title: string; updatedAt: number; permissionId: string | null; messages: VeilyMessage[] };
+
+function readConversations(address: string): VeilyConversation[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(`${HISTORY_PREFIX}${address.toLowerCase()}`) || "[]");
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is VeilyConversation => item && typeof item.id === "string" && typeof item.title === "string" &&
+      typeof item.updatedAt === "number" && (item.permissionId === null || typeof item.permissionId === "string") &&
+      Array.isArray(item.messages) && item.messages.every((message: unknown) => {
+        const entry = message as VeilyMessage;
+        return entry && (entry.role === "user" || entry.role === "assistant") && typeof entry.content === "string" && entry.content.length <= 12000;
+      })).slice(0, MAX_CONVERSATIONS);
+  } catch { return []; }
+}
+
 const markdownComponents = {
   p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2 last:mb-0">{children}</p>,
   h1: ({ children }: { children?: React.ReactNode }) => <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{children}</h1>,
@@ -39,6 +56,10 @@ export function VeilyAssistant() {
   const reduceMotion = Boolean(useReducedMotion());
   const holdings = useHoldings();
   const storageKey = `${KEY_PREFIX}${walletAddress.toLowerCase()}`;
+  const [historyAddress, setHistoryAddress] = useState(walletAddress.toLowerCase());
+  const [conversations, setConversations] = useState<VeilyConversation[]>(() => readConversations(walletAddress));
+  const [activeConversationId, setActiveConversationId] = useState(() => readConversations(walletAddress)[0]?.id ?? "");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const readSavedCredential = () => {
     try { return JSON.parse(localStorage.getItem(storageKey) || "null") as { provider: VeilyProvider; model: string; encryptedKey: string } | null; }
     catch { return null; }
@@ -64,7 +85,22 @@ export function VeilyAssistant() {
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [permissionNotice, setPermissionNotice] = useState("");
   const sessionPermission = permissions.find(p => p.id === activePermissionId && p.status === "active" && Date.parse(p.expires_at) > Date.now()) ?? null;
+  const activeConversation = conversations.find(conversation => conversation.id === activeConversationId) ?? null;
+  const conversationCanContinue = (activeConversation?.permissionId ?? null) === (sessionPermission?.id ?? null);
   useEffect(() => { setSaved(readSavedCredential()); setApiKey(""); }, [storageKey]);
+  useEffect(() => {
+    const address = walletAddress.toLowerCase();
+    const next = readConversations(address);
+    setHistoryAddress(address);
+    setConversations(next);
+    setActiveConversationId(next[0]?.id ?? "");
+    setMessages(next[0]?.messages ?? initialMessages);
+    setHistoryOpen(false);
+  }, [walletAddress]);
+  useEffect(() => {
+    try { localStorage.setItem(`${HISTORY_PREFIX}${historyAddress}`, JSON.stringify(conversations.slice(0, MAX_CONVERSATIONS))); }
+    catch { /* Conversation history is a convenience; chat still works when storage is unavailable. */ }
+  }, [conversations, historyAddress]);
   useEffect(() => {
     setPermissions([]);
     setActivePermissionId("");
@@ -105,6 +141,41 @@ export function VeilyAssistant() {
     ).join("\n");
     return `Live balances on Robinhood Chain (raw token amounts, not USD values):\n${assets || "Balances are loading or unavailable."}`;
   }, [holdings.data]);
+
+  function startConversation(permissionId: string | null = sessionPermission?.id ?? null) {
+    const conversation: VeilyConversation = { id: crypto.randomUUID(), title: "New conversation", updatedAt: Date.now(), permissionId, messages: initialMessages };
+    setConversations(current => [conversation, ...current].slice(0, MAX_CONVERSATIONS));
+    setActiveConversationId(conversation.id);
+    setMessages(initialMessages);
+    setHistoryOpen(false);
+    setError("");
+  }
+
+  function selectConversation(conversation: VeilyConversation) {
+    setActiveConversationId(conversation.id);
+    setMessages(conversation.messages);
+    setHistoryOpen(false);
+    setError("");
+  }
+
+  function updateConversation(conversationId: string, permissionId: string | null, nextMessages: VeilyMessage[]) {
+    setConversations(current => {
+      const existing = current.find(conversation => conversation.id === conversationId);
+      const firstUserMessage = nextMessages.find(message => message.role === "user")?.content.trim();
+      const title = existing?.title !== "New conversation" ? existing?.title : firstUserMessage?.slice(0, 48) || "New conversation";
+      const updated: VeilyConversation = { id: conversationId, title: title ?? "New conversation", updatedAt: Date.now(), permissionId, messages: nextMessages.slice(-24) };
+      return [updated, ...current.filter(conversation => conversation.id !== conversationId)].slice(0, MAX_CONVERSATIONS);
+    });
+  }
+
+  function deleteConversation(conversationId: string) {
+    const remaining = conversations.filter(conversation => conversation.id !== conversationId);
+    setConversations(remaining);
+    if (activeConversationId === conversationId) {
+      setActiveConversationId(remaining[0]?.id ?? "");
+      setMessages(remaining[0]?.messages ?? initialMessages);
+    }
+  }
 
   async function saveCredential() {
     setCredentialNotice("");
@@ -154,7 +225,7 @@ export function VeilyAssistant() {
       setPermissions(current => [result.permission, ...current]);
       setActivePermissionId(result.permission.id);
       setPermissionPurpose("");
-      setMessages(initialMessages);
+      startConversation(result.permission.id);
       setPermissionNotice("Permission granted. Veily can use only the selected tools until it expires or you revoke it.");
     } catch (e) { setPermissionNotice(e instanceof Error ? e.message : "Could not grant Veily permission."); }
     finally { setPermissionBusy(false); }
@@ -173,7 +244,7 @@ export function VeilyAssistant() {
       setPermissions(current => current.map(p => p.id === permissionId ? result.permission : p));
       if (activePermissionId === permissionId) {
         setActivePermissionId("");
-        setMessages(initialMessages);
+        startConversation(null);
       }
       setPermissionNotice("Permission revoked. New Veily requests can no longer use it.");
     } catch (e) { setPermissionNotice(e instanceof Error ? e.message : "Could not revoke this permission."); }
@@ -185,13 +256,23 @@ export function VeilyAssistant() {
     const text = draft.trim();
     if (!text || busy) return;
     const permission = permissions.find(p => p.id === activePermissionId && p.status === "active" && Date.parse(p.expires_at) > Date.now()) ?? null;
-    const conversation = activePermissionId && !permission ? initialMessages : messages;
-    if (activePermissionId && !permission) { setActivePermissionId(""); setMessages(initialMessages); }
+    if (activePermissionId && !permission) setActivePermissionId("");
     const shardA = getStoredDeviceKey();
     if (!shardA || !wallet || !wallet.shardA) { setError("Unlock the wallet's Shard A key before using Veily."); return; }
     if (mode === "byok" && !apiKey) { setSettingsOpen(true); setError("Unlock or enter your provider key in Veily settings first."); return; }
+    const permissionKey = permission?.id ?? null;
+    const canContinue = activeConversation && activeConversation.permissionId === permissionKey;
+    const conversationId = canContinue ? activeConversation.id : crypto.randomUUID();
+    const conversation = canContinue ? messages : initialMessages;
+    if (!canContinue) {
+      const fresh: VeilyConversation = { id: conversationId, title: "New conversation", updatedAt: Date.now(), permissionId: permissionKey, messages: initialMessages };
+      setConversations(current => [fresh, ...current].slice(0, MAX_CONVERSATIONS));
+      setActiveConversationId(conversationId);
+    }
     const userMessage: VeilyMessage = { role: "user", content: text };
     const next: VeilyMessage[] = [...conversation, userMessage].slice(-24);
+    setMessages(next);
+    updateConversation(conversationId, permissionKey, next);
     const payload: Omit<Parameters<typeof askVeily>[0], "shardASignature"> = {
       walletAddress: getAddress(walletAddress), requestId: crypto.randomUUID(), timestamp: Math.floor(Date.now() / 1000),
       ...(permission ? { permissionId: permission.id } : {}),
@@ -203,16 +284,19 @@ export function VeilyAssistant() {
     const hash = Array.from(digest, b => b.toString(16).padStart(2, "0")).join("");
     const signedMessage = `Veily request\nwallet:${getAddress(walletAddress)}\ntimestamp:${payload.timestamp}\nrequest:${payload.requestId}\npayload:${hash}`;
     const shardASignature = await privateKeyToAccount(shardA as `0x${string}`).signMessage({ message: signedMessage });
-    setMessages(next); setDraft(""); setBusy(true); setError("");
+    setDraft(""); setBusy(true); setError("");
     try {
       const result = await askVeily({ ...payload, shardASignature });
-      setMessages([...next, { role: "assistant", content: result.answer || "I couldn't form a response. Please try again.", actions: result.actions ?? [] }]);
+      const completed = [...next, { role: "assistant" as const, content: result.answer || "I couldn't form a response. Please try again.", actions: result.actions ?? [] }];
+      setMessages(completed);
+      updateConversation(conversationId, permissionKey, completed);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Veily could not respond.";
       if (/permission.*(?:revoked|expired)/i.test(message)) {
         setActivePermissionId("");
         setMessages(initialMessages);
-      } else setMessages(messages);
+        startConversation(null);
+      } else { setMessages(messages); updateConversation(conversationId, permissionKey, messages); }
       setDraft(text);
       setError(message);
     } finally { setBusy(false); }
@@ -227,12 +311,14 @@ export function VeilyAssistant() {
             <button className={`rounded-lg px-3 py-1.5 text-xs ${mode === "hosted" ? "bg-white shadow dark:bg-ink-700" : "text-slate-500 dark:text-mist"}`} onClick={() => { setMode("hosted"); setError(""); }}>Testing</button>
             <button className={`rounded-lg px-3 py-1.5 text-xs ${mode === "byok" ? "bg-white shadow dark:bg-ink-700" : "text-slate-500 dark:text-mist"}`} onClick={() => { setMode("byok"); setError(""); }}>BYOK</button>
           </div>
+          <button className="wallet-icon-button !h-9 !w-9" aria-label="Conversation history" aria-expanded={historyOpen} onClick={() => setHistoryOpen(value => !value)}><History size={17}/></button>
+          <button className="wallet-icon-button !h-9 !w-9" aria-label="Start new conversation" onClick={() => startConversation()}><Plus size={18}/></button>
           <button className="wallet-icon-button !h-9 !w-9" aria-label="Veily settings" onClick={() => setSettingsOpen(v => !v)}><Settings2 size={17}/></button>
           <button className="wallet-icon-button !h-9 !w-9" aria-label="Close Veily" onClick={() => setPanelOpen(false)}><X size={17}/></button>
         </div>
         {settingsOpen && <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-5 dark:border-ink-700 dark:bg-ink-850/60">
           <div className="flex items-center gap-2 text-sm font-medium"><KeyRound size={16}/>Bring your own provider key</div>
-          <p className="text-xs leading-relaxed text-slate-600 dark:text-mist">Your key is encrypted in this browser using your device passphrase. When you chat, the decrypted key and prompt travel through Veilora’s backend to the selected provider over HTTPS. Veilora does not save the key or conversation on its server.</p>
+          <p className="text-xs leading-relaxed text-slate-600 dark:text-mist">Your key is encrypted in this browser using your device passphrase. When you chat, the decrypted key and prompt travel through Veilora’s backend to the selected provider over HTTPS. Veilora does not save the key or conversation on its server. Conversation history is saved in this browser’s local storage for this wallet and is removed when you disconnect it.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <select aria-label="AI provider" className="wallet-select w-full" value={provider} onChange={e => { const p = e.target.value as VeilyProvider; setProvider(p); setModel(models[p]); }}><option value="groq">Groq</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option></select>
             <input className="wallet-select w-full" aria-label="AI model" value={model} onChange={e => setModel(e.target.value)} placeholder="Model ID"/>
@@ -269,6 +355,15 @@ export function VeilyAssistant() {
         <div className="border-b border-slate-200 px-4 py-2 text-xs text-slate-500 dark:border-ink-700 dark:text-mist">
           {sessionPermission?`Temporary access: ${sessionPermission.scopes.join(", ")} · expires ${new Date(sessionPermission.expires_at).toLocaleTimeString()}`:"No wallet permissions active. Asset search is available; grant a temporary permission in settings for wallet tools."}
         </div>
+        {historyOpen&&<div className="max-h-56 shrink-0 overflow-y-auto border-b border-slate-200 bg-slate-50 p-3 dark:border-ink-700 dark:bg-ink-850/60">
+          <div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-slate-700 dark:text-cream">Conversation history</p><button className="wallet-soft-button !px-2 !py-1 text-[11px]" onClick={()=>startConversation()}>New chat</button></div>
+          <p className="mb-2 text-[11px] leading-relaxed text-slate-500 dark:text-mist">Saved only in this browser for this wallet. Disconnecting the wallet removes this history.</p>
+          {conversations.length===0?<p className="py-3 text-center text-xs text-slate-500 dark:text-mist">No saved conversations yet.</p>:<div className="space-y-1">{conversations.map(conversation=><div key={conversation.id} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${activeConversationId===conversation.id?"bg-[#f0ac5e]/15":"hover:bg-slate-100 dark:hover:bg-ink-800"}`}>
+            <button className="min-w-0 flex-1 text-left" onClick={()=>selectConversation(conversation)}><span className="block truncate text-xs font-medium text-slate-800 dark:text-cream">{conversation.title}</span><span className="block text-[10px] text-slate-500 dark:text-mist">{new Date(conversation.updatedAt).toLocaleString()}{conversation.permissionId?" · temporary permission":" · no wallet access"}</span></button>
+            <button className="wallet-icon-button !h-7 !w-7 text-slate-500 hover:text-rose-600" aria-label={`Delete ${conversation.title}`} onClick={()=>deleteConversation(conversation.id)}><Trash2 size={13}/></button>
+          </div>)}</div>}
+        </div>}
+        {activeConversation&&!conversationCanContinue&&<p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This is history from a different or expired permission. Sending a message starts a fresh conversation and won’t resend these messages.</p>}
         <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
           {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${message.role === "assistant" ? "bg-[#f0ac5e]/15 text-[#bb762e]" : "bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role === "assistant"?<Bot size={16}/>:<MessageSquare size={15}/>}</span><div className={`max-w-[84%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${message.role === "assistant" ? "bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim" : "whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role === "assistant"?<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{message.content}</ReactMarkdown>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>{if(action.screen==="dashboard")void navigate({to:"/app"});else if(action.screen==="market")void navigate({to:"/app/market",search:{q:""}});else if(action.screen==="swap")void navigate({to:"/app/swap",search:{buy:action.token??"NVDA"}});else if(action.screen==="history")void navigate({to:"/app/activity"});else void navigate({to:"/app/rules"});}}>Open {action.screen === "history" ? "history" : action.screen}{action.token?` · ${action.token}`:""}<ArrowUpRight size={13}/></button>)}</div></div>)}
           {busy&&<div className="flex items-center gap-2 text-sm text-slate-500 dark:text-mist"><LoaderCircle className="animate-spin" size={16}/>Veily is thinking…</div>}
