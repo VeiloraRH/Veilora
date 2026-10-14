@@ -160,6 +160,7 @@ export interface WalletMetadata {
   isFrozen: boolean;
   frozenUntil: string | null;
   freezeReason: string | null;
+  freezeInitiatedBy?: "device" | "recovery" | null;
   isDeployed: boolean;
   nonce: string;
   createdAt?: string;
@@ -190,6 +191,23 @@ export async function createWallet(params: {
     method: "POST",
     body: JSON.stringify(params),
   });
+}
+
+export interface QuorumStatus {
+  address: string;
+  threshold: number;
+  registered: { shardA: string; shardB: string; shardC: string };
+  deployed: boolean;
+  chainError: string | null;
+  onChain: { shardA: string; shardB: string; shardC: string; nonce: string } | null;
+  matches: { shardA: boolean; shardB: boolean; shardC: boolean } | null;
+  freeze: { frozen: boolean; frozenUntil: string | null; reason: string | null; initiatedBy: "device" | "recovery" | null };
+  coSigner: { signing: boolean; approvals30d: number; rejections30d: number; lastApprovedAt: string | null; lastRejectedAt: string | null };
+  recoveryPaths: { deviceAndCoSigner: "available"; recoveryKeyFreeze: "available"; recoveryKeyRotation: "available" | "planned" };
+}
+
+export async function getQuorumStatus(address: string) {
+  return request<QuorumStatus>(`/v1/wallets/${encodeURIComponent(address)}/quorum`);
 }
 
 export async function deleteWalletData(walletAddress: string, shardASignature: string) {

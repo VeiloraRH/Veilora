@@ -26,6 +26,14 @@ import { enforceExecutionPolicy } from "../txPolicy";
 
 export const walletsRouter = Router();
 
+/** Which user-held shard signed a security action, if either. */
+function securitySigner(signer: string, row: { shard_a_address: string; shard_c_address: string }): "device" | "recovery" | null {
+  const s = signer.toLowerCase();
+  if (s === String(row.shard_a_address).toLowerCase()) return "device";
+  if (s === String(row.shard_c_address).toLowerCase()) return "recovery";
+  return null;
+}
+
 const ADDRESS_LOOKUP_ATTEMPTS = 3;
 const ADDRESS_LOOKUP_DELAYS_MS = [250, 750];
 const DAILY_SPONSORED_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
@@ -338,6 +346,7 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
       isFrozen: freezeState.frozen,
       frozenUntil: freezeState.frozenUntil,
       freezeReason: freezeState.reason,
+      freezeInitiatedBy: freezeState.initiatedBy,
       isDeployed,
       nonce: onChainNonce,
       createdAt: wallet.created_at,
@@ -488,16 +497,21 @@ walletsRouter.post("/:address/freeze", async (req: Request, res: Response): Prom
       res.status(400).json({ error: "A fresh, valid Shard A freeze authorization is required" });
       return;
     }
-    const rows = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [address]);
+    const rows = await query("SELECT shard_a_address, shard_c_address FROM wallets WHERE address = $1", [address]);
     if (!rows.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
     const message = `Veilora account security action\nwallet:${getAddress(address)}\naction:freeze\nhours:${hours}\nreason:${reason}\ntimestamp:${timestamp}`;
-    const signer = await recoverMessageAddress({ message, signature });
-    if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
-      res.status(403).json({ error: "Freeze authorization does not match this wallet's Shard A" });
+    const initiatedBy = securitySigner(await recoverMessageAddress({ message, signature }), rows.rows[0]);
+    if (!initiatedBy) {
+      res.status(403).json({ error: "Freeze authorization must come from this wallet's device key (Shard A) or recovery key (Shard C)" });
+      return;
+    }
+    const current = await getFreezeState(address);
+    if (current.initiatedBy === "recovery" && initiatedBy !== "recovery") {
+      res.status(409).json({ error: "A recovery-key freeze is active. Only the recovery key can change it." });
       return;
     }
 
-    const state = await freezeWallet(address, hours, reason);
+    const state = await freezeWallet(address, hours, reason, initiatedBy);
     res.json(state);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to freeze wallet" });
@@ -518,12 +532,17 @@ walletsRouter.post("/:address/unfreeze", async (req: Request, res: Response): Pr
       res.status(400).json({ error: "A fresh, valid Shard A unfreeze authorization is required" });
       return;
     }
-    const rows = await query("SELECT shard_a_address FROM wallets WHERE address = $1", [address]);
+    const rows = await query("SELECT shard_a_address, shard_c_address FROM wallets WHERE address = $1", [address]);
     if (!rows.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
     const message = `Veilora account security action\nwallet:${getAddress(address)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${timestamp}`;
-    const signer = await recoverMessageAddress({ message, signature });
-    if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
-      res.status(403).json({ error: "Unfreeze authorization does not match this wallet's Shard A" });
+    const signedBy = securitySigner(await recoverMessageAddress({ message, signature }), rows.rows[0]);
+    if (!signedBy) {
+      res.status(403).json({ error: "Unfreeze authorization must come from this wallet's device key (Shard A) or recovery key (Shard C)" });
+      return;
+    }
+    // A stolen device must not be able to lift a freeze set with the recovery key.
+    if ((await getFreezeState(address)).initiatedBy === "recovery" && signedBy !== "recovery") {
+      res.status(403).json({ error: "This freeze was set with the recovery key. Lift it with the recovery key (Shard C)." });
       return;
     }
     const state = await unfreezeWallet(address);

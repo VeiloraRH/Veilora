@@ -1,615 +1,138 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import {
-  Check,
-  Fingerprint,
-  Laptop,
-  Server,
-  ShieldAlert,
-  ShieldCheck,
-  Lock,
-  Unlock,
-  PlusCircle,
-  Copy,
-} from "lucide-react";
-import { useWallet } from "@/lib/walletContext";
-import { DevicePassphraseDialog } from "@/components/app/DevicePassphraseDialog";
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  KV,
-  Modal,
-  PageHeader,
-  StatusModal,
-  inputClass,
-} from "@/components/ui";
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Check, CircleDashed, Copy, Download, Eye, Fingerprint, KeyRound, Laptop, Loader2, Lock, RefreshCw, Server, ShieldAlert, ShieldCheck, Smartphone, Snowflake, Unlock, X } from 'lucide-react';
+import type { Hex } from 'viem';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DevicePassphraseDialog } from '@/components/app/DevicePassphraseDialog';
+import { PageTitle, shortAddress } from '@/components/wallet/WalletUI';
+import { getQuorumStatus } from '@/lib/api';
+import { useWallet } from '@/lib/walletContext';
+import { DRILL_VALID_DAYS, downloadDeviceKeyBackup, drillIsCurrent, freezeWithKey, keyMatches, readFlag, unfreezeWithKey, writeFlag } from '@/lib/recovery';
+export const Route=createFileRoute('/app/security')({component:RecoveryCenter});
 
-export const Route = createFileRoute("/app/security")({
-  component: SecurityScreen,
-});
+const day=(iso:string)=>new Date(iso).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+const when=(iso:string)=>new Date(iso).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
-export function SecurityScreen() {
-  const {
-    wallet,
-    loading,
-    deviceKeyPresent,
-    getStoredDeviceKey,
-    importDeviceKey,
-    freezeAccount,
-    unfreezeAccount,
-    createAccount,
-    auditTrail,
-  } = useWallet();
+export function RecoveryCenter() {
+ const {wallet,walletAddress,deviceKeyPresent,deviceKeyUnlocked,getStoredDeviceKey,auditTrail,refresh}=useWallet();
+ const quorum=useQuery({queryKey:['quorum',walletAddress],enabled:!!walletAddress,refetchInterval:30000,queryFn:()=>getQuorumStatus(walletAddress)});
+ const [flags,setFlags]=useState(()=>({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')}));
+ const syncFlags=()=>setFlags({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')});
+ const [dialog,setDialog]=useState<null|'drill'|'recovery-freeze'|'device-freeze'|'view-key'|'import-key'>(null);
+ const [notice,setNotice]=useState('');const [error,setError]=useState('');
+ const q=quorum.data; const freeze=q?.freeze; const shardC=q?.onChain?.shardC??wallet?.shardC??'';
+ const after=(message:string)=>{setDialog(null);setNotice(message);syncFlags();void quorum.refetch();void refresh();};
 
-  // Modals for user input
-  const [freezeModalOpen, setFreezeModalOpen] = useState(false);
-  const [freezeHours, setFreezeHours] = useState("24");
-  const [freezeReason, setFreezeReason] = useState("Suspicious activity detected");
-  const [freezeSubmitting, setFreezeSubmitting] = useState(false);
+ function backup(){setError('');try{downloadDeviceKeyBackup(walletAddress,wallet?.shardA??'');syncFlags();setNotice('Encrypted backup downloaded. Keep it somewhere other than this device; you will need its passphrase to restore it.');}catch(e){setError(e instanceof Error?e.message:'Could not create the backup.');}}
+ async function liftWithDevice(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}setError('');try{await unfreezeWithKey(walletAddress,key as Hex);after('Freeze lifted. The co-signer is signing again.');}catch(e){setError(e instanceof Error?e.message:'Could not lift the freeze.');}}
 
-  const [unfreezeModalOpen, setUnfreezeModalOpen] = useState(false);
-  const [unfreezeSubmitting, setUnfreezeSubmitting] = useState(false);
+ const checks:Check[]=[
+  {id:'device',label:'Device key is on this device',detail:deviceKeyPresent?'Encrypted with your passphrase in this browser.':'This browser has no device key. Import it to sign here.',state:deviceKeyPresent?'ok':'bad',action:!deviceKeyPresent?{label:'Import key',run:()=>setDialog('import-key')}:undefined},
+  {id:'backup',label:'Device key is backed up',detail:flags.backup?`Backup saved ${day(flags.backup)}.`:'If this device is lost, a backup lets you sign from a new one in minutes.',state:flags.backup?'ok':'warn',action:deviceKeyPresent?{label:flags.backup?'Download again':'Download backup',run:backup}:undefined},
+  {id:'drill',label:'Recovery key verified',detail:drillIsCurrent(flags.drill)?`Checked ${day(flags.drill!)}. Repeat every ${DRILL_VALID_DAYS} days.`:flags.drill?`Last checked ${day(flags.drill)}. Check it again.`:'Prove you can find your offline recovery key before you need it.',state:drillIsCurrent(flags.drill)?'ok':'warn',action:{label:'Run drill',run:()=>setDialog('drill')}},
+  {id:'chain',label:'Account shards match on-chain',detail:!q?'Checking Robinhood Chain…':q.chainError?q.chainError:!q.deployed?'Your account deploys on its first transaction.':q.matches&&Object.values(q.matches).every(Boolean)?'The deployed account accepts exactly these three keys.':'The deployed account does not match this registration. Freeze and contact support.',state:!q||q.chainError||!q.deployed?'wait':q.matches&&Object.values(q.matches).every(Boolean)?'ok':'bad'},
+  {id:'cosigner',label:'Co-signer is signing',detail:freeze?.frozen?`Frozen until ${when(freeze.frozenUntil!)}${freeze.initiatedBy==='recovery'?' with your recovery key':''}.`:'Shard B co-signs requests you authorize, within its policy limits.',state:!q?'wait':freeze?.frozen?'warn':'ok'},
+ ];
+ const score=checks.filter(c=>c.state==='ok').length;
 
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [passphraseOpen, setPassphraseOpen] = useState(false);
-  const [passphraseAction, setPassphraseAction] = useState<"create" | "import" | null>(null);
-  const [passphraseBusy, setPassphraseBusy] = useState(false);
+ const shards=[
+  {id:'A',name:'Device key',icon:Laptop,address:wallet?.shardA,match:q?.matches?.shardA,status:!deviceKeyPresent?['Missing here','bad']:deviceKeyUnlocked?['Unlocked','ok']:['Locked','warn'],where:'This browser, encrypted with your passphrase',actions:<>{deviceKeyPresent&&<button className="rule-button" onClick={backup}><Download size={14}/>Backup</button>}{deviceKeyPresent?<button className="rule-button" disabled={!deviceKeyUnlocked} onClick={()=>setDialog('view-key')}><Eye size={14}/>View</button>:<button className="rule-button" onClick={()=>setDialog('import-key')}><KeyRound size={14}/>Import</button>}</>},
+  {id:'B',name:'Veilora co-signer',icon:Server,address:wallet?.shardB,match:q?.matches?.shardB,status:!q?['Checking','wait']:q.coSigner.signing?['Signing','ok']:['Paused by freeze','warn'],where:q?`${q.coSigner.approvals30d} approved · ${q.coSigner.rejections30d} refused in 30 days`:'Encrypted on Veilora’s backend',actions:null},
+  {id:'C',name:'Recovery key',icon:Fingerprint,address:wallet?.shardC,match:q?.matches?.shardC,status:drillIsCurrent(flags.drill)?['Verified','ok']:['Not verified','warn'],where:'Offline. Shown once when you created the account',actions:<button className="rule-button" onClick={()=>setDialog('drill')}><ShieldCheck size={14}/>Run drill</button>},
+ ] as const;
 
-  const [viewKeyModalOpen, setViewKeyModalOpen] = useState(false);
-  const [importKeyModalOpen, setImportKeyModalOpen] = useState(false);
-  const [importKeyInput, setImportKeyInput] = useState("");
+ return <><PageTitle title="Quorum & recovery" description="Which keys guard your account, and how you get back in if a device is lost." action={<button className="wallet-icon-button" aria-label="Refresh status" onClick={()=>{void quorum.refetch();void refresh();syncFlags();}}><RefreshCw size={18} className={quorum.isFetching?'animate-spin':''}/></button>}/>
+ {notice&&<div className="wallet-notice" role="status">{notice}<button onClick={()=>setNotice('')} aria-label="Dismiss notification">×</button></div>}
+ {error&&<p role="alert" className="wallet-error mb-5">{error}</p>}
+ {freeze?.frozen&&<div className="rc-frozen" role="status"><Snowflake size={20}/><div><strong>Account frozen until {when(freeze.frozenUntil!)}</strong><p>{freeze.initiatedBy==='recovery'?'Set with your recovery key. Only the recovery key can lift it, so a stolen device cannot undo it.':'The co-signer refuses every request until it ends or you lift it.'}{freeze.reason&&` Reason: ${freeze.reason}.`}</p></div>{freeze.initiatedBy==='recovery'?<button className="rule-button" onClick={()=>setDialog('recovery-freeze')}><Unlock size={14}/>Lift with recovery key</button>:<button className="rule-button" disabled={!deviceKeyUnlocked} onClick={()=>void liftWithDevice()}><Unlock size={14}/>Lift freeze</button>}</div>}
 
-  // Status Modals for success / error notifications
-  const [statusModal, setStatusModal] = useState<{
-    open: boolean;
-    type: "success" | "error" | "info";
-    title: string;
-    message: string;
-    details?: string;
-  }>({
-    open: false,
-    type: "info",
-    title: "",
-    message: "",
-  });
+ <div className="rc-top"><section className="wallet-panel rc-quorum" aria-label="Quorum"><div className="rc-quorum-head"><div><span className="rc-eyebrow">Quorum</span><h2>Any 2 of 3 keys</h2><p>One key alone can never move funds.</p></div><span className={`rule-status ${freeze?.frozen?'paused':'active'}`}>{freeze?.frozen?'Frozen':'Active'}</span></div>
+  <QuorumDiagram a={shards[0].status[1]} b={shards[1].status[1]} c={shards[2].status[1]}/>
+  <dl className="rc-facts"><div><dt>Account</dt><dd>{walletAddress?shortAddress(walletAddress):'—'}</dd></div><div><dt>Deployed</dt><dd>{!q?'—':q.deployed?'On-chain':'Not yet'}</dd></div><div><dt>Nonce</dt><dd>{q?.onChain?.nonce??'—'}</dd></div></dl></section>
+  <section className="wallet-panel rc-ready" aria-label="Recovery readiness"><div className="rc-ready-head"><Ring value={score} total={checks.length}/><div><span className="rc-eyebrow">Recovery readiness</span><h2>{score===checks.length?'You are ready':score>=3?'Almost there':'Needs attention'}</h2><p>{score} of {checks.length} checks passed</p></div></div>
+   <ul className="rc-checks">{checks.map(c=><li key={c.id} className={c.state}><CheckIcon state={c.state}/><div className="min-w-0 flex-1"><strong>{c.label}</strong><small>{c.detail}</small></div>{c.action&&c.state!=='ok'&&<button className="rule-button" onClick={c.action.run}>{c.action.label}</button>}</li>)}</ul></section></div>
 
-  const [copiedShard, setCopiedShard] = useState<string | null>(null);
+ <section className="rc-section"><div className="wallet-section-heading"><h2>Shards</h2></div><div className="rc-shards">{shards.map(s=><article key={s.id} className="wallet-panel rc-shard"><div className="rc-shard-head"><span className={`rc-shard-icon s${s.id}`}><s.icon size={19}/></span><div className="min-w-0 flex-1"><small>Shard {s.id}</small><h3>{s.name}</h3></div><span className={`rc-pill ${s.status[1]}`}>{s.status[0]}</span></div><p className="rc-where">{s.where}</p><AddressLine address={s.address} match={s.match} deployed={q?.deployed}/>{s.actions&&<div className="rc-shard-actions">{s.actions}</div>}</article>)}</div></section>
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard?.writeText(text).catch(() => undefined);
-    setCopiedShard(label);
-    setTimeout(() => setCopiedShard(null), 1500);
-  };
+ <section className="rc-section"><div className="wallet-section-heading"><h2>If you lose access</h2></div><div className="rc-playbook">
+  <Scenario icon={Smartphone} title="New phone or browser" tag="available" text="Restore your encrypted device-key backup on the new device, or import the device key. Your account address does not change.">{deviceKeyPresent&&<button className="rule-button" onClick={backup}><Download size={14}/>Download backup</button>}<Link className="rule-button" to="/recover">Open restore page</Link></Scenario>
+  <Scenario icon={ShieldAlert} title="Device lost or stolen" tag="available" text="Freeze from any browser with your recovery key. The co-signer stops signing, and only the recovery key can lift that freeze."><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Snowflake size={14}/>Freeze with recovery key</button></Scenario>
+  <Scenario icon={KeyRound} title="Device key gone for good" tag="planned" text="Your account accepts the recovery key plus the co-signer, so the device key can be replaced on-chain. Veilora’s guided key rotation for this is planned. Freeze first: your assets stay in your account and nothing can move with one key."/>
+  <Scenario icon={Fingerprint} title="Recovery key lost" tag="available" text="Your device key and the co-signer still work, so you keep full access. Swapping in a new recovery key needs key rotation (planned). Until then, back up your device key, or move your assets to a new account you set up in a separate browser profile."/>
+ </div></section>
 
-  const handleFreezeSubmit = async () => {
-    setFreezeSubmitting(true);
-    try {
-      const hours = parseInt(freezeHours, 10) || 24;
-      await freezeAccount(hours, freezeReason.trim() || "Emergency freeze");
-      setFreezeModalOpen(false);
-      setStatusModal({
-        open: true,
-        type: "success",
-        title: "Account Frozen",
-        message:
-          "Your smart account is now frozen. No transactions can be co-signed until the freeze duration expires or you unlock it with your recovery keys.",
-        details: `Duration: ${hours} hours · Reason: ${freezeReason}`,
-      });
-    } catch (err: any) {
-      setStatusModal({
-        open: true,
-        type: "error",
-        title: "Freeze Failed",
-        message: err?.message || "Could not freeze the account. Please try again.",
-      });
-    } finally {
-      setFreezeSubmitting(false);
-    }
-  };
+ <div className="rc-bottom"><section className="wallet-panel rc-emergency"><span className="rules-aside-icon"><Lock size={18}/></span><h3>Emergency freeze</h3><p>Stops Veilora’s co-signer from signing anything for up to 7 days. It cannot move or lock your on-chain assets; it removes the second signature every transaction needs.</p><div className="rc-shard-actions"><button className="rule-button" disabled={!deviceKeyUnlocked||freeze?.initiatedBy==='recovery'} onClick={()=>setDialog('device-freeze')}><Laptop size={14}/>Freeze with device key</button><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Fingerprint size={14}/>Use recovery key</button></div></section>
+  <section className="wallet-panel rc-audit"><div className="rc-audit-head"><h3>Co-signer activity</h3>{q?.coSigner.lastApprovedAt&&<small>Last approved {when(q.coSigner.lastApprovedAt)}</small>}</div>{auditTrail.length===0?<p className="rc-muted">No co-signing requests yet. Every request Shard B approves or refuses appears here.</p>:<ul>{auditTrail.slice(0,6).map(r=><li key={r.id}><span className="font-mono">{shortAddress(r.user_op_hash)}</span><small>{when(r.created_at)}</small><span className={`wallet-status ${r.status==='APPROVED'?'confirmed':'failed'}`}>{r.status==='APPROVED'?'Approved':r.status.replace('REJECTED_','Refused · ').toLowerCase()}</span></li>)}</ul>}</section></div>
 
-  const handleUnfreezeSubmit = async () => {
-    setUnfreezeSubmitting(true);
-    try {
-      await unfreezeAccount();
-      setUnfreezeModalOpen(false);
-      setStatusModal({
-        open: true,
-        type: "success",
-        title: "Account Unfrozen",
-        message: "Your smart account is now active again. 2-of-3 quorum transactions are permitted.",
-      });
-    } catch (err: any) {
-      setStatusModal({
-        open: true,
-        type: "error",
-        title: "Unlock Failed",
-        message: err?.message || "Could not unlock the account. Please check your credentials.",
-      });
-    } finally {
-      setUnfreezeSubmitting(false);
-    }
-  };
+ {dialog==='drill'&&<DrillDialog shardC={shardC} onClose={()=>setDialog(null)} onPassed={()=>{writeFlag(walletAddress,'drill');after('Recovery key verified. Put it back somewhere safe and offline.');}}/>}
+ {dialog==='recovery-freeze'&&<RecoveryFreezeDialog wallet={walletAddress} shardC={shardC} frozenByRecovery={freeze?.initiatedBy==='recovery'} onClose={()=>setDialog(null)} onDone={after}/>}
+ {dialog==='device-freeze'&&<DeviceFreezeDialog wallet={walletAddress} onClose={()=>setDialog(null)} onDone={after}/>}
+ {dialog==='view-key'&&<ViewKeyDialog wallet={walletAddress} onClose={()=>{setDialog(null);syncFlags();}}/>}
+ {dialog==='import-key'&&<ImportKeyDialog onClose={()=>setDialog(null)} onDone={after}/>}
+ </>;
+}
 
-  const handleCreateAccountSubmit = () => {
-    setPassphraseAction("create");
-    setPassphraseOpen(true);
-  };
+type CheckState='ok'|'warn'|'bad'|'wait';
+type Check={id:string;label:string;detail:string;state:CheckState;action?:{label:string;run:()=>void}};
+function CheckIcon({state}:{state:CheckState}){return <span className={`rc-check-icon ${state}`}>{state==='ok'?<Check size={13}/>:state==='wait'?<CircleDashed size={13}/>:state==='bad'?<X size={13}/>:<AlertTriangle size={12}/>}</span>;}
+function Ring({value,total}:{value:number;total:number}) {
+ const r=30,c=2*Math.PI*r,pct=value/total;
+ return <svg className="rc-ring" viewBox="0 0 76 76" role="img" aria-label={`${value} of ${total}`}><circle cx="38" cy="38" r={r} className="track"/><circle cx="38" cy="38" r={r} className={`bar ${pct===1?'full':pct>=.6?'mid':'low'}`} strokeDasharray={c} strokeDashoffset={c*(1-pct)} transform="rotate(-90 38 38)"/><text x="38" y="43" textAnchor="middle">{value}/{total}</text></svg>;
+}
+function QuorumDiagram({a,b,c}:{a:string;b:string;c:string}) {
+ const nodes=[{k:'A',x:110,y:26,s:a,icon:Laptop},{k:'B',x:30,y:150,s:b,icon:Server},{k:'C',x:190,y:150,s:c,icon:Fingerprint}];
+ return <div className="rc-diagram"><svg viewBox="0 0 220 180" aria-hidden="true"><path d="M110 26 L30 150 L190 150 Z" className="rc-tri"/>{nodes.map(n=><circle key={n.k} cx={n.x} cy={n.y} r="5" className={`rc-dot ${n.s}`}/>)}</svg><div className="rc-core"><strong>2/3</strong><span>to sign</span></div>{nodes.map(n=><span key={n.k} className={`rc-node ${n.s}`} style={{left:`${n.x/220*100}%`,top:`${n.y/180*100}%`}}><n.icon size={17}/><b>{n.k}</b></span>)}</div>;
+}
+function AddressLine({address,match,deployed}:{address?:string;match?:boolean;deployed?:boolean}) {
+ const [copied,setCopied]=useState(false);
+ return <div className="rc-address"><span className="font-mono">{address?shortAddress(address):'—'}</span>{deployed&&match!==undefined&&<span className={match?'rc-match':'rc-mismatch'}>{match?<><Check size={11}/>On-chain</>:<><X size={11}/>Mismatch</>}</span>}{address&&<button className="wallet-icon-button" aria-label="Copy address" onClick={()=>void navigator.clipboard?.writeText(address).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500);})}>{copied?<Check size={14}/>:<Copy size={14}/>}</button>}</div>;
+}
+function Scenario({icon:Icon,title,tag,text,children}:{icon:typeof Laptop;title:string;tag:'available'|'planned';text:string;children?:ReactNode}) {
+ return <article className="wallet-panel rc-scenario"><div className="rc-scenario-head"><span className="rc-scenario-icon"><Icon size={18}/></span><h3>{title}</h3><span className={`rc-tag ${tag}`}>{tag==='available'?'Available':'Planned'}</span></div><p>{text}</p>{children&&<div className="rc-shard-actions">{children}</div>}</article>;
+}
 
-  const handleImportKeySubmit = () => {
-    const clean = importKeyInput.trim();
-    if (!/^0x[0-9a-fA-F]{64}$/.test(clean)) {
-      setStatusModal({
-        open: true,
-        type: "error",
-        title: "Invalid Private Key",
-        message: "Device Key must be a valid 64-character hex string starting with 0x.",
-      });
-      return;
-    }
-    setPassphraseAction("import");
-    setPassphraseOpen(true);
-  };
-
-  const handlePassphraseSubmit = async (passphrase: string) => {
-    if (!passphraseAction) return;
-    setPassphraseBusy(true);
-    try {
-      if (passphraseAction === "create") {
-        await createAccount(passphrase);
-      } else {
-        if (!wallet?.shardA) throw new Error("Load a registered Veilora wallet before importing its Shard A key.");
-        await importDeviceKey(importKeyInput.trim(), passphrase, wallet.shardA);
-        setImportKeyModalOpen(false);
-        setImportKeyInput("");
-        setStatusModal({
-          open: true,
-          type: "success",
-          title: "Device Key Imported",
-          message: "Shard A is now saved in this browser and ready to sign intents.",
-        });
-      }
-    } finally {
-      setPassphraseBusy(false);
-    }
-  };
-
-  const shards = [
-    {
-      id: "A",
-      name: "Device Shard",
-      holder: deviceKeyPresent ? "Stored locally on this browser" : "Key missing on this browser",
-      address: wallet?.shardA || "0xe961…A7b3",
-      icon: Laptop,
-      status: deviceKeyPresent ? "Active" : "Key Missing",
-      tone: deviceKeyPresent ? ("teal" as const) : ("coral" as const),
-    },
-    {
-      id: "B",
-      name: "Veilora Co-Signer",
-      holder: "Encrypted by the Veilora backend and released only after Shard A authorization",
-      address: wallet?.shardB || "0xF1d2…895d",
-      icon: Server,
-      status: "Active",
-      tone: "gold" as const,
-    },
-    {
-      id: "C",
-      name: "Recovery Shard",
-      holder: "Offline passkey / cold backup shard (not stored on servers)",
-      address: wallet?.shardC || "0xC2Ae…a6e1",
-      icon: Fingerprint,
-      status: "Standby",
-      tone: "mist" as const,
-    },
-  ];
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Custody & Recovery"
-        title="No single key can move funds."
-        description="Your smart account is secured by 2-of-3 threshold custody on Robinhood Chain. Any two shards can authorize an action; one shard alone can do nothing."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {wallet?.isFrozen ? (
-              <Button
-                variant="primary"
-                onClick={() => setUnfreezeModalOpen(true)}
-              >
-                <Unlock className="h-4 w-4" /> Lift Freeze
-              </Button>
-            ) : (
-              <Button
-                variant="danger"
-                onClick={() => setFreezeModalOpen(true)}
-              >
-                <Lock className="h-4 w-4" /> Emergency Freeze
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={() => setCreateModalOpen(true)}
-            >
-              <PlusCircle className="h-4 w-4" /> New Account
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Account Status Overview */}
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="panel p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-mist">Account Status</span>
-            <Badge tone={wallet?.isFrozen ? "coral" : "teal"}>
-              {wallet?.isFrozen ? "Frozen" : "Active"}
-            </Badge>
-          </div>
-          <p className="mt-3 font-display text-xl text-cream truncate">
-            {wallet?.address || (loading ? "Loading…" : "No account connected")}
-          </p>
-          <p className="mt-1 text-xs text-mist">
-            {wallet?.isFrozen
-              ? `Frozen until ${new Date(wallet.frozenUntil || "").toLocaleString()}`
-              : "2-of-3 quorum verified"}
-          </p>
-        </div>
-
-        <div className="panel p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-mist">Quorum Rule</span>
-            <Badge tone="teal">2 of 3</Badge>
-          </div>
-          <p className="mt-3 font-display text-xl text-cream">Threshold Signing</p>
-          <p className="mt-1 text-xs text-mist">Requires two valid signatures for any transaction</p>
-        </div>
-
-        <div className="panel p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-mist">Deployment Mode</span>
-            <Badge tone="teal">{wallet?.isDeployed ? "On-Chain" : "Deterministic CREATE2"}</Badge>
-          </div>
-          <p className="mt-3 font-display text-xl text-cream">Counterfactual Vault</p>
-          <p className="mt-1 text-xs text-mist">Deployable on Robinhood Chain upon first execution</p>
-        </div>
-      </div>
-
-      {/* Three Shards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {shards.map((s) => {
-          const Icon = s.icon;
-          return (
-            <div key={s.id} className="panel p-5">
-              <div className="flex items-center justify-between">
-                <span className="grid h-11 w-11 place-items-center rounded-xl border border-gold-400/40 bg-gold-400/5 text-gold-300">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <Badge tone={s.tone}>{s.status}</Badge>
-              </div>
-              <p className="mt-4 font-display text-xl text-cream">
-                Shard {s.id} · {s.name}
-              </p>
-              <p className="mt-1 text-xs text-mist">{s.holder}</p>
-              <div className="mt-4 flex items-center justify-between rounded-lg border border-ink-600/60 bg-ink-950/40 px-3 py-2">
-                <span className="font-mono text-xs text-cream truncate mr-2">
-                  {s.address}
-                </span>
-                <button
-                  onClick={() => copyToClipboard(s.address, s.id)}
-                  className="text-mist hover:text-cream transition-colors shrink-0"
-                  aria-label={`Copy Shard ${s.id}`}
-                >
-                  {copiedShard === s.id ? (
-                    <Check className="h-4 w-4 text-teal-300" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              {s.id === "A" && (
-                <div className="mt-3">
-                  {deviceKeyPresent ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => setViewKeyModalOpen(true)}
-                      className="w-full text-xs py-1.5 border-ink-600 hover:border-gold-400"
-                    >
-                      View Local Device Key
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={() => setImportKeyModalOpen(true)}
-                      className="w-full text-xs py-1.5 border-coral-500/50 text-coral-400 hover:bg-coral-500/10"
-                    >
-                      Import Shard A Key
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <Card title="Co-Signer Trust Boundary" eyebrow="What Shard B evaluates">
-          <div className="space-y-3">
-            {[
-              { rule: "Requires a valid Shard A signature over the exact transaction", ok: true },
-              { rule: "Cannot move funds unilaterally without a second key", ok: true },
-              { rule: "Transaction details remain public on Robinhood Chain", ok: true },
-              { rule: "Refuses signing while an authorized emergency freeze is active", ok: true },
-            ].map((item, idx) => (
-              <div key={idx} className="flex items-center gap-3 text-sm">
-                <ShieldCheck className="h-4 w-4 text-teal-300 shrink-0" />
-                <span className="text-cream-dim">{item.rule}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 border-t border-ink-600/60 pt-4">
-            <KV k="Network" v="Robinhood Chain" />
-            <KV k="Co-Signer" v="Veilora backend" />
-            <KV k="Threshold Required" v="2 of 3" />
-            <KV k="Emergency Action" v="Panic Freeze available at any time" />
-          </div>
-        </Card>
-
-        <Card title="Security & Co-Signing Audit Trail" eyebrow="Audit records">
-          {auditTrail.length === 0 ? (
-            <div className="text-center py-6">
-              <ShieldAlert className="mx-auto h-8 w-8 text-mist/50 mb-2" />
-              <p className="text-sm text-mist">No signature requests logged yet for this account.</p>
-              <p className="text-xs text-mist/80 mt-1">Actions co-signed by Shard B will appear here.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {auditTrail.slice(0, 5).map((rec) => (
-                <div
-                  key={rec.id}
-                  className="flex items-center justify-between rounded-lg border border-ink-600/60 p-3 text-xs"
-                >
-                  <div>
-                    <p className="font-mono text-cream truncate max-w-[220px]">
-                      {rec.user_op_hash}
-                    </p>
-                    <p className="text-mist mt-0.5">
-                      {new Date(rec.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge tone={rec.status === "APPROVED" ? "teal" : "gold"}>
-                    {rec.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* MODAL 1: Emergency Freeze Input */}
-      <Modal
-        open={freezeModalOpen}
-        onClose={() => setFreezeModalOpen(false)}
-        title="Emergency Freeze Account"
-        description="Immediately halt co-signing permissions for your smart account on Robinhood Chain."
-        actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setFreezeModalOpen(false)}
-              disabled={freezeSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleFreezeSubmit}
-              disabled={freezeSubmitting}
-            >
-              {freezeSubmitting ? "Freezing…" : "Confirm Emergency Freeze"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="Freeze Duration (Hours)" hint="The co-signer will reject all requests for this duration.">
-            <select
-              className={inputClass}
-              value={freezeHours}
-              onChange={(e) => setFreezeHours(e.target.value)}
-            >
-              <option value="6">6 Hours</option>
-              <option value="12">12 Hours</option>
-              <option value="24">24 Hours (Standard)</option>
-              <option value="48">48 Hours</option>
-              <option value="72">72 Hours (Extended)</option>
-            </select>
-          </Field>
-
-          <Field label="Reason for Freeze" hint="Recorded securely in your account audit log.">
-            <input
-              className={inputClass}
-              value={freezeReason}
-              onChange={(e) => setFreezeReason(e.target.value)}
-              placeholder="e.g. Lost device, suspicious transaction attempt"
-            />
-          </Field>
-
-          <div className="rounded-lg border border-coral-500/30 bg-coral-500/10 p-3 text-xs text-cream-dim">
-            <p className="font-medium text-coral-400 mb-1">Immediate Safety Lock</p>
-            Once confirmed, Shard B will decline all co-signing operations. You can unlock early at any time using your recovery shard.
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL 2: Lift Freeze Confirmation */}
-      <Modal
-        open={unfreezeModalOpen}
-        onClose={() => setUnfreezeModalOpen(false)}
-        title="Lift Account Freeze"
-        description="Re-enable normal 2-of-3 threshold transactions for this account."
-        actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setUnfreezeModalOpen(false)}
-              disabled={unfreezeSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleUnfreezeSubmit}
-              disabled={unfreezeSubmitting}
-            >
-              {unfreezeSubmitting ? "Unlocking…" : "Confirm Lift Freeze"}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm leading-relaxed text-cream-dim">
-          Are you sure you want to lift the emergency freeze on{" "}
-          <span className="font-mono text-gold-300">{wallet?.address}</span>?
-          This will restore normal co-signing permissions.
-        </p>
-      </Modal>
-
-      {/* MODAL 3: Generate Account Input */}
-      <Modal
-        open={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        title="Create 2-of-3 Smart Account"
-        description="Deploy a new deterministic smart account on Robinhood Chain."
-        actions={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setCreateModalOpen(false)}
-              disabled={passphraseBusy}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleCreateAccountSubmit}
-              disabled={passphraseBusy}
-            >
-              Generate Account
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-sm text-cream-dim leading-relaxed">
-          <p>
-            This action creates a fresh smart account with:
-          </p>
-          <ul className="list-disc pl-5 space-y-1 text-xs text-mist">
-            <li>Shard A: Generated for this device</li>
-            <li>Shard B: Configured with Veilora Co-signer</li>
-            <li>Shard C: Generated for emergency recovery</li>
-          </ul>
-          <p className="text-xs text-mist">
-            Address computation is deterministic via VeiloraFactory on Robinhood Chain.
-          </p>
-        </div>
-      </Modal>
-
-      <DevicePassphraseDialog
-        open={passphraseOpen}
-        onOpenChange={(open) => {
-          setPassphraseOpen(open);
-          if (!open) setPassphraseAction(null);
-        }}
-        onSubmit={handlePassphraseSubmit}
-        busy={passphraseBusy}
-        title={passphraseAction === "import" ? "Encrypt your imported key" : "Protect this device key"}
-        description={passphraseAction === "import" ? "Choose a passphrase to encrypt Shard A before saving it in this browser." : undefined}
-      />
-
-      {/* MODAL 6: View Local Device Key */}
-      <Modal
-        open={viewKeyModalOpen}
-        onClose={() => setViewKeyModalOpen(false)}
-        title="Local Device Key (Shard A)"
-        description="Encrypted on this device. Decrypted only while the device key is unlocked."
-        actions={
-          <Button variant="outline" onClick={() => setViewKeyModalOpen(false)}>
-            Close
-          </Button>
-        }
-      >
-        <div className="space-y-4 text-xs">
-          <p className="text-mist leading-relaxed">
-            This private key is decrypted in memory while unlocked. Never share it with anyone.
-          </p>
-          <div className="rounded-lg border border-ink-600 bg-ink-950/80 p-3 font-mono text-gold-200 break-all select-all">
-            {getStoredDeviceKey() || "No key found in storage."}
-          </div>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              onClick={() => {
-                const k = getStoredDeviceKey();
-                if (k) navigator.clipboard.writeText(k);
-              }}
-              className="text-xs"
-            >
-              Copy to Clipboard
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL 7: Import Device Key */}
-      <Modal
-        open={importKeyModalOpen}
-        onClose={() => setImportKeyModalOpen(false)}
-        title="Import Device Key (Shard A)"
-        description="Paste your Shard A private key to authorize transactions on this browser."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setImportKeyModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleImportKeySubmit}>
-              Save Key
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Field label="Private Key (64-character hex starting with 0x)">
-            <input
-              className={inputClass}
-              placeholder="0x…"
-              value={importKeyInput}
-              onChange={(e) => setImportKeyInput(e.target.value)}
-            />
-          </Field>
-          <p className="text-xs text-mist">
-            The key will be encrypted with your passphrase before it is stored on this device.
-          </p>
-        </div>
-      </Modal>
-
-      {/* MODAL 8: Global Status Modal */}
-      <StatusModal
-        open={statusModal.open}
-        onClose={() => setStatusModal((s) => ({ ...s, open: false }))}
-        type={statusModal.type}
-        title={statusModal.title}
-        message={statusModal.message}
-        details={
-          statusModal.details ? (
-            <p className="rounded-lg border border-ink-600 bg-ink-950/60 p-3 font-mono text-xs text-gold-200">
-              {statusModal.details}
-            </p>
-          ) : undefined
-        }
-      />
-    </>
-  );
+function KeyInput({value,onChange,label}:{value:string;onChange:(v:string)=>void;label:string}) {
+ return <label className="builder-field"><span>{label}</span><input className="builder-input font-mono" type="password" autoComplete="off" spellCheck={false} placeholder="0x…" value={value} onChange={e=>onChange(e.target.value.trim())}/></label>;
+}
+function DrillDialog({shardC,onClose,onPassed}:{shardC:string;onClose:()=>void;onPassed:()=>void}) {
+ const [key,setKey]=useState('');const [failed,setFailed]=useState(false);
+ return <Dialog open onOpenChange={v=>{if(!v)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-md"><DialogHeader><DialogTitle>Recovery drill</DialogTitle><DialogDescription>Paste the recovery key you saved when you created this account.</DialogDescription></DialogHeader>
+  <KeyInput label="Recovery key (Shard C)" value={key} onChange={v=>{setKey(v);setFailed(false);}}/>
+  <p className="builder-hint">The key is checked against your account’s Shard C address ({shardC?shortAddress(shardC):'—'}) here in your browser. It is never sent or stored.</p>
+  {failed&&<p role="alert" className="wallet-error">This key does not match your recovery shard. Look for the key you saved when you created this account.</p>}
+  <button className="wallet-primary-button" disabled={!key} onClick={()=>{if(keyMatches(key,shardC)){setKey('');onPassed();}else setFailed(true);}}>Check recovery key</button></DialogContent></Dialog>;
+}
+function RecoveryFreezeDialog({wallet,shardC,frozenByRecovery,onClose,onDone}:{wallet:string;shardC:string;frozenByRecovery:boolean;onClose:()=>void;onDone:(m:string)=>void}) {
+ const [key,setKey]=useState('');const [hours,setHours]=useState(72);const [reason,setReason]=useState('Device lost or stolen');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ async function run(){if(!keyMatches(key,shardC)){setError('This key does not match your recovery shard.');return;}setBusy(true);setError('');try{if(frozenByRecovery){await unfreezeWithKey(wallet,key as Hex);setKey('');onDone('Recovery freeze lifted. The co-signer is signing again.');}else{await freezeWithKey(wallet,key as Hex,hours,reason.trim()||'Recovery freeze');setKey('');onDone(`Frozen for ${hours} hours with your recovery key. A stolen device cannot lift this freeze.`);}}catch(e){setError(e instanceof Error?e.message:'Could not update the freeze.');}finally{setBusy(false);}}
+ return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-md"><DialogHeader><DialogTitle>{frozenByRecovery?'Lift recovery freeze':'Freeze with recovery key'}</DialogTitle><DialogDescription>{frozenByRecovery?'Only your recovery key can lift a freeze it set.':'Use this if your device is lost or someone else may have it.'}</DialogDescription></DialogHeader>
+  <KeyInput label="Recovery key (Shard C)" value={key} onChange={v=>{setKey(v);setError('');}}/>
+  {!frozenByRecovery&&<div className="builder-row"><label className="builder-field"><span>Duration</span><select className="wallet-select" value={hours} onChange={e=>setHours(Number(e.target.value))}>{[24,72,168].map(h=><option key={h} value={h}>{h===168?'7 days':`${h} hours`}</option>)}</select></label><label className="builder-field"><span>Reason</span><input className="builder-input" maxLength={128} value={reason} onChange={e=>setReason(e.target.value.replace(/[\r\n]/g,''))}/></label></div>}
+  <p className="builder-hint">The key signs this request in your browser and is not sent or stored.</p>
+  {error&&<p role="alert" className="wallet-error">{error}</p>}
+  <button className="wallet-primary-button" disabled={!key||busy} onClick={()=>void run()}>{busy?<><Loader2 size={16} className="animate-spin"/>Signing…</>:frozenByRecovery?'Lift freeze':'Freeze account'}</button></DialogContent></Dialog>;
+}
+function DeviceFreezeDialog({wallet,onClose,onDone}:{wallet:string;onClose:()=>void;onDone:(m:string)=>void}) {
+ const {getStoredDeviceKey}=useWallet();const [hours,setHours]=useState(24);const [reason,setReason]=useState('Suspicious activity');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ async function run(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}setBusy(true);setError('');try{await freezeWithKey(wallet,key as Hex,hours,reason.trim()||'Emergency freeze');onDone(`Frozen for ${hours} hours. Lift it early here with your device or recovery key.`);}catch(e){setError(e instanceof Error?e.message:'Could not freeze the account.');}finally{setBusy(false);}}
+ return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-md"><DialogHeader><DialogTitle>Emergency freeze</DialogTitle><DialogDescription>The co-signer refuses every request while the freeze lasts.</DialogDescription></DialogHeader>
+  <div className="builder-row"><label className="builder-field"><span>Duration</span><select className="wallet-select" value={hours} onChange={e=>setHours(Number(e.target.value))}>{[6,12,24,48,72].map(h=><option key={h} value={h}>{h} hours</option>)}</select></label><label className="builder-field"><span>Reason</span><input className="builder-input" maxLength={128} value={reason} onChange={e=>setReason(e.target.value.replace(/[\r\n]/g,''))}/></label></div>
+  <p className="builder-hint">If you think this device is compromised, freeze with your recovery key instead. A device-key freeze can be lifted by the device key.</p>
+  {error&&<p role="alert" className="wallet-error">{error}</p>}
+  <button className="wallet-primary-button" disabled={busy} onClick={()=>void run()}>{busy?<><Loader2 size={16} className="animate-spin"/>Freezing…</>:'Freeze account'}</button></DialogContent></Dialog>;
+}
+function ViewKeyDialog({wallet,onClose}:{wallet:string;onClose:()=>void}) {
+ const {getStoredDeviceKey}=useWallet();const key=getStoredDeviceKey();const [shown,setShown]=useState(false);const [copied,setCopied]=useState(false);
+ return <Dialog open onOpenChange={v=>{if(!v)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-md"><DialogHeader><DialogTitle>Device key (Shard A)</DialogTitle><DialogDescription>Anyone with this key and your recovery key, or this key and the co-signer, can sign for your account.</DialogDescription></DialogHeader>
+  <div className="rc-secret">{shown?key:'•'.repeat(32)}</div>
+  <div className="review-actions"><button className="rule-button" onClick={()=>setShown(!shown)}><Eye size={14}/>{shown?'Hide':'Reveal'}</button><button className="wallet-primary-button" disabled={!key} onClick={()=>{if(key)void navigator.clipboard.writeText(key).then(()=>{writeFlag(wallet,'backup');setCopied(true);});}}>{copied?<><Check size={16}/>Copied</>:<><Copy size={16}/>Copy key</>}</button></div>
+  <p className="builder-hint">Prefer the encrypted backup file. A copied key is unencrypted: store it offline and never share it.</p></DialogContent></Dialog>;
+}
+function ImportKeyDialog({onClose,onDone}:{onClose:()=>void;onDone:(m:string)=>void}) {
+ const {wallet,importDeviceKey}=useWallet();const [key,setKey]=useState('');const [error,setError]=useState('');const [passphrase,setPassphrase]=useState(false);const [busy,setBusy]=useState(false);
+ return <><Dialog open={!passphrase} onOpenChange={v=>{if(!v)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-md"><DialogHeader><DialogTitle>Import device key</DialogTitle><DialogDescription>Paste this account’s Shard A key to sign from this browser.</DialogDescription></DialogHeader>
+  <KeyInput label="Device key (Shard A)" value={key} onChange={v=>{setKey(v);setError('');}}/>{error&&<p role="alert" className="wallet-error">{error}</p>}
+  <button className="wallet-primary-button" disabled={!key} onClick={()=>{if(!wallet?.shardA||!keyMatches(key,wallet.shardA)){setError('This key does not match the account’s registered Shard A.');return;}setPassphrase(true);}}>Continue</button></DialogContent></Dialog>
+  <DevicePassphraseDialog open={passphrase} busy={busy} onOpenChange={open=>{if(!open)setPassphrase(false);}} title="Encrypt your imported key" description="Choose a passphrase to encrypt Shard A before saving it in this browser." onSubmit={async pass=>{setBusy(true);try{await importDeviceKey(key,pass,wallet?.shardA);setKey('');onDone('Device key imported and encrypted on this browser.');}finally{setBusy(false);}}}/></>;
 }

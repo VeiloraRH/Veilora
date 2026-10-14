@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as ZhRouteImport } from './routes/zh'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecoverRoute = RecoverRouteImport.update({
+  id: '/recover',
+  path: '/recover',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoadmapRoute = RoadmapRouteImport.update({
@@ -86,6 +92,7 @@ const AppSwapRoute = AppSwapRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/recover'
     | '/roadmap'
     | '/whitepaper'
     | '/zh'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/recover'
     | '/roadmap'
     | '/whitepaper'
     | '/zh'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/recover'
     | '/roadmap'
     | '/whitepaper'
     | '/zh'
@@ -172,6 +184,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
+  RecoverRoute: typeof RecoverRoute
   RoadmapRoute: typeof RoadmapRoute
   WhitepaperRoute: typeof WhitepaperRoute
   ZhRoute: typeof ZhRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recover': {
+      id: '/recover'
+      path: '/recover'
+      fullPath: '/recover'
+      preLoaderRoute: typeof RecoverRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/roadmap': {
@@ -293,6 +313,7 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
+  RecoverRoute: RecoverRoute,
   RoadmapRoute: RoadmapRoute,
   WhitepaperRoute: WhitepaperRoute,
   ZhRoute: ZhRoute,

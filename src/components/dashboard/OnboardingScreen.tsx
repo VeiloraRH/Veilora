@@ -230,6 +230,9 @@ export function OnboardingScreen() {
               >
                 Import existing wallet
               </Button>
+              <a href="/recover" className="block text-center text-sm text-slate-500 underline-offset-4 hover:text-slate-900 hover:underline dark:text-slate-400 dark:hover:text-white">
+                Lost your device? Restore a backup or freeze your account
+              </a>
             </div>
 
             {/* Subtext with Clock */}

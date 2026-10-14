@@ -1,10 +1,13 @@
 import { query } from "./db/index";
 
+export type FreezeInitiator = "device" | "recovery";
+
 export interface FreezeState {
   address: string;
   frozen: boolean;
   frozenUntil: string | null;
   reason: string | null;
+  initiatedBy: FreezeInitiator | null;
 }
 
 export const ATTEMPT_WINDOW_MINUTES = 15;
@@ -42,7 +45,7 @@ export function resetAttempts(address: string): void {
 export async function getFreezeState(address: string): Promise<FreezeState> {
   const normalized = address.toLowerCase();
   const result = await query(
-    `SELECT is_frozen, frozen_until, freeze_reason
+    `SELECT is_frozen, frozen_until, freeze_reason, freeze_initiated_by
      FROM wallets WHERE address = $1`,
     [normalized]
   );
@@ -53,6 +56,7 @@ export async function getFreezeState(address: string): Promise<FreezeState> {
       frozen: false,
       frozenUntil: null,
       reason: null,
+      initiatedBy: null,
     };
   }
 
@@ -65,13 +69,15 @@ export async function getFreezeState(address: string): Promise<FreezeState> {
     frozen: isStillFrozen,
     frozenUntil: row.frozen_until ? new Date(row.frozen_until).toISOString() : null,
     reason: row.freeze_reason,
+    initiatedBy: isStillFrozen ? (row.freeze_initiated_by ?? "device") : null,
   };
 }
 
 export async function freezeWallet(
   address: string,
   hours: number = 24,
-  reason: string = "Emergency user freeze"
+  reason: string = "Emergency user freeze",
+  initiatedBy: FreezeInitiator = "device"
 ): Promise<FreezeState> {
   const normalized = address.toLowerCase();
   const frozenUntil = new Date(Date.now() + Math.min(hours, 168) * 3600 * 1000);
@@ -81,9 +87,10 @@ export async function freezeWallet(
      SET is_frozen = true,
          frozen_until = $1,
          freeze_reason = $2,
+         freeze_initiated_by = $4,
          updated_at = now()
      WHERE address = $3`,
-    [frozenUntil, reason, normalized]
+    [frozenUntil, reason, normalized, initiatedBy]
   );
 
   return {
@@ -91,6 +98,7 @@ export async function freezeWallet(
     frozen: true,
     frozenUntil: frozenUntil.toISOString(),
     reason,
+    initiatedBy,
   };
 }
 
@@ -102,6 +110,7 @@ export async function unfreezeWallet(address: string): Promise<FreezeState> {
      SET is_frozen = false,
          frozen_until = null,
          freeze_reason = null,
+         freeze_initiated_by = null,
          updated_at = now()
      WHERE address = $1`,
     [normalized]
@@ -112,5 +121,6 @@ export async function unfreezeWallet(address: string): Promise<FreezeState> {
     frozen: false,
     frozenUntil: null,
     reason: null,
+    initiatedBy: null,
   };
 }
