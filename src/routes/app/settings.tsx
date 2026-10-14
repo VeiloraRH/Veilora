@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Eye, EyeOff, RotateCcw, Server, ShieldAlert } from 'lucide-react';
+import { Check, Eye, EyeOff, Lock, RotateCcw, Server, ShieldAlert } from 'lucide-react';
 import { setPrivacyMode, usePrivacyMode } from '@/lib/privacyMode';
+import { IDLE_CHOICES, saveAutoLockSettings, useAutoLockSettings } from '@/lib/autoLock';
 import { PageTitle } from '@/components/wallet/WalletUI';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { useWallet } from '@/lib/walletContext';
@@ -11,7 +12,7 @@ import { clearRpcOverride, getRpcOverride, saveRpcOverride, verifyRpcEndpoint } 
 export const Route = createFileRoute('/app/settings')({ component: SettingsScreen });
 
 function SettingsScreen() {
-  const { walletAddress } = useWallet();
+  const { walletAddress, lockDeviceKey } = useWallet();
   const cache = useQueryClient();
   const [rpcUrl, setRpcUrl] = useState(() => getRpcOverride());
   const [showUrl, setShowUrl] = useState(false);
@@ -20,6 +21,7 @@ function SettingsScreen() {
   const [completion, setCompletion] = useState<CompletionNotice | null>(null);
   const usingCustomRpc = !!getRpcOverride();
   const privacy = usePrivacyMode();
+  const autoLock = useAutoLockSettings();
 
   function refreshChainData() {
     void cache.invalidateQueries({ queryKey: ['holdings', walletAddress] });
@@ -55,6 +57,13 @@ function SettingsScreen() {
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span>{privacy ? <EyeOff size={20}/> : <Eye size={20}/>}</span><div><h2>Privacy mode</h2><p>Hide balances and amounts across Veilora, for screen sharing, screenshots and using your wallet in public.</p></div><button role="switch" aria-checked={privacy} aria-label="Privacy mode" className={`wallet-toggle-switch ${privacy ? 'on' : ''}`} onClick={() => setPrivacyMode(!privacy)}><span/></button></div>
       <ul className="wallet-privacy-points"><li>Balances, holdings, history amounts, rule runs and transaction previews show •••• instead.</li><li>Tap any hidden amount to show it for 5 seconds.</li><li>Saved on this device only. It changes what is shown on screen; your balances are still public on Robinhood Chain.</li></ul>
+    </section>
+    <section className="wallet-panel wallet-settings-card">
+      <div className="wallet-settings-heading"><span><Lock size={20}/></span><div><h2>Auto-lock</h2><p>Clear your device key from memory when you step away. Unlocking again needs your passphrase.</p></div><span className={`wallet-status ${autoLock.idleMinutes ? 'confirmed' : 'pending'}`}>{autoLock.idleMinutes ? `${autoLock.idleMinutes} min` : 'Off'}</span></div>
+      <label className="wallet-settings-field"><span>Lock after no activity for</span><select className="wallet-select" value={autoLock.idleMinutes} onChange={event => saveAutoLockSettings({ idleMinutes: Number(event.target.value) })}>{IDLE_CHOICES.map(m => <option key={m} value={m}>{m === 0 ? 'Never (not recommended)' : m === 60 ? '1 hour' : `${m} minutes`}</option>)}</select></label>
+      <div className="wallet-settings-row"><div><strong>Lock when I leave the tab</strong><p>Locks once Veilora has been in the background for a minute.</p></div><button role="switch" aria-checked={autoLock.lockWhenHidden} aria-label="Lock when I leave the tab" className={`wallet-toggle-switch ${autoLock.lockWhenHidden ? 'on' : ''}`} onClick={() => saveAutoLockSettings({ lockWhenHidden: !autoLock.lockWhenHidden })}><span/></button></div>
+      <div className="wallet-settings-actions"><button className="wallet-soft-button" onClick={() => lockDeviceKey('manual')}><Lock size={15}/> Lock now</button></div>
+      {autoLock.idleMinutes === 0 && <div className="wallet-settings-note"><ShieldAlert size={16}/><p>With auto-lock off, anyone with access to this unlocked browser can sign with your device key until you close the tab.</p></div>}
     </section>
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span><Server size={20}/></span><div><h2>Use your own node</h2><p>Connect browser-side chain reads to your Robinhood Chain RPC provider.</p></div><span className={`wallet-status ${usingCustomRpc ? 'confirmed' : 'pending'}`}>{usingCustomRpc ? 'Custom RPC' : 'Veilora gateway'}</span></div>

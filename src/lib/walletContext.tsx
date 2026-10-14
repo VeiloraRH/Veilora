@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import {
   getWallet,
   createWallet,
@@ -8,6 +8,7 @@ import {
   type WalletMetadata,
 } from "./api";
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
+import { getAutoLockSettings, lockDue, type LockReason } from "./autoLock";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
@@ -56,6 +57,9 @@ interface WalletContextType {
   importDeviceKey: (privateKey: string, passphrase: string, expectedAddress?: string) => Promise<void>;
   connectExistingWallet: (address: string, privateKey: string, passphrase: string) => Promise<void>;
   deviceKeyUnlocked: boolean;
+  /** Why the device key was last locked, for the unlock screen. */
+  lockReason: LockReason | null;
+  lockDeviceKey: (reason?: LockReason) => void;
   clearLatestRecoveryKey: () => void;
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
@@ -76,6 +80,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   });
   const [deviceKey, setDeviceKey] = useState<string | null>(null);
   const [deviceKeyUnlocked, setDeviceKeyUnlocked] = useState(false);
+  const [lockReason, setLockReason] = useState<LockReason | null>(null);
   const [latestRecoveryKey, setLatestRecoveryKey] = useState<string | null>(null);
   const [pendingRecoveryDetails, setPendingRecoveryDetails] = useState<CreatedAccountDetails | null>(null);
   const [pendingRegistration, setPendingRegistration] = useState<{
@@ -142,6 +147,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(LEGACY_DEVICE_KEY);
       setDeviceKey(shardAPk);
       setDeviceKeyUnlocked(true);
+    setLockReason(null);
       setDeviceKeyPresent(true);
       const details: CreatedAccountDetails = {
         address: "",
@@ -188,6 +194,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setPendingRegistration(null);
   };
 
+  /** Wipe the decrypted device key from memory. The encrypted copy stays on this device. */
+  const lockDeviceKey = useCallback((reason: LockReason = "manual") => {
+    setDeviceKey(null);
+    setDeviceKeyUnlocked(false);
+    setLockReason(reason);
+  }, []);
+
+  // Auto-lock: track activity only while the key is unlocked, and check often
+  // enough that a laptop waking from sleep locks straight away.
+  const lastActivity = useRef(Date.now());
+  const hiddenSince = useRef<number | null>(null);
+  useEffect(() => {
+    if (!deviceKeyUnlocked) return;
+    lastActivity.current = Date.now();
+    hiddenSince.current = document.visibilityState === "hidden" ? Date.now() : null;
+    const touch = () => { lastActivity.current = Date.now(); };
+    const check = () => {
+      const reason = lockDue(getAutoLockSettings(), Date.now(), lastActivity.current, hiddenSince.current);
+      if (reason) lockDeviceKey(reason);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") { hiddenSince.current = Date.now(); return; }
+      check();
+      hiddenSince.current = null;
+      touch();
+    };
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    document.addEventListener("visibilitychange", onVisibility);
+    const timer = window.setInterval(check, 15_000);
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, touch));
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(timer);
+    };
+  }, [deviceKeyUnlocked, lockDeviceKey]);
+
   const getStoredDeviceKey = () => {
     return deviceKeyUnlocked ? deviceKey : null;
   };
@@ -198,6 +241,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const privateKey = await decryptDeviceKey(encrypted, passphrase);
       setDeviceKey(privateKey);
       setDeviceKeyUnlocked(true);
+    setLockReason(null);
       return;
     }
     const legacyKey = localStorage.getItem(LEGACY_DEVICE_KEY);
@@ -206,6 +250,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(LEGACY_DEVICE_KEY);
       setDeviceKey(legacyKey);
       setDeviceKeyUnlocked(true);
+    setLockReason(null);
       setDeviceKeyPresent(true);
       return;
     }
@@ -221,6 +266,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(LEGACY_DEVICE_KEY);
     setDeviceKey(privateKey);
     setDeviceKeyUnlocked(true);
+    setLockReason(null);
     setDeviceKeyPresent(true);
   };
 
@@ -292,6 +338,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         auditTrail,
         deviceKeyPresent,
         deviceKeyUnlocked,
+        lockReason,
+        lockDeviceKey,
         latestRecoveryKey,
         pendingRecoveryDetails,
         setWalletAddress,

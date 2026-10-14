@@ -5,9 +5,10 @@ import { OnboardingScreen } from "@/components/dashboard/OnboardingScreen";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getAutoLockSettings, lockMessage } from "@/lib/autoLock";
 
 function AppRouteGate() {
-  const { walletAddress, pendingRecoveryDetails, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey } = useWallet();
+  const { walletAddress, pendingRecoveryDetails, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey, lockReason } = useWallet();
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
@@ -37,6 +38,7 @@ function AppRouteGate() {
             <h1 className="text-xl font-semibold text-slate-900 dark:text-cream">Unlock your device key</h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-mist">Shard A is encrypted on this device. Enter its passphrase to unlock it in memory.</p>
           </div>
+          {lockReason && <p role="status" className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{lockMessage(lockReason, getAutoLockSettings())} Your device key was cleared from memory.</p>}
           <Input type="password" autoComplete="current-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="Device-key passphrase" aria-label="Device-key passphrase" required />
           {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
           <Button className="w-full" disabled={unlocking || !passphrase}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
