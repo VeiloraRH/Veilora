@@ -226,6 +226,24 @@ export async function getOnrampSession(sessionId: string) {
   return request<OnrampSessionStatus>(`/v1/onramp/session/${encodeURIComponent(sessionId)}`);
 }
 
+// ---------------------------------------------------------------------------
+// Transaction explanations
+// ---------------------------------------------------------------------------
+
+export type ExplainFlag = { level: "info" | "warn" | "danger"; code: string; text: string };
+export type ExplainEffect = { direction: "out" | "in" | "permission"; asset: string; amount: string | null; raw: string | null; counterparty: string | null };
+export interface TxExplanation { kind: string; title: string; summary: string[]; effects: ExplainEffect[]; flags: ExplainFlag[]; target: { address: string; label: string }; status?: "success" | "reverted"; gasPaidBy?: "relayer" | "you" | "sender"; feeEth?: string | null }
+
+export async function explainCalls(walletAddress: string, calls: { target: string; value: bigint; data: string }[]) {
+  return request<{ level: "info" | "warn" | "danger"; explanations: TxExplanation[] }>("/v1/explain", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, calls: calls.map((c) => ({ target: c.target, value: c.value.toString(), data: c.data })) }),
+  });
+}
+export async function explainTransaction(walletAddress: string, hash: string) {
+  return request<TxExplanation>(`/v1/wallets/${encodeURIComponent(walletAddress)}/explain/${encodeURIComponent(hash)}`);
+}
+
 export async function getQuorumStatus(address: string) {
   return request<QuorumStatus>(`/v1/wallets/${encodeURIComponent(address)}/quorum`);
 }

@@ -95,27 +95,34 @@ export async function quoteSwap(input: WalletToken, output: WalletToken, amountI
  if(!best) throw new Error('No live Uniswap v3 or v4 quote is available for this pair. Try another asset or amount.');
  return {...best,amountIn,tokenIn,tokenOut,minOut:best.amountOut*BigInt(10000-slippageBps)/10000n,expiresAt:Date.now()+60000};
 }
-export async function performSwap(wallet: Address, key: Hex, input: WalletToken, output: WalletToken, quote: SwapQuote, onStatus: (message: string)=>void) {
- if (Date.now() >= quote.expiresAt) throw new Error('This quote expired. Get a fresh quote before swapping.');
- if (quote.amountIn > await tokenBalance(wallet,input)) throw new Error('Insufficient balance for this swap.');
+export type PlannedCall = { target: Address; value: bigint; data: Hex };
+/** The exact calls a swap will sign: an approval when allowance is short, then the swap. Used for review and execution alike. */
+export async function planSwapCalls(wallet: Address, input: WalletToken, output: WalletToken, quote: SwapQuote): Promise<{ approval: PlannedCall | null; swap: PlannedCall; deadline?: number }> {
+ let approval: PlannedCall | null = null;
  if (!input.native) {
   const spender=quote.venue==='uniswap-v4'?UNISWAP_V4_ADAPTER:SWAP_ROUTER;
   const allowance = await chainClient.readContract({address:input.address,abi:erc20Abi,functionName:'allowance',args:[wallet,spender]});
-  if (allowance < quote.amountIn) {
-   onStatus('Approving token…');
-   await executeWalletCall(wallet,key,input.address,0n,encodeFunctionData({abi:erc20Abi,functionName:'approve',args:[spender,quote.amountIn]}));
-  }
+  if (allowance < quote.amountIn) approval={target:input.address,value:0n,data:encodeFunctionData({abi:erc20Abi,functionName:'approve',args:[spender,quote.amountIn]})};
  }
- if (Date.now() >= quote.expiresAt) throw new Error('Token approved. Refresh your quote to complete the swap.');
  if(quote.venue==='uniswap-v4') {
   if(!quote.pool||input.native||output.native)throw new Error('This Uniswap v4 route is not executable for native ETH. Refresh your quote to use Uniswap v3.');
   const {currency0,currency1,fee,tickSpacing,hooks,zeroForOne}=quote.pool;
-  onStatus('Signing & swapping…');
-  return executeWalletCall(wallet,key,UNISWAP_V4_ADAPTER,0n,encodeFunctionData({abi:v4AdapterAbi,functionName:'swapExactIn',args:[{currency0,currency1,fee,tickSpacing,hooks},zeroForOne,quote.amountIn,quote.minOut,wallet]}));
+  return {approval,swap:{target:UNISWAP_V4_ADAPTER,value:0n,data:encodeFunctionData({abi:v4AdapterAbi,functionName:'swapExactIn',args:[{currency0,currency1,fee,tickSpacing,hooks},zeroForOne,quote.amountIn,quote.minOut,wallet]})}};
  }
  const calls: Hex[] = [encodeFunctionData({abi:routerAbi,functionName:'exactInputSingle',args:[{tokenIn:quote.tokenIn,tokenOut:quote.tokenOut,fee:quote.fee,recipient:output.native ? SWAP_ROUTER : wallet,amountIn:quote.amountIn,amountOutMinimum:quote.minOut,sqrtPriceLimitX96:0n}]})];
  if (output.native) calls.push(encodeFunctionData({abi:routerAbi,functionName:'unwrapWETH9',args:[quote.minOut,wallet]}));
  const deadline = Math.floor(quote.expiresAt/1000);
+ return {approval,swap:{target:SWAP_ROUTER,value:input.native ? quote.amountIn : 0n,data:encodeFunctionData({abi:routerAbi,functionName:'multicall',args:[BigInt(deadline),calls]})},deadline};
+}
+export async function performSwap(wallet: Address, key: Hex, input: WalletToken, output: WalletToken, quote: SwapQuote, onStatus: (message: string)=>void) {
+ if (Date.now() >= quote.expiresAt) throw new Error('This quote expired. Get a fresh quote before swapping.');
+ if (quote.amountIn > await tokenBalance(wallet,input)) throw new Error('Insufficient balance for this swap.');
+ const plan = await planSwapCalls(wallet,input,output,quote);
+ if (plan.approval) {
+  onStatus('Approving token…');
+  await executeWalletCall(wallet,key,plan.approval.target,plan.approval.value,plan.approval.data);
+ }
+ if (Date.now() >= quote.expiresAt) throw new Error('Token approved. Refresh your quote to complete the swap.');
  onStatus('Signing & swapping…');
- return executeWalletCall(wallet,key,SWAP_ROUTER,input.native ? quote.amountIn : 0n,encodeFunctionData({abi:routerAbi,functionName:'multicall',args:[BigInt(deadline),calls]}),deadline);
+ return plan.deadline===undefined ? executeWalletCall(wallet,key,plan.swap.target,plan.swap.value,plan.swap.data) : executeWalletCall(wallet,key,plan.swap.target,plan.swap.value,plan.swap.data,plan.deadline);
 }

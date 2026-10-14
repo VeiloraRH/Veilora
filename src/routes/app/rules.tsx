@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { PageTitle, TokenIcon } from '@/components/wallet/WalletUI';
 import { useWallet } from '@/lib/walletContext';
 import { WALLET_TOKENS, ROBINHOOD_TOKEN_REGISTRY as TOKENS } from '@/lib/tokens';
-import { EXPLORER, performSwap, quoteSwap, tokenBalance, type SwapQuote } from '@/lib/walletChain';
+import { EXPLORER, performSwap, planSwapCalls, quoteSwap, tokenBalance, type PlannedCall, type SwapQuote } from '@/lib/walletChain';
+import { SignPreview } from '@/components/wallet/TxExplanation';
 import { createRule, describeAction, describeLimits, describeTrigger, hourLabel, useWalletRules, rawText, resolveExecution, setRuleStatus, WEEKDAY_NAMES, type RuleExecution, type RuleSpec, type RuleTrigger, type WalletRule } from '@/lib/rulesApi';
 export const Route=createFileRoute('/app/rules')({component:RulesScreen});
 
@@ -99,6 +100,8 @@ function ApprovalReview({run,onClose,onDone}:{run:RuleExecution;onClose:()=>void
  useEffect(()=>{let active=true;setLoading(true);setError('');
   void Promise.all([tokenBalance(getAddress(walletAddress),source).catch(()=>null),...run.legs.map(async l=>{const amountRaw=BigInt(l.amountRaw);try{return {asset:l.asset,amountRaw,quote:await quoteSwap(source,TOKENS[l.asset],amountRaw,run.slippageBps)};}catch(e){return {asset:l.asset,amountRaw,error:e instanceof Error?e.message:'No quote'};}})]).then(([bal,...quoted])=>{if(!active)return;setBalance(bal as bigint|null);setLegs(quoted as LegQuote[]);}).finally(()=>{if(active)setLoading(false);});
   return()=>{active=false;};},[run,refresh,walletAddress,source]);
+ const [planned,setPlanned]=useState<PlannedCall[]>([]);
+ useEffect(()=>{setPlanned([]);if(loading||!legs.length||legs.some(l=>!l.quote))return;let active=true;void Promise.all(legs.map(l=>planSwapCalls(getAddress(walletAddress),source,TOKENS[l.asset],l.quote!))).then(plans=>{if(active)setPlanned(plans.flatMap(p=>[...(p.approval?[p.approval]:[]),p.swap]));}).catch(()=>{});return()=>{active=false;};},[legs,loading,walletAddress,source]);
  const expired=legs.some(l=>l.quote&&l.quote.expiresAt<=now); const missing=legs.some(l=>!l.quote); const enough=balance!=null&&balance>=total;
  async function approve(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key before approving.');return;}const hashes:string[]=[];setError('');
   try{for(const [i,l] of legs.entries()){const fresh=l.quote&&l.quote.expiresAt-Date.now()>15000?l.quote:await quoteSwap(source,TOKENS[l.asset],l.amountRaw,run.slippageBps);setBusy(`Swap ${i+1} of ${legs.length}: ${l.asset}…`);hashes.push(await performSwap(getAddress(walletAddress),key as Hex,source,TOKENS[l.asset],fresh,s=>setBusy(`Swap ${i+1} of ${legs.length}: ${s}`)));}
@@ -110,6 +113,7 @@ function ApprovalReview({run,onClose,onDone}:{run:RuleExecution;onClose:()=>void
  return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose();}}><DialogContent className="wallet-dialog sm:max-w-lg"><DialogHeader><DialogTitle>Approve this run</DialogTitle><DialogDescription>{run.ruleName} · {triggerText(run)}</DialogDescription></DialogHeader>
   <div className="review-legs">{loading?<div className="review-loading"><Loader2 className="animate-spin" size={18}/>Getting live quotes…</div>:legs.map(l=><div key={l.asset} className="review-leg"><div className="review-leg-pair"><TokenIcon token={source} size={26}/><ArrowRight size={14}/><TokenIcon token={TOKENS[l.asset]} size={26}/><div><strong>{rawText(l.amountRaw,run.sourceAsset)} → {l.asset}</strong><small>{l.quote?`Uniswap ${l.quote.venue==='uniswap-v4'?'v4':'v3'} · ${l.quote.fee/10000}% pool`:l.error}</small></div></div>{l.quote&&<dl><div><dt>Expected</dt><dd>{rawText(l.quote.amountOut,l.asset)}</dd></div><div><dt>Minimum received</dt><dd>{rawText(l.quote.minOut,l.asset)}</dd></div></dl>}</div>)}</div>
   <div className="send-review"><div><span>Total from your wallet</span><strong>{rawText(total,run.sourceAsset)}</strong></div><div><span>Your balance</span><strong>{balance==null?'—':rawText(balance,run.sourceAsset)}</strong></div><div><span>Max slippage</span><strong>{run.slippageBps/100}%</strong></div><div><span>Network</span><strong>Robinhood Chain</strong></div><div><span>Network fee</span><strong>Paid by Veilora's relayer</strong></div><div><span>Signing</span><strong>Your device key + co-signer</strong></div></div>
+  <SignPreview wallet={walletAddress} calls={planned}/>
   <ul className="review-risks"><li>Each target is a separate swap. If one fails, the ones before it stay completed.</li>{!source.native&&<li>A token approval may be signed first, limited to each swap's amount.</li>}<li>Prices move. You receive at least the minimum shown, or the swap does not execute.</li></ul>
   {!loading&&!enough&&<p role="alert" className="wallet-error mb-3">Your {run.sourceAsset} balance is below this run's total. Top up or decline it.</p>}
   {error&&<p role="alert" className="wallet-error mb-3">{error}</p>}
