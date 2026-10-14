@@ -28,6 +28,16 @@ export const bridgeDestinations = [
       { symbol: "USDT", name: "Tether USD", currency: "0xdac17f958d2ee523a2206206994597c13d831ec7", decimals: 6 },
     ],
   },
+  {
+    chainId: 137,
+    name: "Polygon",
+    assets: [
+      { symbol: "POL", name: "POL", currency: NATIVE_CURRENCY, decimals: 18, native: true },
+      { symbol: "ETH", name: "Wrapped Ether", currency: "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", decimals: 18 },
+      { symbol: "USDC", name: "USD Coin", currency: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", decimals: 6 },
+      { symbol: "USDT", name: "Tether USD", currency: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", decimals: 6 },
+    ],
+  },
 ] as const;
 
 type BridgeInput = {

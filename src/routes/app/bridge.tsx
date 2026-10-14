@@ -26,6 +26,12 @@ const DESTINATIONS = [
     { symbol: 'USDC', currency: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', decimals: 6 },
     { symbol: 'USDT', currency: '0xdac17f958d2ee523a2206206994597c13d831ec7', decimals: 6 },
   ] },
+  { chainId: 137, name: 'Polygon', explorer: 'https://polygonscan.com', assets: [
+    { symbol: 'POL', name: 'POL', currency: NATIVE, decimals: 18, native: true },
+    { symbol: 'ETH', name: 'Wrapped Ether', currency: '0x7ceb23fd6bc0add59e62ac25578270cff1b9f619', decimals: 18 },
+    { symbol: 'USDC', name: 'USD Coin', currency: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', decimals: 6 },
+    { symbol: 'USDT', name: 'Tether USD', currency: '0xc2132d05d31c914a87c6611c10748aeb04b58e8f', decimals: 6 },
+  ] },
 ] as const;
 const SOURCES = [
   { symbol: 'ETH', currency: NATIVE, decimals: 18 },
@@ -73,12 +79,12 @@ function BridgeScreen() {
     const known = ROBINHOOD_TOKEN_REGISTRY[asset.symbol];
     return {
       symbol: asset.symbol,
-      name: known?.name || (asset.symbol === 'ETH' ? 'Ether' : asset.symbol === 'USDC' ? 'USD Coin' : 'Tether USD'),
+      name: 'name' in asset ? asset.name : known?.name || (asset.symbol === 'ETH' ? 'Ether' : asset.symbol === 'USDC' ? 'USD Coin' : 'Tether USD'),
       address: asset.currency as Address,
       decimals: asset.decimals,
       logo: known?.logo || `/tokens/${asset.symbol.toLowerCase()}.svg`,
       stock: false,
-      native: asset.symbol === 'ETH',
+      native: 'native' in asset ? asset.native : asset.currency === NATIVE,
       category: 'crypto',
     };
   });
@@ -223,7 +229,7 @@ function BridgeScreen() {
   const lastDeposit = records[0];
 
   return <>
-    <PageTitle title="Bridge" description="Move ETH or USDG from Robinhood Chain to Base or Ethereum." />
+    <PageTitle title="Bridge" description="Move ETH or USDG from Robinhood Chain to Base, Polygon, or Ethereum." />
     <div className="wallet-bridge-layout">
       <section className="wallet-panel wallet-bridge-card">
         <div className="wallet-bridge-steps" aria-label="Bridge steps">
@@ -269,7 +275,7 @@ function BridgeScreen() {
         </>}
         {step === 4 && <div className="wallet-bridge-success"><span><Check size={23} /></span><h2>Bridge submitted</h2><p>Your source transaction is confirmed. Relay is processing delivery to {destinationChain.name}.</p>{lastDeposit?.sourceHash && <a href={`https://robinhoodchain.blockscout.com/tx/${lastDeposit.sourceHash}`} target="_blank" rel="noreferrer">View source transaction <ExternalLink size={15} /></a>}<button className="wallet-primary-button mt-5" onClick={() => { setStep(1); setRecipient(''); }}>Start another bridge</button></div>}
       </section>
-      <aside className="wallet-bridge-aside"><span><ArrowDown size={21} /></span><h3>Cross-chain, with a clear destination.</h3><p>Relay routes ETH or USDG from Robinhood Chain to ETH or USDC on Base, and ETH, USDC, or USDT on Ethereum.</p><small><Clock3 size={15} /> Network delivery can take several minutes. You can track the Relay status below.</small><small><ShieldCheck size={15} /> You review the destination address and minimum receive amount before signing.</small></aside>
+      <aside className="wallet-bridge-aside"><span><ArrowDown size={21} /></span><h3>Cross-chain, with a clear destination.</h3><p>Relay routes ETH or USDG from Robinhood Chain to Base, Polygon, or Ethereum. Polygon destinations include POL, wrapped ETH, USDC, and USDT.</p><small><Clock3 size={15} /> Network delivery can take several minutes. You can track the Relay status below.</small><small><ShieldCheck size={15} /> You review the destination address and minimum receive amount before signing.</small></aside>
     </div>
     <section className="wallet-bridge-history">
       <div className="wallet-section-heading"><h2>Bridge activity</h2><button className="wallet-icon-button" onClick={() => void refreshAll()} disabled={refreshing || !records.length} aria-label="Refresh bridge status"><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button></div>
