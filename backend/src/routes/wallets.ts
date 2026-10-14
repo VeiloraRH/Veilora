@@ -4,12 +4,13 @@ import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
 import { query } from "../db/index";
 import {
   CHAIN_ID,
-  FACTORY_ADDRESS,
+  LEGACY_FACTORY_ADDRESS,
+  V2_FACTORY_ADDRESS,
   publicClient,
   relayerAccount,
   relayerClient,
 } from "../config";
-import { veiloraFactoryAbi, veiloraAccountAbi } from "../abi";
+import { veiloraFactoryAbi, veiloraFactoryV2Abi, veiloraAccountAbi } from "../abi";
 import {
   generateShardKey,
   encryptSecret,
@@ -17,6 +18,7 @@ import {
   generateApiKey,
   hashApiKey,
   computeExecutionDigest,
+  computeExecutionDigestV2,
   signUserOpHash,
   concatSignatures,
 } from "../crypto";
@@ -85,7 +87,7 @@ async function readCounterfactualAddress(
     try {
       return await publicClient.readContract({
         address: factoryAddress,
-        abi: veiloraFactoryAbi,
+        abi: veiloraFactoryV2Abi,
         functionName: "getAddress",
         args: [shardA, shardB, shardC, salt],
       });
@@ -108,6 +110,10 @@ async function readCounterfactualAddress(
  */
 walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
+    if (!V2_FACTORY_ADDRESS) {
+      res.status(503).json({ error: "Veilora V2 account creation is being prepared. Please try again shortly." });
+      return;
+    }
     if (!await consumeRegistrationAttempt(req.ip || req.socket.remoteAddress || "unknown")) {
       res.status(429).json({ error: "Wallet registration rate limit reached; try again later" });
       return;
@@ -122,13 +128,18 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     shardA = getAddress(shardA);
     shardC = getAddress(shardC);
     const { requestId, timestamp, shardASignature } = req.body;
+    const accountVersion = Number(req.body.accountVersion);
+    if (accountVersion !== 2) {
+      res.status(400).json({ error: "New accounts must use the current Veilora V2 account version" });
+      return;
+    }
     if (typeof requestId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(requestId) ||
         !Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300 ||
         !shardASignature || !isHex(shardASignature) || shardASignature.length !== 132) {
       res.status(400).json({ error: "A fresh Shard A registration signature and request ID are required" });
       return;
     }
-    const registrationMessage = `Veilora wallet registration\nshardA:${shardA}\nshardC:${shardC}\nsalt:${salt}\ndeploy:${req.body.deployOnCreate === true}\ntimestamp:${timestamp}\nrequest:${requestId}`;
+    const registrationMessage = `Veilora wallet registration\nversion:${accountVersion}\nshardA:${shardA}\nshardC:${shardC}\nsalt:${salt}\ndeploy:${req.body.deployOnCreate === true}\ntimestamp:${timestamp}\nrequest:${requestId}`;
     const registrationSigner = await recoverMessageAddress({ message: registrationMessage, signature: shardASignature });
     if (registrationSigner.toLowerCase() !== shardA.toLowerCase()) {
       res.status(403).json({ error: "Registration signature does not match Shard A" });
@@ -151,7 +162,7 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     let counterfactualAddress: `0x${string}`;
     try {
       counterfactualAddress = await readCounterfactualAddress(
-        FACTORY_ADDRESS,
+        V2_FACTORY_ADDRESS,
         shardA,
         shardB.address,
         shardC,
@@ -190,8 +201,8 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         isDeployed = Boolean(code && code !== "0x");
         if (!isDeployed) {
           const deployHash = await relayerClient.writeContract({
-            address: FACTORY_ADDRESS,
-            abi: veiloraFactoryAbi,
+            address: V2_FACTORY_ADDRESS,
+            abi: veiloraFactoryV2Abi,
             functionName: "createAccount",
             args: [shardA, shardB.address, shardC, salt],
           });
@@ -216,7 +227,7 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
 
     await query(
       `INSERT INTO wallets (
-        address, factory_address, salt, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
+        address, factory_address, account_version, salt, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
         shard_c_address, api_key_hash, threshold, totp_secret_encrypted, registration_request_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 2, $11, $12)
       ON CONFLICT (address) DO UPDATE SET
@@ -225,12 +236,14 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
         shard_b_encrypted = EXCLUDED.shard_b_encrypted,
         shard_c_address = EXCLUDED.shard_c_address,
         factory_address = EXCLUDED.factory_address,
+        account_version = EXCLUDED.account_version,
         salt = EXCLUDED.salt,
         api_key_hash = EXCLUDED.api_key_hash,
         updated_at = now()`,
       [
         counterfactualAddress.toLowerCase(),
-        FACTORY_ADDRESS.toLowerCase(),
+        V2_FACTORY_ADDRESS.toLowerCase(),
+        accountVersion,
         salt.toString(),
         CHAIN_ID,
         shardA.toLowerCase(),
@@ -246,7 +259,8 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     res.status(201).json({
       address: counterfactualAddress,
       chainId: CHAIN_ID,
-      factoryAddress: FACTORY_ADDRESS,
+      factoryAddress: V2_FACTORY_ADDRESS,
+      accountVersion,
       shardA,
       shardB: shardB.address,
       shardC,
@@ -352,7 +366,8 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
       address: getAddress(wallet.address),
       chainId: wallet.chain_id,
       shardA: getAddress(wallet.shard_a_address),
-      factoryAddress: getAddress(wallet.factory_address || FACTORY_ADDRESS),
+      factoryAddress: getAddress(wallet.factory_address || LEGACY_FACTORY_ADDRESS),
+      accountVersion: Number(wallet.account_version) === 2 ? 2 : 1,
       shardB: getAddress(wallet.shard_b_address),
       shardC: getAddress(wallet.shard_c_address),
       threshold: wallet.threshold,
@@ -431,14 +446,9 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
     // The deployed account enforces the authoritative nonce during execution.
     // This endpoint has no caller-supplied digest path; Shard A must authorize
     // this exact payload, and the short deadline bounds stale approvals.
-    const digest = computeExecutionDigest(
-      target,
-      BigInt(value),
-      data as `0x${string}`,
-      nonce,
-      deadline,
-      BigInt(wallet.chain_id || CHAIN_ID),
-    );
+    const digest = Number(wallet.account_version) === 2
+      ? computeExecutionDigestV2(getAddress(wallet.address), target, BigInt(value), data as `0x${string}`, nonce, deadline, BigInt(wallet.chain_id || CHAIN_ID))
+      : computeExecutionDigest(target, BigInt(value), data as `0x${string}`, nonce, deadline, BigInt(wallet.chain_id || CHAIN_ID));
     const recoveredShardA = await recoverMessageAddress({ message: { raw: digest }, signature: shardASignature });
     if (recoveredShardA.toLowerCase() !== String(wallet.shard_a_address).toLowerCase()) {
       res.status(403).json({ error: "Execution signature does not match this wallet's Shard A" });

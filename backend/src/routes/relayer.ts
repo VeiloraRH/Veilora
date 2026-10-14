@@ -4,14 +4,16 @@ import {
   CHAIN_ID,
   RPC_URL,
   FACTORY_ADDRESS,
+  LEGACY_FACTORY_ADDRESS,
+  V2_FACTORY_ADDRESS,
   USDG_ADDRESS,
   publicClient,
   relayerAccount,
   relayerClient,
 } from "../config";
-import { veiloraFactoryAbi, veiloraAccountAbi } from "../abi";
+import { veiloraFactoryAbi, veiloraFactoryV2Abi, veiloraAccountAbi } from "../abi";
 import { db, query } from "../db/index";
-import { computeExecutionDigest } from "../crypto";
+import { computeExecutionDigest, computeExecutionDigestV2 } from "../crypto";
 import { getFreezeState } from "../freeze";
 
 const MAX_EXECUTION_GAS = BigInt(process.env.RELAYER_MAX_EXECUTION_GAS || "1500000");
@@ -94,6 +96,8 @@ relayerRouter.get("/status", async (_req: Request, res: Response): Promise<void>
       },
       contracts: {
         factory: FACTORY_ADDRESS,
+        legacyFactory: FACTORY_ADDRESS,
+        v2Factory: V2_FACTORY_ADDRESS ?? null,
         usdgToken: USDG_ADDRESS,
       },
     });
@@ -155,8 +159,8 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const walletResult = await query<{ shard_a_address: string; shard_b_address: string; shard_c_address: string; factory_address: string; salt: string; chain_id: number }>(
-      "SELECT shard_a_address, shard_b_address, shard_c_address, factory_address, salt::text, chain_id FROM wallets WHERE address = $1",
+    const walletResult = await query<{ shard_a_address: string; shard_b_address: string; shard_c_address: string; factory_address: string; account_version: number; salt: string; chain_id: number }>(
+      "SELECT shard_a_address, shard_b_address, shard_c_address, factory_address, account_version, salt::text, chain_id FROM wallets WHERE address = $1",
       [cleanWallet.toLowerCase()],
     );
     const wallet = walletResult.rows[0];
@@ -164,7 +168,14 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     if (Number(wallet.chain_id) !== CHAIN_ID) { res.status(400).json({ error: "Wallet is registered for another chain" }); return; }
     if ((await getFreezeState(cleanWallet)).frozen) { res.status(403).json({ error: "Wallet is frozen; the relayer will not submit transactions" }); return; }
 
-    const digest = computeExecutionDigest(cleanTarget, numValue, hexData, numNonce, numDeadline, BigInt(CHAIN_ID));
+    const accountVersion = Number(wallet.account_version) === 2 ? 2 : 1;
+    if (accountVersion === 2 && (!V2_FACTORY_ADDRESS || wallet.factory_address.toLowerCase() !== V2_FACTORY_ADDRESS.toLowerCase())) {
+      res.status(503).json({ error: "This V2 wallet is not connected to its configured factory" });
+      return;
+    }
+    const digest = accountVersion === 2
+      ? computeExecutionDigestV2(cleanWallet, cleanTarget, numValue, hexData, numNonce, numDeadline, BigInt(CHAIN_ID))
+      : computeExecutionDigest(cleanTarget, numValue, hexData, numNonce, numDeadline, BigInt(CHAIN_ID));
     const firstSignature = `0x${hexSignatures.slice(2, 132)}` as `0x${string}`;
     const secondSignature = `0x${hexSignatures.slice(132)}` as `0x${string}`;
     const [firstSigner, secondSigner] = await Promise.all([
@@ -183,10 +194,11 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     );
     if (!approved.rows.length) { res.status(403).json({ error: "This transaction has no Shard B co-signer approval" }); return; }
 
-    const factoryAddress = getAddress(wallet.factory_address || FACTORY_ADDRESS);
+    const factoryAddress = getAddress(wallet.factory_address || LEGACY_FACTORY_ADDRESS);
+    const factoryAbi = accountVersion === 2 ? veiloraFactoryV2Abi : veiloraFactoryAbi;
     const salt = BigInt(wallet.salt || "0");
     const expectedWallet = await publicClient.readContract({
-      address: factoryAddress, abi: veiloraFactoryAbi, functionName: "getAddress",
+      address: factoryAddress, abi: factoryAbi, functionName: "getAddress",
       args: [getAddress(wallet.shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.shard_c_address), salt],
     });
     if (expectedWallet.toLowerCase() !== cleanWallet.toLowerCase()) {
@@ -197,7 +209,7 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     let code = await publicClient.getCode({ address: cleanWallet });
     let isDeployed = Boolean(code && code !== "0x");
     if (!isDeployed) {
-      const deployment = { address: factoryAddress, abi: veiloraFactoryAbi, functionName: "createAccount" as const,
+      const deployment = { address: factoryAddress, abi: factoryAbi, functionName: "createAccount" as const,
         args: [getAddress(wallet.shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.shard_c_address), salt] as const,
         account: relayerAccount.address };
       await publicClient.simulateContract(deployment);

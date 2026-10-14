@@ -63,8 +63,18 @@ export const amountText = (value: bigint, decimals: number) => Number(formatUnit
 export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240) {
  const nonce = await chainClient.readContract({ address: wallet, abi: parseAbi(['function nonce() view returns (uint256)']), functionName: 'nonce' });
  if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Account nonce exceeds the supported range.');
- const typeHash = keccak256(stringToHex('VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)'));
- const digest = keccak256(encodeAbiParameters([{type:'bytes32'},{type:'address'},{type:'uint256'},{type:'bytes32'},{type:'uint256'},{type:'uint256'},{type:'uint256'}], [typeHash,target,value,keccak256(data),nonce,BigInt(deadline),4663n]));
+ const accountVersion = localStorage.getItem(`veilora:account-version:${wallet.toLowerCase()}`) === '2' ? 2 : 1;
+ const type = accountVersion === 2
+  ? 'VeiloraExecutionV2(address account,address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)'
+  : 'VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)';
+ const typeHash = keccak256(stringToHex(type));
+ const fields = accountVersion === 2
+  ? [{type:'bytes32'},{type:'address'},{type:'address'},{type:'uint256'},{type:'bytes32'},{type:'uint256'},{type:'uint256'},{type:'uint256'}] as const
+  : [{type:'bytes32'},{type:'address'},{type:'uint256'},{type:'bytes32'},{type:'uint256'},{type:'uint256'},{type:'uint256'}] as const;
+ const values = accountVersion === 2
+  ? [typeHash,wallet,target,value,keccak256(data),nonce,BigInt(deadline),4663n] as const
+  : [typeHash,target,value,keccak256(data),nonce,BigInt(deadline),4663n] as const;
+ const digest = keccak256(encodeAbiParameters(fields, values));
  const shardASignature = await privateKeyToAccount(privateKey).signMessage({ message: { raw: digest } });
  const payload = { target, value: value.toString(), data, nonce: Number(nonce), deadline };
  const cosigned = await cosignTransaction(wallet, { ...payload, shardASignature });

@@ -80,17 +80,7 @@ contract VeiloraAccount {
         nonce++;
 
         // Compute execution digest
-        bytes32 digest = keccak256(
-            abi.encode(
-                keccak256("VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)"),
-                target,
-                value,
-                keccak256(data),
-                _nonce,
-                deadline,
-                block.chainid
-            )
-        );
+        bytes32 digest = _executionDigest(target, value, data, _nonce, deadline);
 
         bytes32 ethSignedMessageHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", digest)
@@ -119,6 +109,27 @@ contract VeiloraAccount {
         }
 
         emit Executed(target, value, data);
+    }
+
+    /// @dev V1 execution digest retained for already deployed Legacy accounts.
+    function _executionDigest(
+        address target,
+        uint256 value,
+        bytes calldata data,
+        uint256 _nonce,
+        uint256 deadline
+    ) internal view virtual returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                keccak256("VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)"),
+                target,
+                value,
+                keccak256(data),
+                _nonce,
+                deadline,
+                block.chainid
+            )
+        );
     }
 
     /**

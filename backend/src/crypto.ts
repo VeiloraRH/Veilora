@@ -155,6 +155,30 @@ export function computeExecutionDigest(
   );
 }
 
+/** V2 execution digest binds authorization to the destination account address. */
+export function computeExecutionDigestV2(
+  account: `0x${string}`,
+  target: `0x${string}`,
+  value: bigint,
+  data: `0x${string}`,
+  nonce: bigint,
+  deadline: bigint,
+  chainId: bigint
+): `0x${string}` {
+  const typeHash = keccak256(
+    stringToHex("VeiloraExecutionV2(address account,address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)")
+  );
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: "bytes32" }, { type: "address" }, { type: "address" }, { type: "uint256" },
+        { type: "bytes32" }, { type: "uint256" }, { type: "uint256" }, { type: "uint256" },
+      ],
+      [typeHash, account, target, value, keccak256(data), nonce, deadline, chainId]
+    )
+  );
+}
+
 /**
  * Concatenates two 65-byte signatures into a single 130-byte hex string (0x-prefixed).
  */

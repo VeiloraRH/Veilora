@@ -12,6 +12,7 @@ import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "vi
 import { getAddress } from "viem";
 
 const STORAGE_KEY = "veilora:wallet_address";
+const ACCOUNT_VERSION_KEY = (address: string) => `veilora:account-version:${address.toLowerCase()}`;
 const ENCRYPTED_DEVICE_KEY = "veilora:shardA:encrypted";
 const LEGACY_DEVICE_KEY = "veilora:shardA:privateKey";
 
@@ -100,6 +101,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const data = await getWallet(addr);
       setWallet(data);
+      localStorage.setItem(ACCOUNT_VERSION_KEY(addr), String(data.accountVersion ?? 1));
       const audit = deviceKey ? await getWalletAudit(addr, deviceKey as `0x${string}`).catch(() => ({ records: [] })) : { records: [] };
       setAuditTrail(audit.records || []);
     } catch (err: any) {
@@ -127,12 +129,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const shardCAddress = privateKeyToAddress(shardCPk);
       const requestId = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
       const timestamp = Math.floor(Date.now() / 1000);
-      const message = `Veilora wallet registration\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:true\ntimestamp:${timestamp}\nrequest:${requestId}`;
+      const message = `Veilora wallet registration\nversion:2\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:true\ntimestamp:${timestamp}\nrequest:${requestId}`;
       const shardASignature = await privateKeyToAccount(shardAPk).signMessage({ message });
-      const res = await createWallet({ shardAAddress, shardCAddress, deployOnCreate: true, requestId, timestamp, shardASignature });
+      const res = await createWallet({ accountVersion: 2, shardAAddress, shardCAddress, deployOnCreate: true, requestId, timestamp, shardASignature });
 
       localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(shardAPk, passphrase));
       localStorage.setItem("veilora:shardA:address", res.shardA);
+      localStorage.setItem(ACCOUNT_VERSION_KEY(res.address), String(res.accountVersion));
       localStorage.removeItem(LEGACY_DEVICE_KEY);
       setDeviceKey(shardAPk);
       setDeviceKeyUnlocked(true);
@@ -207,6 +210,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!deviceKeyMatchesAddress(privateKey, metadata.shardA)) {
       throw new Error("This key does not match Shard A registered for that Veilora account.");
     }
+    localStorage.setItem(ACCOUNT_VERSION_KEY(metadata.address), String(metadata.accountVersion ?? 1));
     await importDeviceKey(privateKey, passphrase, metadata.shardA);
     setWalletAddress(address);
   };
@@ -233,6 +237,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await deleteWalletData(canonicalAddress, timestamp, signature);
 
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ACCOUNT_VERSION_KEY(walletAddress));
     localStorage.removeItem(LEGACY_DEVICE_KEY);
     localStorage.removeItem(ENCRYPTED_DEVICE_KEY);
     localStorage.removeItem("veilora:shardA:address");

@@ -151,7 +151,7 @@ export async function getRelayerStatus() {
   return request<{
     network: { chainId: number; rpcHost: string; blockNumber: string; gasPriceGwei: string };
     relayer: { address: string | null; balanceEth: string; ready: boolean };
-    contracts: { factory: string; usdgToken: string };
+    contracts: { factory: string; legacyFactory: string; v2Factory: string | null; usdgToken: string };
   }>("/v1/relayer/status");
 }
 
@@ -209,6 +209,7 @@ export async function getBridgeStatus(requestId: string) {
 export interface WalletMetadata {
   address: string;
   chainId: number;
+  accountVersion: 1 | 2;
   shardA: string;
   shardB: string;
   shardC: string;
@@ -223,6 +224,7 @@ export interface WalletMetadata {
 }
 
 export async function createWallet(params: {
+  accountVersion: 2;
   shardAAddress?: string;
   shardCAddress?: string;
   salt?: string;
@@ -236,6 +238,7 @@ export async function createWallet(params: {
     address: string;
     chainId: number;
     factoryAddress: string;
+    accountVersion: 2;
     shardA: string;
     shardB: string;
     shardC: string;

@@ -6,6 +6,8 @@ const root = join(import.meta.dir, "../..");
 const sourceFiles = [
   "contracts/src/VeiloraAccount.sol",
   "contracts/src/VeiloraFactory.sol",
+  "contracts/src/VeiloraAccountV2.sol",
+  "contracts/src/VeiloraFactoryV2.sol",
   "contracts/src/VeiloraEscrow.sol",
   "contracts/src/VeiloraEscrowFactory.sol",
 ];

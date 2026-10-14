@@ -11,5 +11,10 @@
   "escrowFactoryDeploymentTx": "0x6128ae544fca3504043372a4c18c79436ecc1a7b0bfeaad5c74718c88149965d",
   "escrowFactoryRuntimeCodeHash": "0xe04b66fc89642ae36cf6a663d5c72d5f25265367425be679ad670c43a0c26f4a",
   "escrowFactoryDeployer": "0x695d8E941e68D3ea39c14C43745286b5729E8CD7",
-  "escrowFactoryDeployedAt": "2026-10-14T08:51:34.508Z"
+  "escrowFactoryDeployedAt": "2026-10-14T08:51:34.508Z",
+  "veiloraFactoryV2": "0xBB073C1c441e9793f8eFf49A35BDEafbCD6d475c",
+  "factoryV2DeploymentTx": "0x2e0675365daa23992b3260d0135d6dfd88e204531931fb74cb08a552beb6d854",
+  "factoryV2RuntimeCodeHash": "0xaabe6f49c5e6f68673f2c2626b5feaeb93714129d034ccdf39279170ea66e32e",
+  "factoryV2Deployer": "0x695d8E941e68D3ea39c14C43745286b5729E8CD7",
+  "factoryV2DeployedAt": "2026-10-14T17:56:04.493Z"
 }

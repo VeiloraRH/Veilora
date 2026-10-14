@@ -12,6 +12,7 @@
     "backend:dev": "cd backend && bun run dev",
     "compile:contracts": "bun run contracts/script/compile.ts",
     "deploy:contracts": "bun run contracts/script/deploy.ts",
+    "deploy:contracts:v2": "bun run compile:contracts && bun run contracts/script/deploy-v2.ts",
     "deploy:escrow": "bun run contracts/script/deploy-escrow.ts",
     "push:origin": "git push origin main",
     "push:public": "python3 scripts/sync-public.py",

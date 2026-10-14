@@ -48,6 +48,9 @@ export const veiloraFactoryAbi = [
   },
 ] as const;
 
+// V2 has the same factory interface; its CREATE2 init code uses V2 account code.
+export const veiloraFactoryV2Abi = veiloraFactoryAbi;
+
 export const veiloraAccountAbi = [
   {
     inputs: [
@@ -208,4 +211,7 @@ export const veiloraAccountAbi = [
     type: "function",
   },
 ] as const;
+
+// VeiloraAccountV2 preserves the account interface while changing its digest domain.
+export const veiloraAccountV2Abi = veiloraAccountAbi;
 
