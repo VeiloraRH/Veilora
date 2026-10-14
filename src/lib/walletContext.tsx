@@ -9,6 +9,7 @@ import {
 } from "./api";
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
 import { getAutoLockSettings, lockDue, type LockReason } from "./autoLock";
+import { removePasskeyRecord, unlockWithPasskey } from "./passkeyUnlock";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
@@ -54,6 +55,8 @@ interface WalletContextType {
   createAccount: (passphrase: string) => Promise<CreatedAccountDetails>;
   completeAccountCreation: () => Promise<void>;
   unlockDeviceKey: (passphrase: string) => Promise<void>;
+  /** Unlock with Face ID / Touch ID, if set up in this browser. */
+  unlockDeviceKeyWithPasskey: () => Promise<void>;
   importDeviceKey: (privateKey: string, passphrase: string, expectedAddress?: string) => Promise<void>;
   connectExistingWallet: (address: string, privateKey: string, passphrase: string) => Promise<void>;
   deviceKeyUnlocked: boolean;
@@ -257,6 +260,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     throw new Error("No device key is stored in this browser.");
   };
 
+  const unlockDeviceKeyWithPasskey = async () => {
+    if (!walletAddress) throw new Error("No wallet is connected in this browser.");
+    const privateKey = await unlockWithPasskey(walletAddress);
+    const expected = wallet?.shardA || localStorage.getItem("veilora:shardA:address");
+    if (expected && !deviceKeyMatchesAddress(privateKey, expected)) {
+      removePasskeyRecord(walletAddress);
+      throw new Error("The passkey opened a key that does not match this wallet. Unlock with your passphrase and set up Face ID / Touch ID again.");
+    }
+    setDeviceKey(privateKey);
+    setDeviceKeyUnlocked(true);
+    setLockReason(null);
+  };
+
   const importDeviceKey = async (privateKey: string, passphrase: string, expectedAddress?: string) => {
     if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) throw new Error("Enter a valid 32-byte private key.");
     if (expectedAddress && !deviceKeyMatchesAddress(privateKey, expectedAddress)) {
@@ -264,6 +280,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
     localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(privateKey, passphrase));
     localStorage.removeItem(LEGACY_DEVICE_KEY);
+    if (walletAddress) removePasskeyRecord(walletAddress);
     setDeviceKey(privateKey);
     setDeviceKeyUnlocked(true);
     setLockReason(null);
@@ -318,6 +335,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const bridgeTrackingKey = `veilora:bridge:tracking:${walletAddress.toLowerCase()}`;
     localStorage.removeItem(bridgeTrackingKey);
     localStorage.removeItem(`veilora:contacts:${walletAddress.toLowerCase()}`);
+    removePasskeyRecord(walletAddress);
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);
@@ -347,6 +365,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         createAccount,
         completeAccountCreation,
         unlockDeviceKey,
+        unlockDeviceKeyWithPasskey,
         importDeviceKey,
         connectExistingWallet,
         clearLatestRecoveryKey,

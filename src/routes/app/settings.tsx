@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Eye, EyeOff, Lock, RotateCcw, Server, ShieldAlert } from 'lucide-react';
+import { Check, Eye, EyeOff, Fingerprint, Lock, RotateCcw, Server, ShieldAlert } from 'lucide-react';
+import { enrollPasskey, getPasskeyRecord, passkeyUnlockAvailable, removePasskeyRecord } from '@/lib/passkeyUnlock';
 import { setPrivacyMode, usePrivacyMode } from '@/lib/privacyMode';
 import { IDLE_CHOICES, saveAutoLockSettings, useAutoLockSettings } from '@/lib/autoLock';
 import { PageTitle } from '@/components/wallet/WalletUI';
@@ -12,7 +13,24 @@ import { clearRpcOverride, getRpcOverride, saveRpcOverride, verifyRpcEndpoint } 
 export const Route = createFileRoute('/app/settings')({ component: SettingsScreen });
 
 function SettingsScreen() {
-  const { walletAddress, lockDeviceKey } = useWallet();
+  const { walletAddress, lockDeviceKey, getStoredDeviceKey } = useWallet();
+  const [passkey, setPasskey] = useState(() => getPasskeyRecord(walletAddress));
+  const [passkeySupported, setPasskeySupported] = useState<boolean | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyError, setPasskeyError] = useState('');
+  useEffect(() => { void passkeyUnlockAvailable().then(setPasskeySupported); }, []);
+  useEffect(() => setPasskey(getPasskeyRecord(walletAddress)), [walletAddress]);
+  async function enablePasskey() {
+    const key = getStoredDeviceKey();
+    if (!key) { setPasskeyError('Unlock your device key first.'); return; }
+    setPasskeyBusy(true); setPasskeyError('');
+    try {
+      setPasskey(await enrollPasskey(walletAddress, key));
+      setCompletion({ title: 'Face ID / Touch ID is on', description: 'Next time Veilora locks, unlock with your face, fingerprint or device PIN. Your passphrase still works.' });
+    } catch (cause) {
+      setPasskeyError(cause instanceof Error ? (cause.name === 'NotAllowedError' ? 'Setup was cancelled.' : cause.message) : 'Could not set up passkey unlock.');
+    } finally { setPasskeyBusy(false); }
+  }
   const cache = useQueryClient();
   const [rpcUrl, setRpcUrl] = useState(() => getRpcOverride());
   const [showUrl, setShowUrl] = useState(false);
@@ -57,6 +75,15 @@ function SettingsScreen() {
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span>{privacy ? <EyeOff size={20}/> : <Eye size={20}/>}</span><div><h2>Privacy mode</h2><p>Hide balances and amounts across Veilora, for screen sharing, screenshots and using your wallet in public.</p></div><button role="switch" aria-checked={privacy} aria-label="Privacy mode" className={`wallet-toggle-switch ${privacy ? 'on' : ''}`} onClick={() => setPrivacyMode(!privacy)}><span/></button></div>
       <ul className="wallet-privacy-points"><li>Balances, holdings, history amounts, rule runs and transaction previews show •••• instead.</li><li>Tap any hidden amount to show it for 5 seconds.</li><li>Saved on this device only. It changes what is shown on screen; your balances are still public on Robinhood Chain.</li></ul>
+    </section>
+    <section className="wallet-panel wallet-settings-card">
+      <div className="wallet-settings-heading"><span><Fingerprint size={20}/></span><div><h2>Face ID / Touch ID unlock</h2><p>Unlock your device key with a passkey (Face ID, Touch ID, Windows Hello or your device PIN) instead of typing your passphrase.</p></div><span className={`wallet-status ${passkey ? 'confirmed' : 'pending'}`}>{passkey ? 'On' : 'Off'}</span></div>
+      {passkeySupported === false && !passkey && <div className="wallet-settings-note"><ShieldAlert size={16}/><p>This browser or device has no passkey with Face ID, Touch ID or a PIN. Keep using your passphrase.</p></div>}
+      {passkeyError && <p className="wallet-error" role="alert">{passkeyError}</p>}
+      <div className="wallet-settings-actions">{passkey
+        ? <button className="wallet-soft-button" onClick={() => { removePasskeyRecord(walletAddress); setPasskey(null); }}>Turn off</button>
+        : <button className="wallet-primary-button" disabled={passkeyBusy || passkeySupported === false} onClick={() => void enablePasskey()}>{passkeyBusy ? 'Waiting for your passkey…' : <><Fingerprint size={15}/> Set up Face ID / Touch ID</>}</button>}</div>
+      <ul className="wallet-privacy-points"><li>Your passkey unlocks an encrypted copy of the device key stored only in this browser. Nothing is sent to Veilora.</li><li>Your passphrase keeps working, and is still needed on other browsers.</li>{passkey && <li>Set up on {new Date(passkey.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}. Turning it off removes the copy here; you can also delete the passkey in your device settings.</li>}</ul>
     </section>
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span><Lock size={20}/></span><div><h2>Auto-lock</h2><p>Clear your device key from memory when you step away. Unlocking again needs your passphrase.</p></div><span className={`wallet-status ${autoLock.idleMinutes ? 'confirmed' : 'pending'}`}>{autoLock.idleMinutes ? `${autoLock.idleMinutes} min` : 'Off'}</span></div>

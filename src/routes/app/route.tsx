@@ -6,9 +6,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getAutoLockSettings, lockMessage } from "@/lib/autoLock";
+import { getPasskeyRecord } from "@/lib/passkeyUnlock";
+import { Fingerprint } from "lucide-react";
 
 function AppRouteGate() {
-  const { walletAddress, pendingRecoveryDetails, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey, lockReason } = useWallet();
+  const { walletAddress, pendingRecoveryDetails, deviceKeyPresent, deviceKeyUnlocked, unlockDeviceKey, unlockDeviceKeyWithPasskey, lockReason } = useWallet();
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
@@ -39,6 +41,16 @@ function AppRouteGate() {
             <p className="mt-2 text-sm text-slate-600 dark:text-mist">Shard A is encrypted on this device. Enter its passphrase to unlock it in memory.</p>
           </div>
           {lockReason && <p role="status" className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{lockMessage(lockReason, getAutoLockSettings())} Your device key was cleared from memory.</p>}
+          {walletAddress && getPasskeyRecord(walletAddress) && <>
+            <Button type="button" className="w-full gap-2" disabled={unlocking} onClick={async () => {
+              setUnlocking(true);
+              setError(null);
+              try { await unlockDeviceKeyWithPasskey(); }
+              catch (err) { setError(err instanceof Error ? err.message : "Could not unlock with your passkey."); }
+              finally { setUnlocking(false); }
+            }}><Fingerprint size={18}/> Unlock with Face ID / Touch ID</Button>
+            <p className="text-center text-xs text-slate-500 dark:text-mist">or use your passphrase</p>
+          </>}
           <Input type="password" autoComplete="current-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder="Device-key passphrase" aria-label="Device-key passphrase" required />
           {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
           <Button className="w-full" disabled={unlocking || !passphrase}>{unlocking ? "Unlocking…" : "Unlock"}</Button>
