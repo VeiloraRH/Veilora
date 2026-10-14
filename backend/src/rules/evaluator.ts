@@ -3,6 +3,7 @@ import { publicClient } from "../config";
 import { db, query } from "../db/index";
 import { getFreezeState } from "../freeze";
 import { quoteUsdgPrice } from "./prices";
+import { recordAlert } from "../alerts/store";
 import { RULE_ASSETS, nextScheduledRun, planExecution, toRaw, type RuleSpec } from "./spec";
 
 const TICK_MS = Math.max(15_000, Number(process.env.RULES_TICK_MS) || 60_000);
@@ -78,6 +79,10 @@ async function recordTrigger(rule: RuleRow, ref: string, baseRaw: bigint, detail
   );
   if (inserted.rows.length) {
     await query("UPDATE wallet_rules SET last_triggered_at = $2, updated_at = now() WHERE id = $1", [rule.id, now]);
+    const executionId = String(inserted.rows[0].id);
+    await recordAlert(rule.wallet_address, plan.status === "pending"
+      ? { type: "rule", severity: "info", title: `“${rule.spec.name}” needs your approval`, body: "A rule triggered and its swap is ready. Review and approve it in Wallet Rules within 24 hours.", ref: `rule:${executionId}`, data: { ruleId: rule.id, executionId } }
+      : { type: "rule", severity: "warn", title: `“${rule.spec.name}” was skipped`, body: plan.reason ?? "The rule triggered but could not prepare a run.", ref: `rule:${executionId}`, data: { ruleId: rule.id, executionId } });
   }
   return inserted.rows.length > 0;
 }

@@ -25,6 +25,7 @@ import {
 import { buildBlockscoutHistoryUrl } from "../blockscout";
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
 import { enforceExecutionPolicy } from "../txPolicy";
+import { recordAlert } from "../alerts/store";
 import { safeFeeOverrides } from "../feePolicy";
 
 export const walletsRouter = Router();
@@ -445,6 +446,7 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
           JSON.stringify({ reason: freezeState.reason, frozenUntil: freezeState.frozenUntil }),
         ]
       );
+      await recordAlert(address, { type: "security", severity: "warn", title: "Signing refused: account frozen", body: "Veilora's co-signer refused a transaction because your account is frozen. If that wasn't you trying to send, keep the freeze on.", ref: `security:refused-frozen:${Date.now()}` });
 
       res.status(403).json({
         error: "Wallet is currently frozen",
@@ -494,6 +496,7 @@ walletsRouter.post("/:address/cosign", async (req: Request, res: Response): Prom
          VALUES ($1, $2, 'REJECTED_POLICY', $3)`,
         [address, digest, JSON.stringify({ reason: policyError instanceof Error ? policyError.message : "Policy denied" })],
       );
+      await recordAlert(address, { type: "security", severity: "warn", title: "Co-signer refused a transaction", body: (policyError instanceof Error ? policyError.message : "Transaction denied by co-signer policy").replace(/^Shard B policy denied:?\s*/, "Reason: "), ref: `security:refused:${digest}` });
       res.status(403).json({ error: policyError instanceof Error ? policyError.message : "Transaction denied by co-signer policy" });
       return;
     }
@@ -568,6 +571,7 @@ walletsRouter.post("/:address/freeze", async (req: Request, res: Response): Prom
     }
 
     const state = await freezeWallet(address, hours, reason, initiatedBy);
+    await recordAlert(address, { type: "security", severity: "danger", title: initiatedBy === "recovery" ? "Account frozen with your recovery key" : "Account frozen", body: `Veilora's co-signer won't sign anything for ${hours} hours${initiatedBy === "recovery" ? ", and only your recovery key can lift it" : ""}. If you didn't do this, check Quorum & recovery now.`, ref: `security:freeze:${timestamp}`, data: { hours, initiatedBy } });
     res.json(state);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to freeze wallet" });
@@ -597,6 +601,7 @@ walletsRouter.post("/:address/unfreeze", async (req: Request, res: Response): Pr
       return;
     }
     const state = await unfreezeWallet(address);
+    await recordAlert(address, { type: "security", severity: "warn", title: "Account unfrozen", body: `Your account was unfrozen with your ${signedBy === "recovery" ? "recovery key" : "device key"}. If you didn't do this, freeze it again with your recovery key.`, ref: `security:unfreeze:${timestamp}` });
     res.json(state);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to unfreeze wallet" });
