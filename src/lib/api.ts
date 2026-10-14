@@ -1,4 +1,6 @@
 import { resolveRpcEndpoint } from './rpcSettings';
+import { getAddress, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 
 export const API_BASE =
   ((import.meta as any).env?.VITE_API_URL as string) || "/api";
@@ -302,12 +304,12 @@ export async function getQuorumStatus(address: string) {
   return request<QuorumStatus>(`/v1/wallets/${encodeURIComponent(address)}/quorum`);
 }
 
-export async function deleteWalletData(walletAddress: string, shardASignature: string) {
+export async function deleteWalletData(walletAddress: string, timestamp: number, shardASignature: string) {
   return request<{ deleted: boolean; walletAddress: string }>(
     `/v1/wallets/${encodeURIComponent(walletAddress)}`,
     {
       method: "DELETE",
-      body: JSON.stringify({ shardASignature }),
+      body: JSON.stringify({ timestamp, shardASignature }),
     },
   );
 }
@@ -366,7 +368,10 @@ export async function unfreezeWallet(address: string, timestamp: number, shardAS
   });
 }
 
-export async function getWalletAudit(address: string) {
+export async function getWalletAudit(address: string, shardAKey: Hex) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const message = `Veilora wallet audit access\nwallet:${getAddress(address)}\ntimestamp:${timestamp}`;
+  const signature = await privateKeyToAccount(shardAKey).signMessage({ message });
   return request<{
     walletAddress: string;
     records: Array<{
@@ -377,7 +382,7 @@ export async function getWalletAudit(address: string) {
       metadata: Record<string, any>;
       created_at: string;
     }>;
-  }>(`/v1/wallets/${address}/audit`);
+  }>(`/v1/wallets/${address}/audit`, { headers: { "x-veilora-timestamp": String(timestamp), "x-veilora-signature": signature } });
 }
 
 // ---------------------------------------------------------------------------

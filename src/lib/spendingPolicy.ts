@@ -22,10 +22,11 @@ export async function fetchSpendingPolicy(wallet: string, key: Hex): Promise<Spe
   const message = `Veilora spending limits access\nwallet:${getAddress(wallet)}\ntimestamp:${timestamp}`;
   return request(`/v1/wallets/${wallet}/spending-policy`, { method: 'GET', headers: { 'x-veilora-timestamp': String(timestamp), 'x-veilora-signature': await sign(key, message) } });
 }
-export async function saveSpendingPolicy(wallet: string, key: Hex, perTransactionPercent: number, dailyTotalPercent: number): Promise<SpendingPolicy> {
+export async function saveSpendingPolicy(wallet: string, key: Hex, perTransactionPercent: number, dailyTotalPercent: number, recoveryKey?: Hex): Promise<SpendingPolicy> {
   const timestamp = now();
   const message = `Veilora spending limits update\nwallet:${getAddress(wallet)}\nperTransactionPercent:${perTransactionPercent}\ndailyTotalPercent:${dailyTotalPercent}\ntimestamp:${timestamp}`;
-  return request(`/v1/wallets/${wallet}/spending-policy`, { method: 'PUT', body: JSON.stringify({ perTransactionPercent, dailyTotalPercent, timestamp, shardASignature: await sign(key, message) }) });
+  const shardCSignature = recoveryKey ? await sign(recoveryKey, message) : undefined;
+  return request(`/v1/wallets/${wallet}/spending-policy`, { method: 'PUT', body: JSON.stringify({ perTransactionPercent, dailyTotalPercent, timestamp, shardASignature: await sign(key, message), shardCSignature }) });
 }
 export function useSpendingPolicy() {
   const { walletAddress, getStoredDeviceKey } = useWallet();

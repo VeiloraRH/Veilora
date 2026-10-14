@@ -71,7 +71,8 @@ quorumRouter.get("/", async (req: Request, res: Response): Promise<void> => {
         shardB: same(onChain.shardB, registered.shardB),
         shardC: same(onChain.shardC, registered.shardC),
       },
-      freeze,
+      // A public quorum lookup should not disclose free-form reasons that may contain personal context.
+      freeze: { ...freeze, reason: null },
       coSigner: {
         // The co-signer refuses every request while a freeze is active.
         signing: !freeze.frozen,

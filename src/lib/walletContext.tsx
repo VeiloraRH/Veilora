@@ -3,7 +3,6 @@ import {
   getWallet,
   createWallet,
   freezeWallet,
-  unfreezeWallet,
   getWalletAudit,
   deleteWalletData,
   type WalletMetadata,
@@ -58,7 +57,6 @@ interface WalletContextType {
   clearLatestRecoveryKey: () => void;
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
-  unfreezeAccount: () => Promise<void>;
   removeWallet: () => Promise<void>;
 }
 
@@ -102,14 +100,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const data = await getWallet(addr);
       setWallet(data);
-      const audit = await getWalletAudit(addr).catch(() => ({ records: [] }));
+      const audit = deviceKey ? await getWalletAudit(addr, deviceKey as `0x${string}`).catch(() => ({ records: [] })) : { records: [] };
       setAuditTrail(audit.records || []);
     } catch (err: any) {
       setError(err?.message || "Failed to load account");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [deviceKey]);
 
   const refresh = useCallback(async () => {
     await loadWallet(walletAddress);
@@ -222,25 +220,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await loadWallet(walletAddress);
   };
 
-  const unfreezeAccount = async () => {
-    if (!wallet || !deviceKey || !deviceKeyMatchesAddress(deviceKey, wallet.shardA)) throw new Error("Unlock the matching Shard A device key first.");
-    const timestamp = Math.floor(Date.now() / 1000);
-    const message = `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${timestamp}`;
-    const signature = await privateKeyToAccount(deviceKey as `0x${string}`).signMessage({ message });
-    await unfreezeWallet(walletAddress, timestamp, signature);
-    await loadWallet(walletAddress);
-  };
-
   const removeWallet = async () => {
     if (!walletAddress) throw new Error("There is no connected wallet to delete.");
     const shardAPrivateKey = getStoredDeviceKey();
     if (!shardAPrivateKey) throw new Error("Unlock Shard A before deleting this wallet's server data.");
 
     const canonicalAddress = getAddress(walletAddress);
-    const deletionMessage = `Veilora account data deletion request: ${canonicalAddress}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const deletionMessage = `Veilora account data deletion request\nwallet:${canonicalAddress}\ntimestamp:${timestamp}`;
     const signer = privateKeyToAccount(shardAPrivateKey as `0x${string}`);
     const signature = await signer.signMessage({ message: deletionMessage });
-    await deleteWalletData(canonicalAddress, signature);
+    await deleteWalletData(canonicalAddress, timestamp, signature);
 
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_DEVICE_KEY);
@@ -285,7 +275,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         clearLatestRecoveryKey,
         getStoredDeviceKey,
         freezeAccount,
-        unfreezeAccount,
         removeWallet,
       }}
     >

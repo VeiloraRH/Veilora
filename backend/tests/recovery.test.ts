@@ -92,10 +92,11 @@ describe("Quorum and recovery center", () => {
     expect(lifted.body.frozen).toBe(false);
   });
 
-  test("a device freeze can be lifted with either user-held key", async () => {
+  test("a device freeze can only be lifted with the recovery key", async () => {
     expect((await freeze(device)).body.initiatedBy).toBe("device");
     expect((await unfreeze(recovery)).status).toBe(200);
     expect((await freeze(device)).status).toBe(200);
-    expect((await unfreeze(device)).status).toBe(200);
+    expect((await unfreeze(device)).status).toBe(403);
+    expect((await unfreeze(recovery)).status).toBe(200);
   });
 });

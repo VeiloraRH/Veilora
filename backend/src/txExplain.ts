@@ -132,19 +132,19 @@ export function explainCall(walletAddress: string, call: Call): Explanation {
       if (outer.functionName === "multicall") {
         type V3Swap = { tokenIn: Address; tokenOut: Address; amountIn: bigint; amountOutMinimum: bigint; recipient: Address; fee: number };
         let swap = null as V3Swap | null;
-        let unwrap = false;
+        let unwrapRecipient: Address | null = null;
         for (const inner of outer.args[1] as readonly Hex[]) {
           const d = decodeFunctionData({ abi: v3, data: inner });
-          if (d.functionName === "exactInputSingle") swap = d.args[0] as V3Swap;
-          else if (d.functionName === "unwrapWETH9") unwrap = true;
+          if (d.functionName === "exactInputSingle" && !swap) swap = d.args[0] as V3Swap;
+          else if (d.functionName === "unwrapWETH9" && !unwrapRecipient) unwrapRecipient = (d.args as readonly [bigint, Address])[1];
           else throw new Error("unexpected");
         }
         if (swap) {
+          if (unwrapRecipient && (unwrapRecipient.toLowerCase() !== wallet.toLowerCase() || swap.recipient.toLowerCase() !== SWAP_ROUTER.toLowerCase())) throw new Error("unexpected unwrap recipient");
+          if (!unwrapRecipient && swap.recipient.toLowerCase() !== wallet.toLowerCase()) flags.push({ level: "danger", code: "foreign-recipient", text: `The swap output goes to ${short(swap.recipient)}, not your account.` });
           const nativeIn = value > 0n;
           const inA = nativeIn ? { symbol: "ETH", decimals: 18 } : asset(swap.tokenIn);
-          const outA = unwrap ? { symbol: "ETH", decimals: 18 } : tokensByAddress.has(swap.tokenOut.toLowerCase()) ? asset(swap.tokenOut) : { symbol: WETH_LABEL, decimals: 18 };
-          const toSelf = swap.recipient.toLowerCase() === wallet.toLowerCase() || (unwrap && swap.recipient.toLowerCase() === SWAP_ROUTER.toLowerCase());
-          if (!toSelf) flags.push({ level: "danger", code: "foreign-recipient", text: `The swap output goes to ${short(swap.recipient)}, not your account.` });
+          const outA = unwrapRecipient ? { symbol: "ETH", decimals: 18 } : tokensByAddress.has(swap.tokenOut.toLowerCase()) ? asset(swap.tokenOut) : { symbol: WETH_LABEL, decimals: 18 };
           flags.push({ level: "info", code: "min-out", text: `If the price moves so you would get less than ${amountOf(swap.amountOutMinimum, outA.decimals)} ${outA.symbol}, the swap cancels and nothing is spent.` });
           flags.push({ level: "info", code: "pool-fee", text: `Includes Uniswap's ${swap.fee / 10000}% pool fee.` });
           return { ...base, kind: "swap", title: `Swap ${amountOf(swap.amountIn, inA.decimals)} ${inA.symbol} for ${outA.symbol}`,

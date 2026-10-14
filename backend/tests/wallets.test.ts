@@ -8,6 +8,7 @@ import { generateShardKey, signUserOpHash, computeExecutionDigest } from "../src
 describe("Threshold Wallets & Co-signing API", () => {
   let walletAddress: string;
   let shardAPrivateKey: `0x${string}`;
+  let shardCPrivateKey: `0x${string}`;
   let shardAAddress: `0x${string}`;
   let shardCAddress: `0x${string}`;
   let shardBPrivateKey: `0x${string}`;
@@ -23,7 +24,9 @@ describe("Threshold Wallets & Co-signing API", () => {
     const shardA = generateShardKey();
     shardAPrivateKey = shardA.privateKey;
     shardAAddress = shardA.address;
-    shardCAddress = generateShardKey().address;
+    const shardC = generateShardKey();
+    shardCPrivateKey = shardC.privateKey;
+    shardCAddress = shardC.address;
 
     const requestId = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const timestamp = Math.floor(Date.now() / 1000);
@@ -140,7 +143,7 @@ describe("Threshold Wallets & Co-signing API", () => {
 
     // 3. Unfreeze wallet
     const unfreezeTimestamp = Math.floor(Date.now() / 1000);
-    const unfreezeSignature = await privateKeyToAccount(shardAPrivateKey).signMessage({
+    const unfreezeSignature = await privateKeyToAccount(shardCPrivateKey).signMessage({
       message: `Veilora account security action\nwallet:${getAddress(walletAddress)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${unfreezeTimestamp}`,
     });
     const unfreezeRes = await request(app).post(`/v1/wallets/${walletAddress}/unfreeze`).send({
@@ -152,7 +155,13 @@ describe("Threshold Wallets & Co-signing API", () => {
   });
 
   test("GET /v1/wallets/:address/audit records audit events", async () => {
-    const res = await request(app).get(`/v1/wallets/${walletAddress}/audit`);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = await privateKeyToAccount(shardAPrivateKey).signMessage({
+      message: `Veilora wallet audit access\nwallet:${getAddress(walletAddress)}\ntimestamp:${timestamp}`,
+    });
+    const res = await request(app).get(`/v1/wallets/${walletAddress}/audit`)
+      .set("x-veilora-timestamp", String(timestamp))
+      .set("x-veilora-signature", signature);
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.records)).toBe(true);

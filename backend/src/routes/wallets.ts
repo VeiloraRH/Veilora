@@ -37,7 +37,7 @@ function securitySigner(signer: string, row: { shard_a_address: string; shard_c_
 const ADDRESS_LOOKUP_ATTEMPTS = 3;
 const ADDRESS_LOOKUP_DELAYS_MS = [250, 750];
 const DAILY_SPONSORED_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
-const REGISTRATION_LIMIT_PER_IP = 20;
+const REGISTRATION_LIMIT_PER_IP = 100;
 
 function hashRegistrationIp(ip: string): string {
   const key = process.env.SHARD_B_ENCRYPTION_KEY || process.env.CO_SIGNER_SHARD_B_SECRET;
@@ -216,20 +216,22 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
 
     await query(
       `INSERT INTO wallets (
-        address, factory_address, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
+        address, factory_address, salt, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
         shard_c_address, api_key_hash, threshold, totp_secret_encrypted, registration_request_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2, $9, $10)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 2, $11, $12)
       ON CONFLICT (address) DO UPDATE SET
         shard_a_address = EXCLUDED.shard_a_address,
         shard_b_address = EXCLUDED.shard_b_address,
         shard_b_encrypted = EXCLUDED.shard_b_encrypted,
         shard_c_address = EXCLUDED.shard_c_address,
         factory_address = EXCLUDED.factory_address,
+        salt = EXCLUDED.salt,
         api_key_hash = EXCLUDED.api_key_hash,
         updated_at = now()`,
       [
         counterfactualAddress.toLowerCase(),
         FACTORY_ADDRESS.toLowerCase(),
+        salt.toString(),
         CHAIN_ID,
         shardA.toLowerCase(),
         shardB.address.toLowerCase(),
@@ -271,8 +273,13 @@ walletsRouter.delete("/:address", async (req: Request, res: Response): Promise<v
     }
     const address = getAddress(rawAddress);
     const signature = req.body.shardASignature as `0x${string}` | undefined;
+    const timestamp = Number(req.body.timestamp);
     if (!signature || !isHex(signature) || signature.length !== 132) {
       res.status(400).json({ error: "A valid Shard A deletion signature is required" });
+      return;
+    }
+    if (!Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) {
+      res.status(400).json({ error: "A fresh deletion authorization is required" });
       return;
     }
 
@@ -285,12 +292,18 @@ walletsRouter.delete("/:address", async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const deletionMessage = `Veilora account data deletion request: ${address}`;
+    const deletionMessage = `Veilora account data deletion request\nwallet:${address}\ntimestamp:${timestamp}`;
     const signer = await recoverMessageAddress({ message: deletionMessage, signature });
     if (signer.toLowerCase() !== String(rows.rows[0].shard_a_address).toLowerCase()) {
       res.status(403).json({ error: "Deletion signature does not match this wallet's Shard A" });
       return;
     }
+
+    const used = await query(
+      "INSERT INTO wallet_rule_authorizations (signature, wallet_address) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING signature",
+      [signature.toLowerCase(), address.toLowerCase()],
+    );
+    if (!used.rows.length) { res.status(409).json({ error: "This deletion authorization has already been used" }); return; }
 
     await query("DELETE FROM wallets WHERE address = $1", [address.toLowerCase()]);
     // Wallet audit records are linked with ON DELETE CASCADE.
@@ -345,7 +358,8 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
       threshold: wallet.threshold,
       isFrozen: freezeState.frozen,
       frozenUntil: freezeState.frozenUntil,
-      freezeReason: freezeState.reason,
+      // Freeze reasons can include private user context; expose them only on the signed quorum endpoint.
+      freezeReason: null,
       freezeInitiatedBy: freezeState.initiatedBy,
       isDeployed,
       nonce: onChainNonce,
@@ -536,13 +550,8 @@ walletsRouter.post("/:address/unfreeze", async (req: Request, res: Response): Pr
     if (!rows.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
     const message = `Veilora account security action\nwallet:${getAddress(address)}\naction:unfreeze\nhours:0\nreason:\ntimestamp:${timestamp}`;
     const signedBy = securitySigner(await recoverMessageAddress({ message, signature }), rows.rows[0]);
-    if (!signedBy) {
-      res.status(403).json({ error: "Unfreeze authorization must come from this wallet's device key (Shard A) or recovery key (Shard C)" });
-      return;
-    }
-    // A stolen device must not be able to lift a freeze set with the recovery key.
-    if ((await getFreezeState(address)).initiatedBy === "recovery" && signedBy !== "recovery") {
-      res.status(403).json({ error: "This freeze was set with the recovery key. Lift it with the recovery key (Shard C)." });
+    if (signedBy !== "recovery") {
+      res.status(403).json({ error: "Unfreezing requires your recovery key (Shard C), so a stolen device key cannot lift a freeze" });
       return;
     }
     const state = await unfreezeWallet(address);
@@ -559,6 +568,17 @@ walletsRouter.post("/:address/unfreeze", async (req: Request, res: Response): Pr
 walletsRouter.get("/:address/audit", async (req: Request, res: Response): Promise<void> => {
   try {
     const address = String(req.params.address).toLowerCase();
+    if (!isAddress(address)) { res.status(400).json({ error: "A valid smart account address is required" }); return; }
+    const timestamp = Number(req.header("x-veilora-timestamp"));
+    const signature = req.header("x-veilora-signature");
+    if (!Number.isSafeInteger(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300 || !signature || !isHex(signature) || signature.length !== 132) {
+      res.status(401).json({ error: "A fresh Shard A signature is required to view this audit log" }); return;
+    }
+    const owner = await query<{ shard_a_address: string }>("SELECT shard_a_address FROM wallets WHERE address = $1", [address]);
+    if (!owner.rows.length) { res.status(404).json({ error: "Wallet not found" }); return; }
+    const message = `Veilora wallet audit access\nwallet:${getAddress(address)}\ntimestamp:${timestamp}`;
+    const signer = await recoverMessageAddress({ message, signature: signature as `0x${string}` });
+    if (signer.toLowerCase() !== owner.rows[0].shard_a_address.toLowerCase()) { res.status(403).json({ error: "Signature does not match this wallet's Shard A" }); return; }
     const result = await query(
       `SELECT id, user_op_hash, status, shard_b_signature, metadata, created_at
        FROM cosign_audit
