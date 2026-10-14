@@ -14,6 +14,7 @@ export type RuleSpec = { version: 1; name: string; trigger: RuleTrigger; source:
 export type WalletRule = { id: string; name: string; status: 'active' | 'paused' | 'revoked' | 'expired'; mode: 'approval'; spec: RuleSpec; expiresAt: string; nextRunAt: string | null; lastPriceRaw: string | null; lastCheckedAt: string | null; lastTriggeredAt: string | null; createdAt: string };
 export type RuleExecution = { id: string; ruleId: string; ruleName: string; status: 'pending' | 'executed' | 'failed' | 'declined' | 'skipped' | 'expired'; trigger: { kind: string; baseRaw?: string; txHash?: string; asset?: string; priceRaw?: string; dueAt?: string }; sourceAsset: string; totalRaw: string; legs: { asset: string; percent: number; amountRaw: string }[]; slippageBps: number; reason: string | null; txHashes: string[]; error: string | null; createdAt: string; expiresAt: string; resolvedAt: string | null };
 export type RulesState = { automaticExecutionAvailable: boolean; rules: WalletRule[]; executions: RuleExecution[] };
+export type RuleExecutionPage = { executions: RuleExecution[]; page: number; pageSize: number; total: number; pages: number };
 
 // These strings must match backend/src/routes/rules.ts exactly.
 const readMessage = (w: string, ts: number) => `Veilora wallet rules access\nwallet:${getAddress(w)}\ntimestamp:${ts}`;
@@ -33,6 +34,10 @@ async function call<T>(path: string, init: RequestInit): Promise<T> {
 export async function fetchRules(wallet: string, key: Hex): Promise<RulesState> {
  const ts = now();
  return call(`/v1/wallets/${wallet}/rules`, { method: 'GET', headers: { 'x-veilora-timestamp': String(ts), 'x-veilora-signature': await sign(key, readMessage(wallet, ts)) } });
+}
+export async function fetchRuleExecutions(wallet: string, key: Hex, page: number, status: string, search: string): Promise<RuleExecutionPage> {
+ const ts = now(); const params = new URLSearchParams({ page: String(page), pageSize: '20', status, search });
+ return call(`/v1/wallets/${wallet}/rules/executions?${params}`, { method: 'GET', headers: { 'x-veilora-timestamp': String(ts), 'x-veilora-signature': await sign(key, readMessage(wallet, ts)) } });
 }
 export async function createRule(wallet: string, key: Hex, spec: RuleSpec): Promise<WalletRule> {
  const json = JSON.stringify(spec); const ts = now();
@@ -72,4 +77,9 @@ export const WEEKDAY_NAMES = WEEKDAYS;
 export function useWalletRules() {
  const {walletAddress,getStoredDeviceKey}=useWallet(); const key=getStoredDeviceKey();
  return useQuery({queryKey:['wallet-rules',walletAddress],enabled:!!walletAddress&&!!key,refetchInterval:30000,retry:1,queryFn:()=>fetchRules(walletAddress,key as Hex)});
+}
+
+export function useRuleExecutions(page: number, status: string, search: string) {
+ const {walletAddress,getStoredDeviceKey}=useWallet(); const key=getStoredDeviceKey();
+ return useQuery({queryKey:['wallet-rule-runs',walletAddress,page,status,search],enabled:!!walletAddress&&!!key,retry:1,refetchInterval:30000,placeholderData:previous=>previous,queryFn:()=>fetchRuleExecutions(walletAddress,key as Hex,page,status,search)});
 }

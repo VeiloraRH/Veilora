@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BellRing, CalendarClock, Check, CircleAlert, ExternalLink, Loader2, Lock, Pause, Play, Plus, ShieldCheck, Sparkles, Target, Trash2, Workflow, X } from 'lucide-react';
+import { ArrowRight, BellRing, CalendarClock, Check, ChevronLeft, ChevronRight, CircleAlert, ExternalLink, Loader2, Lock, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Target, Trash2, Workflow, X } from 'lucide-react';
 import { formatUnits, getAddress, type Hex } from 'viem';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { PageTitle, TokenIcon } from '@/components/wallet/WalletUI';
@@ -10,12 +10,12 @@ import { WALLET_TOKENS, ROBINHOOD_TOKEN_REGISTRY as TOKENS } from '@/lib/tokens'
 import { EXPLORER, performSwap, planSwapCalls, quoteSwap, tokenBalance, type PlannedCall, type SwapQuote } from '@/lib/walletChain';
 import { SignPreview } from '@/components/wallet/TxExplanation';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
-import { createRule, describeAction, describeLimits, describeTrigger, hourLabel, useWalletRules, rawText, resolveExecution, setRuleStatus, WEEKDAY_NAMES, type RuleExecution, type RuleSpec, type RuleTrigger, type WalletRule } from '@/lib/rulesApi';
+import { createRule, describeAction, describeLimits, describeTrigger, hourLabel, useRuleExecutions, useWalletRules, rawText, resolveExecution, setRuleStatus, WEEKDAY_NAMES, type RuleExecution, type RuleSpec, type RuleTrigger, type WalletRule } from '@/lib/rulesApi';
 export const Route=createFileRoute('/app/rules')({component:RulesScreen});
 
 function RulesScreen() {
  const rules=useWalletRules(); const [builder,setBuilder]=useState<RuleSpec|null>(null); const [review,setReview]=useState<RuleExecution|null>(null); const [completion,setCompletion]=useState<CompletionNotice|null>(null);
- const pending=(rules.data?.executions??[]).filter(e=>e.status==='pending'); const history=(rules.data?.executions??[]).filter(e=>e.status!=='pending').slice(0,12);
+ const pending=(rules.data?.executions??[]).filter(e=>e.status==='pending');
  const live=(rules.data?.rules??[]).filter(r=>r.status==='active'||r.status==='paused'); const ended=(rules.data?.rules??[]).filter(r=>r.status==='revoked'||r.status==='expired');
  return <><PageTitle title="Wallet Rules" description="Set the conditions. Veilora prepares the move. You approve it." action={<button className="wallet-soft-button" onClick={()=>setBuilder(blankSpec())}><Plus size={15}/>New rule</button>}/>
  {rules.isError&&<p role="alert" className="wallet-error mb-5">{rules.error instanceof Error?rules.error.message:'Rules are unavailable right now.'}</p>}
@@ -26,7 +26,7 @@ function RulesScreen() {
   <section><div className="wallet-section-heading"><h2>Your rules</h2></div>
    {rules.isPending?<div className="wallet-panel wallet-empty"><Loader2 className="animate-spin"/><h3>Loading rules</h3></div>:live.length?<div className="rules-stack">{live.map(r=><RuleCard key={r.id} rule={r} onChanged={message=>setCompletion({title:'Wallet Rule updated',description:message})}/>)}</div>:<EmptyRules onStart={spec=>setBuilder(spec)}/>}
   </section>
-  {history.length>0&&<section><div className="wallet-section-heading"><h2>Recent runs</h2></div><div className="wallet-panel rules-history">{history.map(e=><HistoryRow key={e.id} run={e}/>)}</div></section>}
+  <RuleRunHistory />
   {ended.length>0&&<section><div className="wallet-section-heading"><h2>Ended</h2></div><div className="rules-stack">{ended.map(r=><RuleCard key={r.id} rule={r} onChanged={message=>setCompletion({title:'Wallet Rule updated',description:message})}/>)}</div></section>}
  </div><RulesAside/></div>
  {builder&&<RuleBuilder initial={builder} onClose={()=>setBuilder(null)} onCreated={name=>{setBuilder(null);setCompletion({title:'Wallet Rule created',description:`“${name}” is live. You’ll approve every run.`});}}/>}
@@ -88,8 +88,35 @@ function ApprovalCard({run,onReview}:{run:RuleExecution;onReview:()=>void}) {
 }
 
 function HistoryRow({run}:{run:RuleExecution}) {
- const label={executed:'Executed',failed:'Failed',declined:'Declined',skipped:'Skipped',expired:'Expired',pending:'Pending'}[run.status];
- return <div className="history-row"><div className="min-w-0 flex-1"><strong>{run.ruleName}</strong><small>{triggerText(run)} · {new Date(run.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}{run.legs.length>0&&` · ${rawText(run.totalRaw,run.sourceAsset)} → ${run.legs.map(l=>l.asset).join(', ')}`}</small>{(run.reason||run.error)&&run.status!=='executed'&&<small className="history-note">{run.error||run.reason}</small>}</div><div className="history-side">{run.txHashes.map((h,i)=><a key={h} href={`${EXPLORER}/tx/${h}`} target="_blank" rel="noreferrer" aria-label={`View transaction ${i+1}`}><ExternalLink size={13}/></a>)}<span className={`wallet-status ${run.status==='executed'?'confirmed':run.status==='failed'?'failed':run.status==='pending'?'pending':''}`}>{label}</span></div></div>;
+ const [details,setDetails]=useState(false);
+ const label={executed:'Completed',failed:'Failed',declined:'Declined',skipped:'Skipped',expired:'Expired',pending:'Awaiting approval'}[run.status];
+ return <><article className="rule-run-row"><div className="rule-run-row-main"><strong>{run.ruleName}</strong><span>{triggerText(run)}{run.legs.length>0&&` · ${rawText(run.totalRaw,run.sourceAsset)} → ${run.legs.map(l=>l.asset).join(', ')}`}</span><small>{new Date(run.createdAt).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}</small></div><span className={`wallet-status ${run.status==='executed'?'confirmed':run.status==='failed'||run.status==='declined'?'failed':run.status==='pending'?'pending':''}`}>{label}</span><button className="wallet-soft-button rule-run-details-button" onClick={()=>setDetails(true)}>Details <ArrowRight size={14}/></button></article>{details&&<RuleRunDetails run={run} onClose={()=>setDetails(false)}/>}</>;
+}
+
+function RuleRunHistory() {
+ const {deviceKeyUnlocked}=useWallet();
+ const [draft,setDraft]=useState(''); const [search,setSearch]=useState(''); const [status,setStatus]=useState('all'); const [page,setPage]=useState(1);
+ const runs=useRuleExecutions(page,status,search);
+ useEffect(()=>{const timer=setTimeout(()=>setSearch(draft.trim()),250);return()=>clearTimeout(timer);},[draft]);
+ useEffect(()=>{setPage(1);},[search,status]);
+ const pageCount=runs.data?.pages??0;
+ return <section className="rule-run-history"><div className="wallet-section-heading"><div><h2>Run history</h2><p>Every trigger, decision, swap, and outcome for this wallet.</p></div></div>
+  <div className="rule-run-toolbar"><label className="wallet-search"><Search size={16}/><input aria-label="Search rule runs" placeholder="Search rules, assets, or outcomes" value={draft} onChange={event=>setDraft(event.target.value)}/></label><select className="wallet-select" aria-label="Filter runs by status" value={status} onChange={event=>setStatus(event.target.value)}><option value="all">All outcomes</option><option value="pending">Awaiting approval</option><option value="executed">Completed</option><option value="failed">Failed</option><option value="declined">Declined</option><option value="skipped">Skipped</option><option value="expired">Expired</option></select></div>
+  <div className="wallet-panel rules-history">{!deviceKeyUnlocked?<div className="wallet-empty rule-run-empty"><Lock size={20}/><h3>Unlock your device key</h3><p>Unlock it to verify your access and load this wallet’s run history.</p></div>:runs.isPending?<div className="wallet-empty rule-run-empty"><Loader2 className="animate-spin"/><h3>Loading run history</h3></div>:runs.isError?<div className="wallet-empty rule-run-empty"><CircleAlert/><h3>History is unavailable</h3><p>{runs.error instanceof Error?runs.error.message:'Could not load Wallet Rule runs.'}</p><button className="wallet-soft-button" onClick={()=>void runs.refetch()}>Try again</button></div>:runs.data?.executions.length?<>{runs.data.executions.map(run=><HistoryRow key={run.id} run={run}/>)}</>:<div className="wallet-empty rule-run-empty"><Search/><h3>No matching runs</h3><p>{search||status!=='all'?'Try another search or outcome filter.':'Triggered and completed rule runs will appear here.'}</p></div>}</div>
+  {runs.data&&runs.data.total>0&&<div className="rule-run-pagination"><span>{runs.data.total.toLocaleString()} runs · Page {runs.data.page} of {Math.max(1,pageCount)}</span><div><button className="wallet-soft-button" disabled={page<=1||runs.isFetching} onClick={()=>setPage(value=>Math.max(1,value-1))}><ChevronLeft size={15}/>Previous</button><button className="wallet-soft-button" disabled={page>=pageCount||runs.isFetching} onClick={()=>setPage(value=>Math.min(pageCount,value+1))}>Next<ChevronRight size={15}/></button></div></div>}
+ </section>;
+}
+
+function RuleRunDetails({run,onClose}:{run:RuleExecution;onClose:()=>void}) {
+ const approved=run.status==='executed'||(run.status==='failed'&&run.txHashes.length>0);
+ const decision=run.status==='pending'?'Waiting for your approval':run.status==='declined'?'You declined this run':run.status==='expired'?'Approval window expired':run.status==='skipped'?'Run skipped':run.status==='failed'?'Approved, but execution failed':'Approved and completed';
+ return <Dialog open onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="wallet-dialog rule-run-dialog sm:max-w-lg"><DialogHeader><DialogTitle>{run.ruleName}</DialogTitle><DialogDescription>{triggerText(run)}</DialogDescription></DialogHeader>
+  <div className="rule-run-summary"><span className={`wallet-status ${run.status==='executed'?'confirmed':run.status==='failed'||run.status==='declined'?'failed':run.status==='pending'?'pending':''}`}>{run.status==='executed'?'Completed':run.status==='pending'?'Awaiting approval':run.status}</span><span>Started {new Date(run.createdAt).toLocaleString()}</span>{run.resolvedAt&&<span>Finished {new Date(run.resolvedAt).toLocaleString()}</span>}</div>
+  <div className="rule-run-timeline"><article><span className="rule-run-timeline-dot detected"><Workflow size={13}/></span><div><strong>Trigger detected</strong><p>{triggerText(run)} · {run.sourceAsset} budget {rawText(run.totalRaw,run.sourceAsset)}</p>{run.trigger.txHash&&<a href={`${EXPLORER}/tx/${run.trigger.txHash}`} target="_blank" rel="noreferrer">View triggering transaction <ExternalLink size={13}/></a>}</div></article><article><span className={`rule-run-timeline-dot ${approved?'approved':run.status==='declined'?'declined':''}`}>{run.status==='declined'?<X size={13}/>:<Check size={13}/>}</span><div><strong>{decision}</strong><p>{run.status==='pending'?`Approve by ${new Date(run.expiresAt).toLocaleString()}.`:run.status==='declined'?'The rule remains active for future triggers.':run.status==='expired'?'No wallet transaction was signed for this run.':run.status==='skipped'?'No wallet transaction was signed for this trigger.':approved?'This run required your device-key signature and Veilora’s co-signer.':'No transaction was completed.'}</p></div></article></div>
+  {run.legs.length>0&&<section className="rule-run-swaps"><h3>Planned swaps</h3>{run.legs.map((leg,index)=><div key={`${leg.asset}-${index}`}><span>{rawText(leg.amountRaw,run.sourceAsset)} <ArrowRight size={13}/> {leg.percent}% to {leg.asset}</span>{run.txHashes[index]&&<a href={`${EXPLORER}/tx/${run.txHashes[index]}`} target="_blank" rel="noreferrer">Swap transaction <ExternalLink size={12}/></a>}</div>)}</section>}
+  {run.txHashes.length>run.legs.length&&<section className="rule-run-swaps"><h3>Additional transactions</h3>{run.txHashes.slice(run.legs.length).map((hash,index)=><a key={hash} href={`${EXPLORER}/tx/${hash}`} target="_blank" rel="noreferrer">Transaction {run.legs.length+index+1} <ExternalLink size={12}/></a>)}</section>}
+  {(run.reason||run.error)&&<div className={`rule-run-message ${run.error?'error':''}`}><strong>{run.error?'What went wrong':'Run note'}</strong><p>{run.error||run.reason}</p></div>}
+ </DialogContent></Dialog>;
 }
 
 type LegQuote={asset:string;amountRaw:bigint;quote?:SwapQuote;error?:string};
@@ -109,8 +136,8 @@ function ApprovalReview({run,onClose,onDone}:{run:RuleExecution;onClose:()=>void
    await resolveExecution(walletAddress,key as Hex,run.id,'executed',hashes);onDone(`“${run.ruleName}” ran: ${legs.length} swap${legs.length>1?'s':''} confirmed.`);}
   catch(e){const message=e instanceof Error?e.message:'The swap could not be completed.';setError(hashes.length?`${hashes.length} of ${legs.length} swaps completed before this failed: ${message}`:message);
    if(hashes.length){try{await resolveExecution(walletAddress,key as Hex,run.id,'failed',hashes,message);}catch{/* the run stays pending and can be declined */}}}
-  finally{setBusy('');void cache.invalidateQueries({queryKey:['wallet-rules']});void cache.invalidateQueries({queryKey:['holdings']});void cache.invalidateQueries({queryKey:['transactions']});}}
- async function decline(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}setBusy('Declining…');try{await resolveExecution(walletAddress,key as Hex,run.id,'declined');void cache.invalidateQueries({queryKey:['wallet-rules']});onDone(`Declined this run of “${run.ruleName}”. The rule stays active.`);}catch(e){setError(e instanceof Error?e.message:'Could not decline.');}finally{setBusy('');}}
+  finally{setBusy('');void cache.invalidateQueries({queryKey:['wallet-rules']});void cache.invalidateQueries({queryKey:['wallet-rule-runs']});void cache.invalidateQueries({queryKey:['holdings']});void cache.invalidateQueries({queryKey:['transactions']});}}
+ async function decline(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}setBusy('Declining…');try{await resolveExecution(walletAddress,key as Hex,run.id,'declined');void cache.invalidateQueries({queryKey:['wallet-rules']});void cache.invalidateQueries({queryKey:['wallet-rule-runs']});onDone(`Declined this run of “${run.ruleName}”. The rule stays active.`);}catch(e){setError(e instanceof Error?e.message:'Could not decline.');}finally{setBusy('');}}
  return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose();}}><DialogContent className="wallet-dialog sm:max-w-lg"><DialogHeader><DialogTitle>Approve this run</DialogTitle><DialogDescription>{run.ruleName} · {triggerText(run)}</DialogDescription></DialogHeader>
   <div className="review-legs">{loading?<div className="review-loading"><Loader2 className="animate-spin" size={18}/>Getting live quotes…</div>:legs.map(l=><div key={l.asset} className="review-leg"><div className="review-leg-pair"><TokenIcon token={source} size={26}/><ArrowRight size={14}/><TokenIcon token={TOKENS[l.asset]} size={26}/><div><strong>{rawText(l.amountRaw,run.sourceAsset)} → {l.asset}</strong><small>{l.quote?`Uniswap ${l.quote.venue==='uniswap-v4'?'v4':'v3'} · ${l.quote.fee/10000}% pool`:l.error}</small></div></div>{l.quote&&<dl><div><dt>Expected</dt><dd>{rawText(l.quote.amountOut,l.asset)}</dd></div><div><dt>Minimum received</dt><dd>{rawText(l.quote.minOut,l.asset)}</dd></div></dl>}</div>)}</div>
   <div className="send-review"><div><span>Total from your wallet</span><strong>{rawText(total,run.sourceAsset)}</strong></div><div><span>Your balance</span><strong>{balance==null?'—':rawText(balance,run.sourceAsset)}</strong></div><div><span>Max slippage</span><strong>{run.slippageBps/100}%</strong></div><div><span>Network</span><strong>Robinhood Chain</strong></div><div><span>Network fee</span><strong>Paid by Veilora's relayer</strong></div><div><span>Signing</span><strong>Your device key + co-signer</strong></div></div>

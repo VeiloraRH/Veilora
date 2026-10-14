@@ -134,6 +134,49 @@ rulesRouter.get("/", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+/** GET /executions — signed, searchable and paginated all-time rule-run history. */
+rulesRouter.get("/executions", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const wallet = await loadWallet(req);
+    const timestamp = fresh(req.header("x-veilora-timestamp"));
+    await assertShardA(wallet, rulesReadMessage(wallet.address, timestamp), signatureOf(req.header("x-veilora-signature")));
+
+    const requestedPage = Number(req.query.page ?? 1);
+    const requestedPageSize = Number(req.query.pageSize ?? 20);
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1 || !Number.isSafeInteger(requestedPageSize) || requestedPageSize < 1) {
+      throw new HttpError(400, "Page and page size must be positive integers");
+    }
+    const pageSize = Math.min(requestedPageSize, 50);
+    const page = Math.min(requestedPage, Math.floor(Number.MAX_SAFE_INTEGER / pageSize));
+    const offset = (page - 1) * pageSize;
+    const status = String(req.query.status ?? "all");
+    if (status !== "all" && !["pending", "executed", "failed", "declined", "skipped", "expired"].includes(status)) {
+      throw new HttpError(400, "Unsupported run status filter");
+    }
+    const search = String(req.query.search ?? "").trim().slice(0, 100);
+    const searchPattern = `%${search}%`;
+    const [count, executions] = await Promise.all([
+      query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM wallet_rule_executions e JOIN wallet_rules r ON r.id = e.rule_id
+         WHERE e.wallet_address = $1 AND ($2 = 'all' OR e.status = $2)
+         AND ($3 = '' OR r.name ILIKE $4 OR e.source_asset ILIKE $4 OR e.status ILIKE $4 OR COALESCE(e.reason, '') ILIKE $4 OR COALESCE(e.error, '') ILIKE $4 OR e.trigger_detail::text ILIKE $4)`,
+        [wallet.address, status, search, searchPattern],
+      ),
+      query(
+        `SELECT e.*, r.name AS rule_name, r.spec FROM wallet_rule_executions e JOIN wallet_rules r ON r.id = e.rule_id
+         WHERE e.wallet_address = $1 AND ($2 = 'all' OR e.status = $2)
+         AND ($3 = '' OR r.name ILIKE $4 OR e.source_asset ILIKE $4 OR e.status ILIKE $4 OR COALESCE(e.reason, '') ILIKE $4 OR COALESCE(e.error, '') ILIKE $4 OR e.trigger_detail::text ILIKE $4)
+         ORDER BY e.created_at DESC, e.id DESC LIMIT $5 OFFSET $6`,
+        [wallet.address, status, search, searchPattern, pageSize, offset],
+      ),
+    ]);
+    const total = Number(count.rows[0]?.total ?? 0);
+    res.json({ executions: executions.rows.map(presentExecution), page, pageSize, total, pages: Math.ceil(total / pageSize) });
+  } catch (error) {
+    send(res, error, "Failed to load rule-run history");
+  }
+});
+
 /** POST / — create a rule from the exact spec string Shard A signed. */
 rulesRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
