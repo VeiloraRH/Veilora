@@ -332,7 +332,7 @@ function BridgeScreen() {
     <TokenPicker open={picker === 'source'} onClose={() => setPicker(null)} onPick={(token) => { setSourceSymbol(token.symbol as 'ETH' | 'USDG'); setAmount(''); }} tokens={sourceTokens} description="Assets on Robinhood Chain" />
     <TokenPicker open={picker === 'destination'} onClose={() => setPicker(null)} onPick={(token) => setDestinationSymbol(token.symbol)} tokens={destinationTokens} description={`Assets available on ${destinationChain.name}`} />
     <Dialog open={!!freshWallet} onOpenChange={(open) => { if (!open) setFreshWallet(null); }}>
-      <DialogContent className="wallet-dialog sm:max-w-md">
+      <DialogContent className="wallet-dialog wallet-fresh-key-dialog sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Save your fresh wallet key</DialogTitle>
           <DialogDescription>This key controls the destination wallet. Veilora does not store or recover it. Anyone who gets it can take the wallet’s funds.</DialogDescription>
@@ -344,12 +344,12 @@ function BridgeScreen() {
           </div>
           <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
             <span className="block text-[10px] font-medium text-amber-700 dark:text-amber-300">Private key · shown once</span>
-            <code className="block select-all break-all font-mono text-xs leading-5">{freshWallet.privateKey}</code>
+            <code className="fresh-wallet-key block select-all break-all font-mono">{freshWallet.privateKey}</code>
           </div>
           {freshWalletError && <p role="alert" className="wallet-error">{freshWalletError}</p>}
-          <button type="button" className="wallet-icon-button w-full justify-center gap-2 rounded-xl border" onClick={() => void copyFreshPrivateKey()}><Copy size={15}/>{copiedPrivateKey ? 'Copied private key' : 'Copy private key'}</button>
-          <button type="button" className="wallet-primary-button w-full justify-center" onClick={() => { setRecipient(freshWallet.address); setFreshWallet(null); setFreshWalletError(''); }}>I’ve saved the private key, use this address</button>
-          <button type="button" className="wallet-icon-button w-full justify-center" onClick={() => { setFreshWallet(null); setFreshWalletError(''); }}>Discard this wallet</button>
+          <button type="button" className="fresh-wallet-action fresh-wallet-copy" onClick={() => void copyFreshPrivateKey()}><Copy size={15}/>{copiedPrivateKey ? 'Copied private key' : 'Copy private key'}</button>
+          <button type="button" className="wallet-primary-button fresh-wallet-action-primary" onClick={() => { setRecipient(freshWallet.address); setFreshWallet(null); setFreshWalletError(''); }}>I’ve saved the private key, use this address</button>
+          <button type="button" className="fresh-wallet-action fresh-wallet-discard" onClick={() => { setFreshWallet(null); setFreshWalletError(''); }}>Discard this wallet</button>
         </>}
       </DialogContent>
     </Dialog>
