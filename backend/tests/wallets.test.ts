@@ -25,7 +25,7 @@ describe("Threshold Wallets & Co-signing API", () => {
     shardAAddress = shardA.address;
     shardCAddress = generateShardKey().address;
 
-    const requestId = `0x${"11".repeat(32)}`;
+    const requestId = `0x${Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
     const timestamp = Math.floor(Date.now() / 1000);
     const shardASignature = await privateKeyToAccount(shardA.privateKey).signMessage({
       message: `Veilora wallet registration\nshardA:${getAddress(shardAAddress)}\nshardC:${getAddress(shardCAddress)}\nsalt:0\ndeploy:false\ntimestamp:${timestamp}\nrequest:${requestId}`,
@@ -160,7 +160,8 @@ describe("Threshold Wallets & Co-signing API", () => {
   });
 
   test("POST /v1/wallets enforces the shared per-IP hourly registration limit", async () => {
-    const ip = "198.51.100.27";
+    const ipSuffix = Array.from(crypto.getRandomValues(new Uint8Array(2))).join(".");
+    const ip = `198.51.${ipSuffix}`;
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const response = await request(app)
         .post("/v1/wallets")

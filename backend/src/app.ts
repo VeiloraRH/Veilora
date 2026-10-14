@@ -4,6 +4,7 @@ import { healthRouter } from "./routes/health";
 import { walletsRouter } from "./routes/wallets";
 import { relayerRouter } from "./routes/relayer";
 import { rulesRouter } from "./routes/rules";
+import { spendingPolicyRouter } from "./routes/spendingPolicy";
 import { quorumRouter } from "./routes/quorum";
 import { onrampRouter } from "./routes/onramp";
 import { explainRouter, walletExplainRouter } from "./routes/explain";
@@ -70,6 +71,7 @@ app.use((request, response, next) => {
 // Mount Routes
 app.use("/health", healthRouter);
 app.use("/v1/wallets/:address/rules", rulesRouter);
+app.use("/v1/wallets/:address/spending-policy", spendingPolicyRouter);
 app.use("/v1/wallets/:address/quorum", quorumRouter);
 app.use("/v1/onramp", onrampRouter);
 app.use("/v1/explain", explainRouter);

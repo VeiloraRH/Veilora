@@ -53,11 +53,11 @@ function amountText(raw: bigint, decimals: number): string {
 }
 
 /** The daily-limit refusal, in the user's units: what is allowed, what is used, what this needs. */
-export function dailyLimitMessage(asset: string, amount: bigint, maxDailySpend: bigint, spentToday: bigint): string {
+export function dailyLimitMessage(asset: string, amount: bigint, maxDailySpend: bigint, spentToday: bigint, dailyPercent = 20): string {
   const { symbol, decimals } = describeAsset(asset);
   if (maxDailySpend === 0n) return `you have no ${symbol} available to spend`;
   const left = maxDailySpend > spentToday ? maxDailySpend - spentToday : 0n;
-  return `today's ${symbol} limit is ${amountText(maxDailySpend, decimals)} ${symbol} (20% of your balance)` +
+  return `today's ${symbol} limit is ${amountText(maxDailySpend, decimals)} ${symbol} (${dailyPercent}% of your balance at the start of today's co-signed spending)` +
     (spentToday > 0n ? `, ${amountText(spentToday, decimals)} ${symbol} already used, ${amountText(left, decimals)} ${symbol} left` : "") +
     `. This needs ${amountText(amount, decimals)} ${symbol}. The limit resets at 00:00 UTC.`;
 }
@@ -73,25 +73,39 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint)
   const balance = asset === NATIVE_ASSET
     ? await publicClient.getBalance({ address: wallet })
     : await publicClient.readContract({ address: getAddress(asset), abi: BALANCE_ABI, functionName: "balanceOf", args: [wallet] });
-  const maxDailySpend = balance / 5n;
+  const settings = await query<{ per_transaction_percent: number; daily_total_percent: number }>(
+    "SELECT per_transaction_percent, daily_total_percent FROM wallet_spending_policies WHERE wallet_address = $1",
+    [wallet.toLowerCase()],
+  );
+  const perTransactionPercent = Number(settings.rows[0]?.per_transaction_percent ?? 20);
+  const dailyPercent = Number(settings.rows[0]?.daily_total_percent ?? 20);
+  const maxTransactionSpend = balance * BigInt(perTransactionPercent) / 100n;
+  if (amount > maxTransactionSpend) {
+    const { symbol, decimals } = describeAsset(asset);
+    deny(`a single transaction can use up to ${amountText(maxTransactionSpend, decimals)} ${symbol} (${perTransactionPercent}% of your current balance). This needs ${amountText(amount, decimals)} ${symbol}`);
+  }
   const spentRow = await query<{ amount_wei: string }>(
     `SELECT amount_wei::text FROM wallet_daily_spend
      WHERE wallet_address = $1 AND utc_day = (now() AT TIME ZONE 'UTC')::date AND asset_address = $2`,
     [wallet.toLowerCase(), asset],
   );
   const spentToday = BigInt(spentRow.rows[0]?.amount_wei ?? "0");
-  if (amount > maxDailySpend) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday));
+  const balanceAtDayStart = spentToday > 0n ? balance + spentToday : balance;
+  const maxDailySpend = balanceAtDayStart * BigInt(dailyPercent) / 100n;
+  if (amount > maxDailySpend) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday, dailyPercent));
   const result = await query(
-    `INSERT INTO wallet_daily_spend (wallet_address, utc_day, asset_address, amount_wei)
-     VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, $3)
+    `INSERT INTO wallet_daily_spend (wallet_address, utc_day, asset_address, amount_wei, daily_balance_wei)
+     VALUES ($1, (now() AT TIME ZONE 'UTC')::date, $2, $3, $4)
      ON CONFLICT (wallet_address, utc_day, asset_address) DO UPDATE
        SET amount_wei = wallet_daily_spend.amount_wei + EXCLUDED.amount_wei,
+           daily_balance_wei = COALESCE(wallet_daily_spend.daily_balance_wei, EXCLUDED.daily_balance_wei),
            updated_at = now()
-       WHERE wallet_daily_spend.amount_wei + EXCLUDED.amount_wei <= $4
+       WHERE wallet_daily_spend.amount_wei + EXCLUDED.amount_wei <=
+         COALESCE(wallet_daily_spend.daily_balance_wei, EXCLUDED.daily_balance_wei) * $5 / 100
      RETURNING amount_wei`,
-    [wallet.toLowerCase(), asset, amount.toString(), maxDailySpend.toString()],
+    [wallet.toLowerCase(), asset, amount.toString(), balanceAtDayStart.toString(), dailyPercent],
   );
-  if (!result.rows.length) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday));
+  if (!result.rows.length) deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday, dailyPercent));
 }
 
 /**
@@ -131,7 +145,10 @@ export async function enforceExecutionPolicy(
       if (amount <= 0n) deny("the approval amount must be greater than zero");
       const balance = await publicClient.readContract({ address: target, abi: BALANCE_ABI, functionName: "balanceOf", args: [wallet] });
       const { symbol, decimals } = describeAsset(target);
-      if (amount > balance / 5n) deny(`an approval can cover at most ${amountText(balance / 5n, decimals)} ${symbol} (20% of your balance). This asks for ${amountText(amount, decimals)} ${symbol}`);
+      const policy = await query<{ per_transaction_percent: number }>("SELECT per_transaction_percent FROM wallet_spending_policies WHERE wallet_address = $1", [wallet.toLowerCase()]);
+      const percent = Number(policy.rows[0]?.per_transaction_percent ?? 20);
+      const approvalCap = balance * BigInt(percent) / 100n;
+      if (amount > approvalCap) deny(`an approval can cover at most ${amountText(approvalCap, decimals)} ${symbol} (${percent}% of your current balance). This asks for ${amountText(amount, decimals)} ${symbol}`);
       return;
     }
     return deny();

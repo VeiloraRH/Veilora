@@ -189,11 +189,12 @@ describe("Wallet Rules API and evaluator", () => {
     priceRuleId = price.res.body.id;
 
     let nvdaPrice = parseUnits("140", 6);
+    let evaluationTime = new Date();
     const transfers: Record<string, { ref: string; amountRaw: bigint; txHash: string; blockNumber: bigint }[]> = {
       "1000": [],
     };
     const deps: EvaluatorDeps = {
-      now: () => new Date(),
+      now: () => evaluationTime,
       latestBlock: async () => 1_010n,
       incomingTransfers: async (to, _token, fromBlock) => {
         expect(to).toBe(wallet);
@@ -209,8 +210,10 @@ describe("Wallet Rules API and evaluator", () => {
     // A second pass sees no new transfers, no due schedule, and the price rule is disarmed.
     expect(await evaluateRules(deps)).toBe(0);
     // Price recovers (re-arms), then crosses again.
+    evaluationTime = new Date(evaluationTime.getTime() + 1_000);
     nvdaPrice = parseUnits("160", 6);
     expect(await evaluateRules(deps)).toBe(0);
+    evaluationTime = new Date(evaluationTime.getTime() + 1_000);
     nvdaPrice = parseUnits("149", 6);
     expect(await evaluateRules(deps)).toBe(1);
 

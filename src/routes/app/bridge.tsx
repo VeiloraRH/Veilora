@@ -10,6 +10,7 @@ import { executeWalletCall, rawAmount } from '@/lib/walletChain';
 import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI';
 import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
+import { useSpendingPolicy } from '@/lib/spendingPolicy';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
 
@@ -47,6 +48,7 @@ const feeSummary = (fees: BridgeQuote['fees']) => Object.values(fees || {})
 function BridgeScreen() {
   const { walletAddress, getStoredDeviceKey } = useWallet();
   const holdings = useHoldings();
+  const spendingPolicy = useSpendingPolicy();
   const cache = useQueryClient();
   const [sourceSymbol, setSourceSymbol] = useState<'ETH' | 'USDG'>('ETH');
   const [destinationChainId, setDestinationChainId] = useState<number>(8453);
@@ -83,9 +85,13 @@ function BridgeScreen() {
   const sourceTokens = [ROBINHOOD_TOKEN_REGISTRY.ETH, ROBINHOOD_TOKEN_REGISTRY.USDG];
   const sourceToken = ROBINHOOD_TOKEN_REGISTRY[sourceSymbol] as WalletToken;
   const balance = holdings.data?.find((holding) => holding.token.symbol === sourceSymbol)?.raw;
-  const policyCap = balance == null ? null : sourceSymbol === 'ETH'
-    ? (balance > 50_000_000_000_000_000n ? (balance - 50_000_000_000_000_000n) / 5n : 0n)
-    : balance / 5n;
+  const dailyAsset = sourceSymbol === 'ETH' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : source.currency.toLowerCase();
+  const dailyEntry = spendingPolicy.data?.dailySpend[dailyAsset];
+  const dailyBalance = dailyEntry?.balance ? BigInt(dailyEntry.balance) : balance == null ? null : balance + BigInt(dailyEntry?.spent ?? '0');
+  const dailyLimit = dailyBalance == null || !spendingPolicy.data ? null : dailyBalance * BigInt(spendingPolicy.data.dailyTotalPercent) / 100n;
+  const dailyRemaining = dailyLimit == null ? null : dailyLimit > BigInt(dailyEntry?.spent ?? '0') ? dailyLimit - BigInt(dailyEntry?.spent ?? '0') : 0n;
+  const transactionLimit = balance == null || !spendingPolicy.data ? null : balance * BigInt(spendingPolicy.data.perTransactionPercent) / 100n;
+  const policyCap = transactionLimit == null || dailyRemaining == null ? null : transactionLimit < dailyRemaining ? transactionLimit : dailyRemaining;
   const quoteExpired = !!quote && quote.expiresAt <= now;
   const amountRaw = useMemo(() => {
     try { return rawAmount(amount, source.decimals); } catch { return null; }
@@ -159,7 +165,7 @@ function BridgeScreen() {
     const key = getStoredDeviceKey();
     if (!key) { setError('Unlock your device key before bridging.'); return; }
     if (balance == null || amountRaw > balance) { setError(`Your ${sourceSymbol} balance is too low for this transfer.`); return; }
-    if (policyCap == null || amountRaw > policyCap) { setError('This amount exceeds Veilora’s current per-transaction signing limit for this asset.'); return; }
+    if (policyCap == null || amountRaw > policyCap) { setError('This amount exceeds your remaining co-signer allowance for this asset. Check your per-transaction and daily limits in Security.'); return; }
     const sameQuote = quote.input.ownerAddress.toLowerCase() === walletAddress.toLowerCase() &&
       quote.input.recipient.toLowerCase() === recipient.trim().toLowerCase() && quote.input.amount === amountRaw.toString() &&
       quote.input.originCurrency.toLowerCase() === source.currency.toLowerCase() &&
@@ -233,7 +239,7 @@ function BridgeScreen() {
             </div>
             <div className="wallet-percentages">{[25, 50, 75, 100].map((part) => <button key={part} disabled={policyCap == null || !!busy} onClick={() => policyCap != null && setAmount(formatUnits(policyCap * BigInt(part) / 100n, source.decimals))}>{part === 100 ? `Max ${formattedPolicyCap}` : `${part}%`}</button>)}</div>
           </div>
-          <p className="wallet-bridge-limit">Available balance: {formattedBalance} {sourceSymbol}. Max under the current 20% signing cap: {formattedPolicyCap} {sourceSymbol}. Earlier spending today may reduce the amount the co-signer approves.</p>
+          <p className="wallet-bridge-limit">Available balance: {formattedBalance} {sourceSymbol}. Max under your per-transaction and remaining daily limits: {formattedPolicyCap} {sourceSymbol}. Change these limits in Security.</p>
           <button className="wallet-primary-button mt-5" disabled={!amountRaw || balance == null || policyCap == null || !!busy || amountRaw > policyCap} onClick={() => setStep(2)}>Choose destination <ArrowRight size={17} /></button>
         </>}
         {step === 2 && <>

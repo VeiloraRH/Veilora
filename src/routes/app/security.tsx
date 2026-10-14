@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, CircleDashed, Copy, Download, Eye, Fingerprint, KeyRound, Laptop, Loader2, Lock, RefreshCw, Server, ShieldAlert, ShieldCheck, Smartphone, Snowflake, Unlock, X } from 'lucide-react';
 import type { Hex } from 'viem';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,6 +9,7 @@ import { DevicePassphraseDialog } from '@/components/app/DevicePassphraseDialog'
 import { PageTitle, shortAddress } from '@/components/wallet/WalletUI';
 import { getQuorumStatus } from '@/lib/api';
 import { useWallet } from '@/lib/walletContext';
+import { saveSpendingPolicy, useSpendingPolicy } from '@/lib/spendingPolicy';
 import { DRILL_VALID_DAYS, downloadDeviceKeyBackup, drillIsCurrent, freezeWithKey, keyMatches, readFlag, unfreezeWithKey, writeFlag } from '@/lib/recovery';
 export const Route=createFileRoute('/app/security')({component:RecoveryCenter});
 
@@ -55,6 +57,8 @@ export function RecoveryCenter() {
 
  <section className="rc-section"><div className="wallet-section-heading"><h2>Shards</h2></div><div className="rc-shards">{shards.map(s=><article key={s.id} className="wallet-panel rc-shard"><div className="rc-shard-head"><span className={`rc-shard-icon s${s.id}`}><s.icon size={19}/></span><div className="min-w-0 flex-1"><small>Shard {s.id}</small><h3>{s.name}</h3></div><span className={`rc-pill ${s.status[1]}`}>{s.status[0]}</span></div><p className="rc-where">{s.where}</p><AddressLine address={s.address} match={s.match} deployed={q?.deployed}/>{s.actions&&<div className="rc-shard-actions">{s.actions}</div>}</article>)}</div></section>
 
+ <SpendingLimits />
+
  <section className="rc-section"><div className="wallet-section-heading"><h2>If you lose access</h2></div><div className="rc-playbook">
   <Scenario icon={Smartphone} title="New phone or browser" tag="available" text="Restore your encrypted device-key backup on the new device, or import the device key. Your account address does not change.">{deviceKeyPresent&&<button className="rule-button" onClick={backup}><Download size={14}/>Download backup</button>}<Link className="rule-button" to="/recover">Open restore page</Link></Scenario>
   <Scenario icon={ShieldAlert} title="Device lost or stolen" tag="available" text="Freeze from any browser with your recovery key. The co-signer stops signing, and only the recovery key can lift that freeze."><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Snowflake size={14}/>Freeze with recovery key</button></Scenario>
@@ -71,6 +75,45 @@ export function RecoveryCenter() {
  {dialog==='view-key'&&<ViewKeyDialog wallet={walletAddress} onClose={()=>{setDialog(null);syncFlags();}}/>}
  {dialog==='import-key'&&<ImportKeyDialog onClose={()=>setDialog(null)} onDone={after}/>}
  </>;
+}
+
+function SpendingLimits() {
+ const { walletAddress, getStoredDeviceKey, deviceKeyUnlocked } = useWallet();
+ const cache = useQueryClient();
+ const policy = useSpendingPolicy();
+ const [perTx, setPerTx] = useState(20);
+ const [daily, setDaily] = useState(20);
+ const [busy, setBusy] = useState(false);
+ const [message, setMessage] = useState('');
+ const [error, setError] = useState('');
+ useEffect(() => {
+  if (policy.data) { setPerTx(policy.data.perTransactionPercent); setDaily(policy.data.dailyTotalPercent); }
+ }, [policy.data]);
+ async function save() {
+  const key = getStoredDeviceKey();
+  if (!key) { setError('Unlock your device key before changing spending limits.'); return; }
+  setBusy(true); setError(''); setMessage('');
+  try {
+   const updated = await saveSpendingPolicy(walletAddress, key as Hex, perTx, daily);
+   cache.setQueryData(['spending-policy', walletAddress], updated);
+   setMessage('Spending limits updated.');
+  } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not update spending limits.'); }
+  finally { setBusy(false); }
+ }
+ return <section className="rc-section">
+  <div className="wallet-section-heading"><h2>Co-signer spending limits</h2></div>
+  <div className="wallet-panel p-6">
+   <p className="rc-muted">Set the maximum the co-signer will approve for one transaction and across all co-signed spending in a UTC day. Limits apply separately to each asset.</p>
+   <div className="grid gap-6 md:grid-cols-2 mt-5">
+    <label className="builder-field"><span>Maximum per transaction: <strong>{perTx}%</strong></span><input type="range" min="1" max="100" step="1" value={perTx} onChange={e=>setPerTx(Number(e.target.value))} disabled={!deviceKeyUnlocked||busy}/><small className="rc-muted">A single transfer, bridge, swap, or token approval cannot exceed this share of the current asset balance.</small></label>
+    <label className="builder-field"><span>Maximum daily total: <strong>{daily}%</strong></span><input type="range" min="1" max="100" step="1" value={daily} onChange={e=>setDaily(Number(e.target.value))} disabled={!deviceKeyUnlocked||busy}/><small className="rc-muted">The co-signer tracks total approved spending per asset, measured from the balance at your first co-signed spend that UTC day. It resets at 00:00 UTC.</small></label>
+   </div>
+   {!deviceKeyUnlocked&&<p className="builder-hint mt-4">Unlock your device key to view and change these settings.</p>}
+   {policy.isError&&<p role="alert" className="wallet-error mt-4">{policy.error instanceof Error?policy.error.message:'Could not load spending limits.'}</p>}
+   {error&&<p role="alert" className="wallet-error mt-4">{error}</p>}{message&&<p role="status" className="wallet-notice mt-4">{message}</p>}
+   <button className="wallet-primary-button mt-5" disabled={!deviceKeyUnlocked||busy||!policy.data|| (perTx===policy.data.perTransactionPercent&&daily===policy.data.dailyTotalPercent)} onClick={()=>void save()}>{busy?'Saving limits…':'Save spending limits'}</button>
+  </div>
+ </section>;
 }
 
 type CheckState='ok'|'warn'|'bad'|'wait';
