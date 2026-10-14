@@ -80,6 +80,7 @@ export async function askVeily(payload: {
   walletAddress: string;
   requestId: string;
   timestamp: number;
+  permissionId?: string;
   mode: VeilyMode;
   messages: VeilyMessage[];
   context: string;
@@ -89,6 +90,55 @@ export async function askVeily(payload: {
   shardASignature: string;
 }): Promise<{ answer: string; actions: VeilyAction[]; provider: string; model: string }> {
   return request("/v1/veily/chat", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export interface VeilySessionPermission {
+  id: string;
+  purpose: string;
+  scopes: Array<"wallet:read" | "activity:read" | "navigation:prepare">;
+  status: "active" | "expired" | "revoked";
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+}
+
+export async function listVeilyPermissions(payload: {
+  walletAddress: string;
+  requestId: string;
+  timestamp: number;
+  shardASignature: string;
+}) {
+  return request<{ permissions: VeilySessionPermission[] }>("/v1/veily/permissions/list", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createVeilyPermission(payload: {
+  walletAddress: string;
+  requestId: string;
+  timestamp: number;
+  purpose: string;
+  requestedScopes: VeilySessionPermission["scopes"];
+  expiresAt: string;
+  shardASignature: string;
+}) {
+  return request<{ permission: VeilySessionPermission }>("/v1/veily/permissions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function revokeVeilyPermission(permissionId: string, payload: {
+  walletAddress: string;
+  requestId: string;
+  timestamp: number;
+  shardASignature: string;
+}) {
+  return request<{ permission: VeilySessionPermission }>(`/v1/veily/permissions/${encodeURIComponent(permissionId)}/revoke`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getRelayerStatus() {
