@@ -4,6 +4,7 @@ import { healthRouter } from "./routes/health";
 import { walletsRouter } from "./routes/wallets";
 import { relayerRouter } from "./routes/relayer";
 import { rulesRouter } from "./routes/rules";
+import { veilyRouter } from "./routes/veily";
 
 export const app = express();
 
@@ -67,3 +68,4 @@ app.use("/health", healthRouter);
 app.use("/v1/wallets/:address/rules", rulesRouter);
 app.use("/v1/wallets", walletsRouter);
 app.use("/v1/relayer", relayerRouter);
+app.use("/v1/veily", veilyRouter);
