@@ -16,6 +16,7 @@ import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
 import { spendingAllowance } from '@/lib/spendingAllowance';
 import { TransactionCheck } from '@/components/wallet/TransactionCheck';
+import { SignPreview } from '@/components/wallet/TxExplanation';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { ContactBook } from '@/components/wallet/ContactBook';
 import { RecipientCheck, isBlockedRecipient } from '@/components/wallet/RecipientCheck';
@@ -298,6 +299,7 @@ function BridgeScreen() {
   const formattedBalance = balance == null ? '—' : Number(formatUnits(balance, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
   const formattedPolicyCap = policyCap == null ? '—' : Number(formatUnits(policyCap, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
   const fees = quote ? feeSummary(quote.fees) : [];
+  const reviewCalls = quote?.steps.map((tx) => ({ target: getAddress(tx.to), value: BigInt(tx.value), data: tx.data as Hex })) ?? [];
 
   return <>
     <PageTitle title="Bridge" description="Move ETH or USDG from Robinhood Chain to Base, Polygon, Ethereum, or BNB Chain." />
@@ -355,6 +357,16 @@ function BridgeScreen() {
             { label: 'Relay route', detail: !quote ? (quoting ? 'Finding a route' : 'Route unavailable') : quoteExpired ? 'Quote expired' : `${destinationChain.name} route is live`, status: !quote || quoteExpired ? 'attention' : 'ready' },
             { label: 'Destination', detail: !validRecipient ? 'Enter a valid destination address' : recipientBlocked ? 'This address cannot be used' : recipientNeedsAck && !recipientAck ? 'Confirm you checked the address' : `Address is ready for ${destinationChain.name}`, status: !validRecipient || recipientBlocked || recipientNeedsAck && !recipientAck ? 'attention' : 'ready' },
           ]} footnote="Relay’s quote uses current route and fee data. Destination settlement can take time and is not guaranteed until Relay reports completion. Co-signer limits are checked again when you submit." />
+          <SignPreview wallet={walletAddress} calls={reviewCalls} title="Veily’s transaction review" facts={[
+            { label: 'You send', value: <><Private>{amount}</Private> {sourceSymbol} from Robinhood Chain</> },
+            { label: 'Destination', value: <>{destinationChain.name} {destination.symbol} to {shortAddress(recipient.trim())}</> },
+            { label: 'Estimated minimum received', value: quote ? <Private>{outputSummary(quote.minimumAmountOut, quote.outputDecimals, quote.outputSymbol)}</Private> : 'Unavailable' },
+            { label: 'Estimated fees', value: fees.length ? fees.join(' + ') : quote ? 'Included in Relay quote' : 'Unavailable' },
+            { label: 'Per-transaction limit', value: transactionLimit != null ? <><Private>{Number(formatUnits(transactionLimit, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 })}</Private> {sourceSymbol}</> : 'Unavailable' },
+            { label: 'Daily allowance remaining', value: dailyRemaining != null ? <><Private>{Number(formatUnits(dailyRemaining, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 })}</Private> {sourceSymbol}</> : 'Unavailable' },
+            { label: 'Route validity', value: quote ? quoteExpired ? 'Expired' : `${Math.max(0, Math.ceil((quote.expiresAt - now) / 1000))} seconds remaining` : 'Unavailable' },
+            { label: 'Source simulation', value: 'Not run in this review. Relay supplies the route; Veilora’s co-signer rechecks policy when you submit.' },
+          ]} />
           {error && <p role="alert" className="wallet-error mt-4">{error}</p>}
           {quoteExpired ? <button className="wallet-primary-button mt-5" onClick={() => setQuoteRefresh((value) => value + 1)}>Get a new quote <RefreshCw size={16} /></button> :
             <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy || quoteExpired || balance == null || amountRaw == null || amountRaw > balance || policyCap == null || amountRaw > policyCap || recipientBlocked || (recipientNeedsAck && !recipientAck)} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : amountRaw != null && policyCap != null && amountRaw > policyCap ? 'Over co-signer allowance' : 'Confirm bridge'}</button>}

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDownLeft, ArrowUpRight, ExternalLink, Info, KeyRoun
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { explainCalls, explainTransaction, type ExplainFlag, type TxExplanation } from '@/lib/api';
 import { EXPLORER, type PlannedCall } from '@/lib/walletChain';
+import type { ReactNode } from 'react';
 
 const FLAG_ICON={danger:ShieldAlert,warn:AlertTriangle,info:Info} as const;
 const short=(a:string)=>`${a.slice(0,6)}…${a.slice(-4)}`;
@@ -21,11 +22,12 @@ export function ExplanationCard({e,step}:{e:TxExplanation;step?:string}) {
 }
 
 /** "What you're signing" for calls that have not been signed yet. */
-export function SignPreview({wallet,calls}:{wallet:string;calls:PlannedCall[]}) {
+export function SignPreview({wallet,calls,facts,title='What you’re signing'}:{wallet:string;calls:PlannedCall[];facts?:{label:string;value:ReactNode}[];title?:string}) {
  const key=calls.map(c=>`${c.target}:${c.value}:${c.data}`).join('|');
  const q=useQuery({queryKey:['explain-calls',wallet,key],enabled:!!wallet&&calls.length>0,staleTime:60000,retry:1,queryFn:()=>explainCalls(wallet,calls)});
  if(!calls.length) return null;
- return <section className={`tx-preview ${q.data?.level??''}`} aria-label="What you're signing"><div className="tx-preview-head"><Sparkles size={14}/>What you're signing{q.data&&calls.length>1&&<span>{calls.length} transactions</span>}</div>
+ return <section className={`tx-preview ${q.data?.level??''}`} aria-label={title}><div className="tx-preview-head"><Sparkles size={14}/>{title}{q.data&&calls.length>1&&<span>{calls.length} transactions</span>}</div>
+  {facts&&facts.length>0&&<><p className="tx-muted">A plain-language read of the exact call and current review data. Only you can authorize it.</p><dl className="tx-review-facts">{facts.map(f=><div key={f.label}><dt>{f.label}</dt><dd>{f.value}</dd></div>)}</dl></>}
   {q.isPending?<div className="tx-loading"><Loader2 size={14} className="animate-spin"/>Reading the transaction…</div>:q.isError?<p className="tx-muted">The explanation is unavailable right now. Review the details above before signing.</p>:q.data!.explanations.map((e,i)=><ExplanationCard key={i} e={e} step={calls.length>1?`Step ${i+1}`:undefined}/>)}</section>;
 }
 
