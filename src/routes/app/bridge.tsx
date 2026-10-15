@@ -14,6 +14,7 @@ import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI
 import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
+import { spendingAllowance } from '@/lib/spendingAllowance';
 import { TransactionCheck } from '@/components/wallet/TransactionCheck';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { ContactBook } from '@/components/wallet/ContactBook';
@@ -112,13 +113,10 @@ function BridgeScreen() {
   const sourceTokens = [ROBINHOOD_TOKEN_REGISTRY.ETH, ROBINHOOD_TOKEN_REGISTRY.USDG];
   const sourceToken = ROBINHOOD_TOKEN_REGISTRY[sourceSymbol] as WalletToken;
   const balance = holdings.data?.find((holding) => holding.token.symbol === sourceSymbol)?.raw;
-  const dailyAsset = sourceSymbol === 'ETH' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : source.currency.toLowerCase();
-  const dailyEntry = spendingPolicy.data?.dailySpend[dailyAsset];
-  const dailyBalance = dailyEntry?.balance ? BigInt(dailyEntry.balance) : balance == null ? null : balance + BigInt(dailyEntry?.spent ?? '0');
-  const dailyLimit = dailyBalance == null || !spendingPolicy.data ? null : dailyBalance * BigInt(spendingPolicy.data.dailyTotalPercent) / 100n;
-  const dailyRemaining = dailyLimit == null ? null : dailyLimit > BigInt(dailyEntry?.spent ?? '0') ? dailyLimit - BigInt(dailyEntry?.spent ?? '0') : 0n;
-  const transactionLimit = balance == null || !spendingPolicy.data ? null : balance * BigInt(spendingPolicy.data.perTransactionPercent) / 100n;
-  const policyCap = transactionLimit == null || dailyRemaining == null ? null : transactionLimit < dailyRemaining ? transactionLimit : dailyRemaining;
+  const allowance = spendingAllowance(sourceToken, balance, spendingPolicy.data);
+  const dailyRemaining = allowance?.dailyRemaining ?? null;
+  const transactionLimit = allowance?.perTransaction ?? null;
+  const policyCap = allowance?.max ?? null;
   const quoteExpired = !!quote && quote.expiresAt <= now;
   const amountRaw = useMemo(() => {
     try { return rawAmount(amount, source.decimals); } catch { return null; }
@@ -132,7 +130,7 @@ function BridgeScreen() {
     tokenContracts: destinationChain.assets.filter((a) => a.currency !== NATIVE).map((a) => ({ symbol: a.symbol, address: a.currency })),
   }) : null, [validRecipient, recipient, walletAddress, records, destinationChain]);
   const recipientBlocked = isBlockedRecipient(recipientCheck);
-  const recipientNeedsAck = recipientCheck?.level === 'danger' && !recipientBlocked;
+  const recipientNeedsAck = (recipientCheck?.level === 'danger' || recipientCheck?.level === 'warn') && !recipientBlocked;
   const [recipientAck, setRecipientAck] = useState(false);
   useEffect(() => setRecipientAck(false), [recipient, destinationChainId]);
 
@@ -350,10 +348,11 @@ function BridgeScreen() {
           </div>}
           <TransactionCheck items={[
             { label: 'Wallet balance', detail: balance == null ? 'Balance unavailable' : amountRaw != null && amountRaw <= balance ? `${amount} ${sourceSymbol} is available` : `Not enough ${sourceSymbol} for this bridge`, status: balance == null ? (holdings.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= balance ? 'ready' : 'attention' },
-            { label: 'Co-signer allowance', detail: policyCap == null ? (spendingPolicy.isLoading ? 'Checking your allowance' : 'Allowance unavailable') : `Up to ${formattedPolicyCap} ${sourceSymbol} can be approved now`, status: policyCap == null ? (spendingPolicy.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= policyCap ? 'ready' : 'attention' },
+            { label: 'Per-transaction limit', detail: transactionLimit == null ? (spendingPolicy.isLoading ? 'Checking your limit' : 'Limit unavailable') : `${Number(formatUnits(transactionLimit, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${sourceSymbol} maximum`, status: transactionLimit == null ? (spendingPolicy.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= transactionLimit ? 'ready' : 'attention' },
+            { label: 'Daily limit remaining', detail: dailyRemaining == null ? (spendingPolicy.isLoading ? 'Checking today’s limit' : 'Limit unavailable') : `${Number(formatUnits(dailyRemaining, source.decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${sourceSymbol} remains today`, status: dailyRemaining == null ? (spendingPolicy.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= dailyRemaining ? 'ready' : 'attention' },
             { label: 'Relay route', detail: !quote ? (quoting ? 'Finding a route' : 'Route unavailable') : quoteExpired ? 'Quote expired' : `${destinationChain.name} route is live`, status: !quote || quoteExpired ? 'attention' : 'ready' },
             { label: 'Destination', detail: !validRecipient ? 'Enter a valid destination address' : recipientBlocked ? 'This address cannot be used' : recipientNeedsAck && !recipientAck ? 'Confirm you checked the address' : `Address is ready for ${destinationChain.name}`, status: !validRecipient || recipientBlocked || recipientNeedsAck && !recipientAck ? 'attention' : 'ready' },
-          ]} />
+          ]} footnote="Relay’s quote uses current route and fee data. Destination settlement can take time and is not guaranteed until Relay reports completion. Co-signer limits are checked again when you submit." />
           {error && <p role="alert" className="wallet-error mt-4">{error}</p>}
           {quoteExpired ? <button className="wallet-primary-button mt-5" onClick={() => setQuoteRefresh((value) => value + 1)}>Get a new quote <RefreshCw size={16} /></button> :
             <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy || quoteExpired || balance == null || amountRaw == null || amountRaw > balance || policyCap == null || amountRaw > policyCap || recipientBlocked || (recipientNeedsAck && !recipientAck)} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : amountRaw != null && policyCap != null && amountRaw > policyCap ? 'Over co-signer allowance' : 'Confirm bridge'}</button>}
