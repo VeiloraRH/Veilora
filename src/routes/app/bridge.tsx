@@ -14,6 +14,7 @@ import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI
 import { TokenPicker } from '@/components/wallet/TokenPicker';
 import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
+import { TransactionCheck } from '@/components/wallet/TransactionCheck';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { ContactBook } from '@/components/wallet/ContactBook';
 import { RecipientCheck, isBlockedRecipient } from '@/components/wallet/RecipientCheck';
@@ -347,9 +348,15 @@ function BridgeScreen() {
             <div><span>Estimated time</span><strong>{quote.timeEstimate ? `${Math.ceil(quote.timeEstimate / 60)} min` : 'Varies by route'}</strong></div>
             <div><span>Quote validity</span><strong>{quoteExpired ? 'Expired' : `${Math.max(0, Math.ceil((quote.expiresAt - now) / 1000))} sec`}</strong></div>
           </div>}
+          <TransactionCheck items={[
+            { label: 'Wallet balance', detail: balance == null ? 'Balance unavailable' : amountRaw != null && amountRaw <= balance ? `${amount} ${sourceSymbol} is available` : `Not enough ${sourceSymbol} for this bridge`, status: balance == null ? (holdings.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= balance ? 'ready' : 'attention' },
+            { label: 'Co-signer allowance', detail: policyCap == null ? (spendingPolicy.isLoading ? 'Checking your allowance' : 'Allowance unavailable') : `Up to ${formattedPolicyCap} ${sourceSymbol} can be approved now`, status: policyCap == null ? (spendingPolicy.isLoading ? 'checking' : 'attention') : amountRaw != null && amountRaw <= policyCap ? 'ready' : 'attention' },
+            { label: 'Relay route', detail: !quote ? (quoting ? 'Finding a route' : 'Route unavailable') : quoteExpired ? 'Quote expired' : `${destinationChain.name} route is live`, status: !quote || quoteExpired ? 'attention' : 'ready' },
+            { label: 'Destination', detail: !validRecipient ? 'Enter a valid destination address' : recipientBlocked ? 'This address cannot be used' : recipientNeedsAck && !recipientAck ? 'Confirm you checked the address' : `Address is ready for ${destinationChain.name}`, status: !validRecipient || recipientBlocked || recipientNeedsAck && !recipientAck ? 'attention' : 'ready' },
+          ]} />
           {error && <p role="alert" className="wallet-error mt-4">{error}</p>}
           {quoteExpired ? <button className="wallet-primary-button mt-5" onClick={() => setQuoteRefresh((value) => value + 1)}>Get a new quote <RefreshCw size={16} /></button> :
-            <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy || recipientBlocked || (recipientNeedsAck && !recipientAck)} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : 'Confirm bridge'}</button>}
+            <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy || quoteExpired || balance == null || amountRaw == null || amountRaw > balance || policyCap == null || amountRaw > policyCap || recipientBlocked || (recipientNeedsAck && !recipientAck)} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : amountRaw != null && policyCap != null && amountRaw > policyCap ? 'Over co-signer allowance' : 'Confirm bridge'}</button>}
           <p className="wallet-bridge-note"><ShieldCheck size={15} /> Source transaction is authorized by your Veilora threshold account. The destination address is outside Veilora unless it is itself a deployed Veilora account.</p>
         </>}
       </section>
