@@ -6,7 +6,7 @@ import { useWallet } from './walletContext';
 
 export type AlertItem = { id: string; type: 'price' | 'incoming' | 'rule' | 'security'; severity: 'info' | 'success' | 'warn' | 'danger'; title: string; body: string; data: { txHash?: string; ruleId?: string }; createdAt: string; read: boolean };
 export type PriceAlert = { id: string; asset: string; direction: 'above' | 'below'; priceUsdg: string; armed: boolean; lastPriceRaw: string | null; lastTriggeredAt: string | null; createdAt: string };
-export type AlertsState = { alerts: AlertItem[]; unread: number; settings: { incoming: boolean; rules: boolean; security: true }; priceAlerts: PriceAlert[]; priceAssets: string[] };
+export type AlertsState = { alerts: AlertItem[]; unread: number; settings: { incoming: boolean; rules: boolean; prices: boolean; security: true }; priceAlerts: PriceAlert[]; priceAssets: string[] };
 
 // Must match backend/src/routes/alerts.ts.
 const readMessage = (w: string, ts: number) => `Veilora alerts access\nwallet:${getAddress(w)}\ntimestamp:${ts}`;
@@ -24,7 +24,7 @@ export async function fetchAlerts(wallet: string, key: Hex): Promise<AlertsState
  const ts = now();
  return call(`/v1/wallets/${wallet}/alerts`, { method: 'GET', headers: { 'x-veilora-timestamp': String(ts), 'x-veilora-signature': await privateKeyToAccount(key).signMessage({ message: readMessage(wallet, ts) }) } });
 }
-export async function changeAlerts(wallet: string, key: Hex, action: 'read-all' | 'settings' | 'price-add' | 'price-remove', payload: string): Promise<AlertsState> {
+export async function changeAlerts(wallet: string, key: Hex, action: 'read-all' | 'read-one' | 'unread-one' | 'settings' | 'price-add' | 'price-remove', payload: string): Promise<AlertsState> {
  const ts = now();
  return call(`/v1/wallets/${wallet}/alerts/change`, { method: 'POST', body: JSON.stringify({ action, payload, timestamp: ts, shardASignature: await privateKeyToAccount(key).signMessage({ message: changeMessage(wallet, action, payload, ts) }) }) });
 }

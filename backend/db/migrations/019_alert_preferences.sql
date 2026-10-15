@@ -1,0 +1,2 @@
+ALTER TABLE wallet_alert_settings
+  ADD COLUMN IF NOT EXISTS prices BOOLEAN NOT NULL DEFAULT true;

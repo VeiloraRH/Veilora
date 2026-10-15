@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownLeft, Bell, CheckCheck, ExternalLink, Loader2, Plus, ShieldAlert, Target, Trash2, Workflow } from 'lucide-react';
+import { ArrowDownLeft, Bell, Check, CheckCheck, ExternalLink, EyeOff, Loader2, Plus, ShieldAlert, Target, Trash2, Workflow } from 'lucide-react';
 import { formatUnits, type Hex } from 'viem';
 import { PageTitle } from '@/components/wallet/WalletUI';
 import { useWallet } from '@/lib/walletContext';
@@ -18,7 +18,8 @@ function AlertsScreen() {
  const [busy,setBusy]=useState(''); const [error,setError]=useState(''); const [filter,setFilter]=useState<'all'|AlertItem['type']>('all');
  const [desktop,setDesktop]=useState(desktopNotificationsOn);
  const data=alerts.data; const items=(data?.alerts??[]).filter(a=>filter==='all'||a.type===filter);
- async function act(action:'read-all'|'settings'|'price-add'|'price-remove',payload:string,label:string){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return false;}setBusy(label);setError('');try{cache.setQueryData(['alerts',walletAddress],await changeAlerts(walletAddress,key as Hex,action,payload));return true;}catch(e){setError(e instanceof Error?e.message:'Could not update alerts.');return false;}finally{setBusy('');}}
+ async function act(action:'read-all'|'read-one'|'unread-one'|'settings'|'price-add'|'price-remove',payload:string,label:string){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return false;}setBusy(label);setError('');try{cache.setQueryData(['alerts',walletAddress],await changeAlerts(walletAddress,key as Hex,action,payload));return true;}catch(e){setError(e instanceof Error?e.message:'Could not update alerts.');return false;}finally{setBusy('');}}
+ function savePreference(name:'incoming'|'rules'|'prices',value:boolean){if(!data)return;const next={...data.settings,[name]:value};void act('settings',`incoming=${next.incoming?1:0};rules=${next.rules?1:0};prices=${next.prices?1:0}`,'settings');}
  return <><PageTitle title="Alerts" description="Price targets, money coming in, rule runs and anything that touches your account's security." action={data&&data.unread>0?<button className="wallet-soft-button" disabled={!!busy} onClick={()=>void act('read-all','all','read')}><CheckCheck size={15}/>Mark all read</button>:undefined}/>
  {error&&<p role="alert" className="wallet-error mb-5">{error}</p>}
  {alerts.isError&&<p role="alert" className="wallet-error mb-5">{alerts.error instanceof Error?alerts.error.message:'Alerts are unavailable right now.'}</p>}
@@ -26,14 +27,15 @@ function AlertsScreen() {
   <div className="alerts-filters" role="tablist">{(['all','incoming','price','rule','security'] as const).map(f=><button key={f} role="tab" aria-selected={filter===f} className={filter===f?'on':''} onClick={()=>setFilter(f)}>{f==='all'?'All':f==='incoming'?'Incoming':f==='price'?'Prices':f==='rule'?'Rules':'Security'}</button>)}</div>
   {alerts.isPending?<div className="wallet-panel wallet-empty"><Loader2 className="animate-spin"/><h3>Loading alerts</h3></div>
   :!items.length?<div className="wallet-panel wallet-empty"><span className="wallet-empty-icon"><Bell/></span><h3>{filter==='all'?'No alerts yet':'Nothing here yet'}</h3><p>Money coming in, price targets you set, rule runs and security events will show up here.</p></div>
-  :<div className="wallet-panel alerts-feed">{items.map(a=>{const Icon=TYPE_ICON[a.type];return <article key={a.id} className={`alert-item ${a.severity} ${a.read?'':'unread'}`}><span className={`alert-icon ${a.severity}`}><Icon size={16}/></span><div className="min-w-0 flex-1"><strong>{a.title}</strong><p>{a.body}</p><small>{ago(a.createdAt)}{a.data?.txHash&&<> · <a href={`${EXPLORER}/tx/${a.data.txHash}`} target="_blank" rel="noreferrer">Transaction <ExternalLink size={11}/></a></>}{a.type==='rule'&&<> · <Link to="/app/rules">Open Wallet Rules</Link></>}{a.type==='security'&&<> · <Link to="/app/security">Quorum & recovery</Link></>}</small></div>{!a.read&&<span className="alert-dot" aria-label="Unread"/>}</article>;})}</div>}
+  :<div className="wallet-panel alerts-feed">{items.map(a=>{const Icon=TYPE_ICON[a.type];const action=a.read?'unread-one':'read-one';const label=`${action}-${a.id}`;return <article key={a.id} className={`alert-item ${a.severity} ${a.read?'':'unread'}`}><span className={`alert-icon ${a.severity}`}><Icon size={16}/></span><div className="min-w-0 flex-1"><strong>{a.title}</strong><p>{a.body}</p><small>{ago(a.createdAt)}{a.data?.txHash&&<> · <a href={`${EXPLORER}/tx/${a.data.txHash}`} target="_blank" rel="noreferrer">Transaction <ExternalLink size={11}/></a></>}{a.type==='rule'&&<> · <Link to="/app/rules">Open Wallet Rules</Link></>}{a.type==='security'&&<> · <Link to="/app/security">Quorum & recovery</Link></>}</small></div><button type="button" className="alert-read-button" disabled={!!busy} aria-label={`${a.read?'Mark unread':'Mark read'}: ${a.title}`} title={a.read?'Mark unread':'Mark read'} onClick={()=>void act(action,a.id,label)}>{busy===label?<Loader2 size={15} className="animate-spin"/>:a.read?<EyeOff size={15}/>:<Check size={15}/>}</button>{!a.read&&<span className="alert-dot" aria-label="Unread"/>}</article>;})}</div>}
  </section></div>
  <aside className="rules-aside">
   <PriceAlerts busy={!!busy} onAdd={payload=>act('price-add',payload,'price')} onRemove={id=>void act('price-remove',id,`remove-${id}`)} busyLabel={busy}/>
   <div className="wallet-panel rules-aside-card"><h3 className="!mt-0">What to alert me about</h3>
    <div className="alerts-settings">
-    <Toggle label="Money coming in" hint="Every token transfer into your account, and a warning for zero-value transfers used in address poisoning." on={data?.settings.incoming??true} disabled={!data||!!busy} onChange={v=>void act('settings',`incoming=${v?1:0};rules=${data?.settings.rules?1:0}`,'settings')}/>
-    <Toggle label="Rule runs" hint="When a rule needs your approval or is skipped." on={data?.settings.rules??true} disabled={!data||!!busy} onChange={v=>void act('settings',`incoming=${data?.settings.incoming?1:0};rules=${v?1:0}`,'settings')}/>
+    <Toggle label="Money coming in" hint="Token transfers and warnings for zero-value address-poisoning transfers." on={data?.settings.incoming??true} disabled={!data||!!busy} onChange={v=>savePreference('incoming',v)}/>
+    <Toggle label="Price alerts" hint="When an asset crosses one of your price targets." on={data?.settings.prices??true} disabled={!data||!!busy} onChange={v=>savePreference('prices',v)}/>
+    <Toggle label="Rule runs" hint="When a rule needs your approval or is skipped." on={data?.settings.rules??true} disabled={!data||!!busy} onChange={v=>savePreference('rules',v)}/>
     <Toggle label="Security events" hint="Freezes, unfreezes and refused transactions. Always on." on disabled onChange={()=>{}}/>
     <Toggle label="Desktop notifications" hint="Pop-ups while Veilora is open in a tab. In privacy mode they say only “New alert”." on={desktop} disabled={!!busy} onChange={v=>void setDesktopNotifications(v).then(setDesktop).catch(e=>setError(e instanceof Error?e.message:'Notifications are unavailable.'))}/>
    </div>

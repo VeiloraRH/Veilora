@@ -12,10 +12,10 @@ export type NewAlert = { type: AlertType; severity: AlertSeverity; title: string
 export async function recordAlert(walletAddress: string, alert: NewAlert): Promise<boolean> {
   try {
     const wallet = walletAddress.toLowerCase();
-    if (alert.type === "incoming" || alert.type === "rule") {
-      const settings = await query<{ incoming: boolean; rules: boolean }>("SELECT incoming, rules FROM wallet_alert_settings WHERE wallet_address = $1", [wallet]);
+    if (alert.type === "incoming" || alert.type === "rule" || alert.type === "price") {
+      const settings = await query<{ incoming: boolean; rules: boolean; prices: boolean }>("SELECT incoming, rules, prices FROM wallet_alert_settings WHERE wallet_address = $1", [wallet]);
       const row = settings.rows[0];
-      if (row && ((alert.type === "incoming" && !row.incoming) || (alert.type === "rule" && !row.rules))) return false;
+      if (row && ((alert.type === "incoming" && !row.incoming) || (alert.type === "rule" && !row.rules) || (alert.type === "price" && !row.prices))) return false;
     }
     const inserted = await query(
       `INSERT INTO wallet_alerts (wallet_address, type, severity, title, body, ref, data)

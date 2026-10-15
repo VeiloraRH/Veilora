@@ -45,7 +45,7 @@ describe("Alerts", () => {
     expect((await read(stranger)).status).toBe(403);
     const res = await read();
     expect(res.status).toBe(200);
-    expect(res.body.settings).toEqual({ incoming: true, rules: true, security: true });
+    expect(res.body.settings).toEqual({ incoming: true, rules: true, prices: true, security: true });
     expect(res.body.priceAssets).toContain("NVDA");
     const row = await query("SELECT incoming FROM wallet_alert_settings WHERE wallet_address = $1", [wallet.toLowerCase()]);
     expect(row.rows[0].incoming).toBe(true);
@@ -55,10 +55,10 @@ describe("Alerts", () => {
     expect((await change("price-add", "DOGE:above:1")).status).toBe(400);
     expect((await change("price-add", "NVDA:below:150")).body.priceAlerts).toHaveLength(1);
     const t = ts();
-    const sig = await device.signMessage({ message: alertsChangeMessage(wallet, "settings", "incoming=1;rules=0", t) });
-    const first = await request(app).post(`${base}/change`).send({ action: "settings", payload: "incoming=1;rules=0", timestamp: t, shardASignature: sig });
+    const sig = await device.signMessage({ message: alertsChangeMessage(wallet, "settings", "incoming=1;rules=0;prices=1", t) });
+    const first = await request(app).post(`${base}/change`).send({ action: "settings", payload: "incoming=1;rules=0;prices=1", timestamp: t, shardASignature: sig });
     expect(first.body.settings.rules).toBe(false);
-    expect((await request(app).post(`${base}/change`).send({ action: "settings", payload: "incoming=1;rules=0", timestamp: t, shardASignature: sig })).status).toBe(409);
+    expect((await request(app).post(`${base}/change`).send({ action: "settings", payload: "incoming=1;rules=0;prices=1", timestamp: t, shardASignature: sig })).status).toBe(409);
     // Rule alerts are now muted; security alerts never are.
     expect(await recordAlert(wallet, { type: "rule", severity: "info", title: "x", body: "y", ref: "rule:test" })).toBe(false);
     expect(await recordAlert(wallet, { type: "security", severity: "warn", title: "x", body: "y", ref: "security:test" })).toBe(true);

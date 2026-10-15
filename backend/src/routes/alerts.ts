@@ -51,13 +51,13 @@ async function state(wallet: string) {
   const [alerts, unread, settings, prices] = await Promise.all([
     query("SELECT id, type, severity, title, body, data, created_at, read_at FROM wallet_alerts WHERE wallet_address = $1 ORDER BY id DESC LIMIT 60", [wallet]),
     query<{ n: number }>("SELECT count(*)::int AS n FROM wallet_alerts WHERE wallet_address = $1 AND read_at IS NULL", [wallet]),
-    query<{ incoming: boolean; rules: boolean }>("SELECT incoming, rules FROM wallet_alert_settings WHERE wallet_address = $1", [wallet]),
+    query<{ incoming: boolean; rules: boolean; prices: boolean }>("SELECT incoming, rules, prices FROM wallet_alert_settings WHERE wallet_address = $1", [wallet]),
     query("SELECT id, asset, direction, price_usdg, armed, last_price, last_triggered_at, created_at FROM wallet_price_alerts WHERE wallet_address = $1 ORDER BY id", [wallet]),
   ]);
   return {
     alerts: alerts.rows.map((a) => ({ id: String(a.id), type: a.type, severity: a.severity, title: a.title, body: a.body, data: a.data, createdAt: a.created_at, read: a.read_at !== null })),
     unread: unread.rows[0]?.n ?? 0,
-    settings: { incoming: settings.rows[0]?.incoming ?? true, rules: settings.rows[0]?.rules ?? true, security: true },
+    settings: { incoming: settings.rows[0]?.incoming ?? true, rules: settings.rows[0]?.rules ?? true, prices: settings.rows[0]?.prices ?? true, security: true },
     priceAlerts: prices.rows.map((p) => ({ id: String(p.id), asset: p.asset, direction: p.direction, priceUsdg: p.price_usdg, armed: p.armed, lastPriceRaw: p.last_price, lastTriggeredAt: p.last_triggered_at, createdAt: p.created_at })),
     priceAssets: PRICE_ASSETS,
   };
@@ -85,14 +85,20 @@ alertsRouter.post("/change", async (req, res) => {
       if (payload !== "all") throw new HttpError(400, "read-all takes payload 'all'");
       await consume(wallet.address, signature);
       await query("UPDATE wallet_alerts SET read_at = now() WHERE wallet_address = $1 AND read_at IS NULL", [wallet.address]);
+    } else if (action === "read-one" || action === "unread-one") {
+      if (!/^\d{1,18}$/.test(payload)) throw new HttpError(400, `${action} takes the alert ID`);
+      await consume(wallet.address, signature);
+      const readAt = action === "read-one" ? "now()" : "NULL";
+      const r = await query(`UPDATE wallet_alerts SET read_at = ${readAt} WHERE id = $1 AND wallet_address = $2 RETURNING id`, [payload, wallet.address]);
+      if (!r.rows.length) throw new HttpError(404, "Alert not found");
     } else if (action === "settings") {
-      const m = /^incoming=([01]);rules=([01])$/.exec(payload);
-      if (!m) throw new HttpError(400, "settings payload must be incoming=0|1;rules=0|1");
+      const m = /^incoming=([01]);rules=([01]);prices=([01])$/.exec(payload);
+      if (!m) throw new HttpError(400, "settings payload must be incoming=0|1;rules=0|1;prices=0|1");
       await consume(wallet.address, signature);
       await query(
-        `INSERT INTO wallet_alert_settings (wallet_address, incoming, rules) VALUES ($1, $2, $3)
-         ON CONFLICT (wallet_address) DO UPDATE SET incoming = EXCLUDED.incoming, rules = EXCLUDED.rules, updated_at = now()`,
-        [wallet.address, m[1] === "1", m[2] === "1"],
+        `INSERT INTO wallet_alert_settings (wallet_address, incoming, rules, prices) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (wallet_address) DO UPDATE SET incoming = EXCLUDED.incoming, rules = EXCLUDED.rules, prices = EXCLUDED.prices, updated_at = now()`,
+        [wallet.address, m[1] === "1", m[2] === "1", m[3] === "1"],
       );
     } else if (action === "price-add") {
       const m = /^([A-Z]{1,10}):(above|below):((?:0|[1-9]\d{0,11})(?:\.\d{1,6})?)$/.exec(payload);
