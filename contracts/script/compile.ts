@@ -10,6 +10,8 @@ const sourceFiles = [
   "contracts/src/VeiloraFactoryV2.sol",
   "contracts/src/VeiloraEscrow.sol",
   "contracts/src/VeiloraEscrowFactory.sol",
+  "contracts/src/VeiloraEscrowV2.sol",
+  "contracts/src/VeiloraEscrowFactoryV2.sol",
 ];
 const sources = Object.fromEntries(
   sourceFiles.map((path) => [path, { content: readFileSync(join(root, path), "utf8") }]),

@@ -1,0 +1,64 @@
+name: Escrow regression
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "contracts/**"
+      - "backend/**"
+      - ".github/workflows/escrow-regression.yml"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "backend/**"
+      - ".github/workflows/escrow-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.repository == 'VeiloraRH/Veilora'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: veilora_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d veilora_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/veilora_test
+      NODE_ENV: test
+      SHARD_B_ENCRYPTION_KEY: test-only-key-material-never-use-in-production-32-bytes
+      ROBINHOOD_CHAIN_RPC: https://rpc.mainnet.chain.robinhood.com
+      ROBINHOOD_CHAIN_ID: "4663"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - run: bun run compile:contracts
+      - run: bun test contracts/test/contracts.test.ts
+      - name: Install backend dependencies
+        working-directory: backend
+        run: bun install --frozen-lockfile
+      - name: Check backend types
+        working-directory: backend
+        run: bun run check
+      - name: Apply migrations to disposable database
+        working-directory: backend
+        run: bun run db:migrate
+      - name: Run backend tests
+        working-directory: backend
+        run: bun test --timeout 30000
