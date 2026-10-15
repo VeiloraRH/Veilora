@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as ExitRouteImport } from './routes/exit'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
@@ -35,6 +36,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExitRoute = ExitRouteImport.update({
+  id: '/exit',
+  path: '/exit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecoverRoute = RecoverRouteImport.update({
@@ -116,6 +122,7 @@ const AppWatchRoute = AppWatchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
   '/whitepaper': typeof WhitepaperRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/exit'
     | '/recover'
     | '/roadmap'
     | '/whitepaper'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/exit'
     | '/recover'
     | '/roadmap'
     | '/whitepaper'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/exit'
     | '/recover'
     | '/roadmap'
     | '/whitepaper'
@@ -232,6 +244,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
+  ExitRoute: typeof ExitRoute
   RecoverRoute: typeof RecoverRoute
   RoadmapRoute: typeof RoadmapRoute
   WhitepaperRoute: typeof WhitepaperRoute
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exit': {
+      id: '/exit'
+      path: '/exit'
+      fullPath: '/exit'
+      preLoaderRoute: typeof ExitRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recover': {
@@ -397,6 +417,7 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
+  ExitRoute: ExitRoute,
   RecoverRoute: RecoverRoute,
   RoadmapRoute: RoadmapRoute,
   WhitepaperRoute: WhitepaperRoute,

@@ -17,7 +17,7 @@ function RecoverPage() {
   <div className="builder-segments rc-recover-tabs" role="tablist"><button role="tab" aria-selected={tab==='freeze'} className={tab==='freeze'?'on':''} onClick={()=>setTab('freeze')}><Snowflake size={16}/>Freeze with recovery key</button><button role="tab" aria-selected={tab==='replace'} className={tab==='replace'?'on':''} onClick={()=>setTab('replace')}><KeyRound size={16}/>Replace device key</button><button role="tab" aria-selected={tab==='restore'} className={tab==='restore'?'on':''} onClick={()=>setTab('restore')}><FileKey2 size={16}/>Restore from backup</button></div>
   <section className="wallet-panel rc-recover-card">{tab==='freeze'?<FreezeTool/>:tab==='replace'?<ReplaceDeviceTool/>:<RestoreTool/>}</section>
   <div className="rc-recover-note"><KeyRound size={16}/><p><strong>Only have your recovery key?</strong> Freeze first so nothing can move, then replace your device key. It finishes after a 48-hour wait, during which your old device key can cancel it, so a stolen recovery key can’t take over quietly.</p></div>
-  <Link to="/app" className="rc-recover-back"><ArrowLeft size={14}/>Back to the wallet</Link></main></div>;
+  <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><Link to="/app" className="rc-recover-back"><ArrowLeft size={14}/>Back to the wallet</Link><Link to="/exit" className="text-sm font-medium text-slate-700 underline underline-offset-4 dark:text-mist">Open independent exit tool</Link></div></main></div>;
 }
 
 function FreezeTool() {
