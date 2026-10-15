@@ -43,4 +43,15 @@ describe('address-poisoning protection', () => {
     expect(token.level).toBe('danger');
     expect(codes(token)).toContain('token-contract');
   });
+
+  test('bridge mode blocks your own address, uses bridge history and names the chain', () => {
+    const own = assessRecipient({ ...base, recipient: wallet, mode: 'bridge', chainName: 'Base' });
+    expect(own.items[0].code).toBe('self');
+    expect(own.items[0].text).toContain('only exists on Robinhood Chain');
+    const fresh = assessRecipient({ ...base, recipient: friend, mode: 'bridge', chainName: 'Base' });
+    expect(fresh.items[0].text).toContain('control it on Base');
+    const bridgedBefore = { direction: 'sent' as const, from: wallet, to: friend, amount: '1' };
+    expect(assessRecipient({ ...base, recipient: friend, history: [bridgedBefore], mode: 'bridge' }).items[0].text).toContain('bridged to this address once');
+    expect(assessRecipient({ ...base, recipient: poison, history: [bridgedBefore], mode: 'bridge' }).level).toBe('danger');
+  });
 });

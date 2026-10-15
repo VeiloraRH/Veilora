@@ -16,6 +16,9 @@ import { ROBINHOOD_TOKEN_REGISTRY, type WalletToken } from '@/lib/tokens';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
 import { ContactBook } from '@/components/wallet/ContactBook';
+import { RecipientCheck, isBlockedRecipient } from '@/components/wallet/RecipientCheck';
+import { assessRecipient } from '@/lib/recipientCheck';
+import { getWalletContacts } from '@/lib/contacts';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
 
@@ -120,6 +123,17 @@ function BridgeScreen() {
     try { return rawAmount(amount, source.decimals); } catch { return null; }
   }, [amount, source.decimals]);
   const validRecipient = /^0x[\da-f]{40}$/i.test(recipient.trim()) && !/^0x0{40}$/i.test(recipient.trim());
+  // Address-poisoning check for the destination: contacts, past bridge recipients, and your own
+  // Veilora address, which does not exist on other chains.
+  const recipientCheck = useMemo(() => validRecipient && walletAddress ? assessRecipient({
+    recipient: recipient.trim(), wallet: walletAddress, contacts: getWalletContacts(walletAddress), mode: 'bridge', chainName: destinationChain.name,
+    history: records.map((r) => ({ direction: 'sent' as const, from: walletAddress, to: r.recipient, amount: r.amount })),
+    tokenContracts: destinationChain.assets.filter((a) => a.currency !== NATIVE).map((a) => ({ symbol: a.symbol, address: a.currency })),
+  }) : null, [validRecipient, recipient, walletAddress, records, destinationChain]);
+  const recipientBlocked = isBlockedRecipient(recipientCheck);
+  const recipientNeedsAck = recipientCheck?.level === 'danger' && !recipientBlocked;
+  const [recipientAck, setRecipientAck] = useState(false);
+  useEffect(() => setRecipientAck(false), [recipient, destinationChainId]);
 
   function createFreshDestinationWallet() {
     try {
@@ -210,7 +224,7 @@ function BridgeScreen() {
   }, [records, refreshing]);
 
   async function submitBridge() {
-    if (!quote || quoteExpired || busy || !amountRaw || !validRecipient) return;
+    if (!quote || quoteExpired || busy || !amountRaw || !validRecipient || recipientBlocked || (recipientNeedsAck && !recipientAck)) return;
     const key = getStoredDeviceKey();
     if (!key) { setError('Unlock your device key before bridging.'); return; }
     if (balance == null || amountRaw > balance) { setError(`Your ${sourceSymbol} balance is too low for this transfer.`); return; }
@@ -316,13 +330,16 @@ function BridgeScreen() {
             {freshWalletError && !freshWallet && <p role="alert" className="wallet-error mt-2">{freshWalletError}</p>}
           </div>
           {recipient && !validRecipient && <p className="wallet-error">Enter a valid EVM address. Funds go to this exact address on {destinationChain.name}.</p>}
+          {validRecipient && <div className="mt-3"><RecipientCheck recipient={recipient.trim()} assessment={recipientCheck} loading={false}/></div>}
           <p className="wallet-bridge-custody"><ShieldCheck size={16} /> Destination funds go to the address you provide and are controlled by that address on {destinationChain.name}.</p>
-          <button className="wallet-primary-button mt-5" disabled={!validRecipient || !!busy} onClick={() => setStep(3)}>Review route <ArrowRight size={17} /></button>
+          <button className="wallet-primary-button mt-5" disabled={!validRecipient || recipientBlocked || !!busy} onClick={() => setStep(3)}>{recipientBlocked ? 'Choose a different address' : <>Review route <ArrowRight size={17} /></>}</button>
         </>}
         {step === 3 && <>
           <div className="wallet-bridge-heading"><button className="wallet-icon-button" aria-label="Back" disabled={!!busy} onClick={() => setStep(2)}><ArrowLeft size={17} /></button><div><h2>Review your route</h2><p className="wallet-bridge-intro">Relay will find the route and settle the selected asset.</p></div></div>
           <div className="wallet-bridge-route"><div><TokenIcon token={sourceToken} size={34} /><span><small>From Robinhood Chain</small><strong>{amount || '0'} {sourceSymbol}</strong></span></div><ArrowRight size={18} /><div><span className="wallet-bridge-chain-icon">{destinationChain.name.slice(0, 1)}</span><span><small>To {destinationChain.name}</small><strong>{quote ? outputSummary(quote.amountOut, quote.outputDecimals, quote.outputSymbol) : `— ${destinationSymbol}`}</strong></span></div></div>
           <div className="wallet-bridge-recipient"><span>Destination address</span><code title={recipient}>{shortAddress(recipient)}</code></div>
+          <RecipientCheck recipient={recipient.trim()} assessment={recipientCheck} loading={false} showAddress/>
+          {recipientNeedsAck && <label className="recipient-ack"><input type="checkbox" checked={recipientAck} onChange={(e) => setRecipientAck(e.target.checked)}/><span>I checked every character of this address, and I control it on {destinationChain.name}.</span></label>}
           {quoting && <div className="wallet-bridge-loading"><Loader2 size={17} className="animate-spin" /> Finding the best available route…</div>}
           {!quoting && quote && <div className="wallet-bridge-quote">
             <div><span>You receive at least</span><strong>{outputSummary(quote.minimumAmountOut, quote.outputDecimals, quote.outputSymbol)}</strong></div>
@@ -332,7 +349,7 @@ function BridgeScreen() {
           </div>}
           {error && <p role="alert" className="wallet-error mt-4">{error}</p>}
           {quoteExpired ? <button className="wallet-primary-button mt-5" onClick={() => setQuoteRefresh((value) => value + 1)}>Get a new quote <RefreshCw size={16} /></button> :
-            <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : 'Confirm bridge'}</button>}
+            <button className="wallet-primary-button mt-5" disabled={!quote || quoting || !!busy || recipientBlocked || (recipientNeedsAck && !recipientAck)} onClick={() => void submitBridge()}>{busy ? <><Loader2 size={17} className="animate-spin" />{busy}</> : quoting ? 'Finding route…' : !quote ? 'Route unavailable' : 'Confirm bridge'}</button>}
           <p className="wallet-bridge-note"><ShieldCheck size={15} /> Source transaction is authorized by your Veilora threshold account. The destination address is outside Veilora unless it is itself a deployed Veilora account.</p>
         </>}
       </section>

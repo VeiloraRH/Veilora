@@ -17,6 +17,9 @@ export type RecipientInputs = {
  tokenContracts: { symbol: string; address: string }[];
  /** Bytecode at the recipient, if known. Veilora accounts are contracts too, so this is informational. */
  code?: string | null;
+ /** "bridge" checks a destination on another chain, where your Veilora account does not exist. */
+ mode?: 'send' | 'bridge';
+ chainName?: string;
 };
 
 const RANK: Record<CheckLevel, number> = { ok: 0, info: 1, warn: 2, danger: 3 };
@@ -30,21 +33,25 @@ export function looksAlike(a: string, b: string, n: number): boolean {
  return x !== y && x.slice(0, n) === y.slice(0, n) && x.slice(-n) === y.slice(-n);
 }
 
-export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, code }: RecipientInputs): RecipientAssessment {
+export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
+ const bridge = mode === 'bridge';
+ const verb = bridge ? 'bridged' : 'sent';
  const r = lower(recipient);
  const items: CheckItem[] = [];
  const contact = contacts.find(c => lower(c.address) === r) ?? null;
  const timesSent = history.filter(t => t.direction === 'sent' && lower(t.to) === r).length;
  const receivedOnly = !timesSent && history.some(t => t.direction === 'received' && lower(t.from) === r);
 
- if (r === lower(wallet)) items.push({ level: 'danger', code: 'self', text: 'This is your own account. Sending here does nothing.' });
+ if (r === lower(wallet)) items.push({ level: 'danger', code: 'self', text: bridge
+  ? `This is your Veilora account address. It only exists on Robinhood Chain, so funds sent to it on ${chainName} could be lost.`
+  : 'This is your own account. Sending here does nothing.' });
  const token = tokenContracts.find(t => lower(t.address) === r);
- if (token) items.push({ level: 'danger', code: 'token-contract', text: `This is the ${token.symbol} token contract, not a wallet. Tokens sent here are usually lost for good.` });
+ if (token) items.push({ level: 'danger', code: 'token-contract', text: `This is the ${token.symbol} token contract${bridge ? ` on ${chainName}` : ''}, not a wallet. Tokens sent here are usually lost for good.` });
 
  // Lookalikes of anything you trust: contacts, past recipients, your own account.
  const trusted = new Map<string, string>();
  for (const c of contacts) trusted.set(lower(c.address), `your contact “${c.name}”`);
- for (const t of history) if (t.direction === 'sent' && t.to && !trusted.has(lower(t.to))) trusted.set(lower(t.to), `${short(t.to)}, which you have sent to before`);
+ for (const t of history) if (t.direction === 'sent' && t.to && !trusted.has(lower(t.to))) trusted.set(lower(t.to), `${short(t.to)}, which you have ${verb} to before`);
  trusted.set(lower(wallet), 'your own account');
  const strong = [...trusted].find(([addr]) => looksAlike(r, addr, 4));
  const weak = strong ? undefined : [...trusted].find(([addr]) => looksAlike(r, addr, 3));
@@ -52,10 +59,12 @@ export function assessRecipient({ recipient, wallet, contacts, history, tokenCon
  else if (weak) items.push({ level: 'warn', code: 'similar', text: `Starts and ends like ${weak[1]}. Check every character.` });
 
  if (contact) items.push({ level: 'ok', code: 'contact', text: `Saved contact: ${contact.name}.` });
- if (timesSent) items.push({ level: 'ok', code: 'known', text: `You have sent to this address ${timesSent === 1 ? 'once' : `${timesSent} times`} before.` });
+ if (timesSent) items.push({ level: 'ok', code: 'known', text: `You have ${verb} to this address ${timesSent === 1 ? 'once' : `${timesSent} times`} before.` });
  if (receivedOnly) items.push({ level: 'warn', code: 'received-only', text: 'This address only appears in your history because it sent to you. Scammers send tiny transfers so you copy their address.' });
  if (!contact && !timesSent && !receivedOnly && !items.some(i => i.level === 'danger')) {
-  items.push({ level: 'warn', code: 'new', text: 'First time sending to this address. Confirm it with the recipient through another channel.' });
+  items.push({ level: 'warn', code: 'new', text: bridge
+   ? `First time bridging to this address. Make sure you control it on ${chainName}: bridged funds can't be called back.`
+   : 'First time sending to this address. Confirm it with the recipient through another channel.' });
  }
  if (code && code !== '0x' && !token) items.push({ level: 'info', code: 'contract', text: 'This address is a smart contract, such as another smart account. Make sure it can receive this asset.' });
 
