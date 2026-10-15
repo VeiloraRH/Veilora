@@ -15,6 +15,7 @@ export type RecipientInputs = {
  contacts: { name: string; address: string }[];
  history: RecipientHistory;
  tokenContracts: { symbol: string; address: string }[];
+ blockedAddresses?: string[];
  /** Bytecode at the recipient, if known. Veilora accounts are contracts too, so this is informational. */
  code?: string | null;
  /** "bridge" checks a destination on another chain, where your Veilora account does not exist. */
@@ -33,7 +34,7 @@ export function looksAlike(a: string, b: string, n: number): boolean {
  return x !== y && x.slice(0, n) === y.slice(0, n) && x.slice(-n) === y.slice(-n);
 }
 
-export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
+export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, blockedAddresses, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
  const bridge = mode === 'bridge';
  const verb = bridge ? 'bridged' : 'sent';
  const r = lower(recipient);
@@ -47,6 +48,7 @@ export function assessRecipient({ recipient, wallet, contacts, history, tokenCon
   : 'This is your own account. Sending here does nothing.' });
  const token = tokenContracts.find(t => lower(t.address) === r);
  if (token) items.push({ level: 'danger', code: 'token-contract', text: `This is the ${token.symbol} token contract${bridge ? ` on ${chainName}` : ''}, not a wallet. Tokens sent here are usually lost for good.` });
+ if (blockedAddresses?.some(address => lower(address) === r)) items.push({ level: 'danger', code: 'user-blocked', text: 'This address is on your device’s blocklist. Remove it in Quorum & recovery before sending or bridging here.' });
 
  // Lookalikes of anything you trust: contacts, past recipients, your own account.
  const trusted = new Map<string, string>();

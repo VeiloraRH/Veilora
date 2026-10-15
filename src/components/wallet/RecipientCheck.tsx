@@ -4,6 +4,7 @@ import { isAddress, type Address } from 'viem';
 import { useWallet } from '@/lib/walletContext';
 import { useTransactions } from '@/lib/walletQueries';
 import { getWalletContacts } from '@/lib/contacts';
+import { useWalletBlocklist } from '@/lib/addressBlocklist';
 import { WALLET_TOKENS } from '@/lib/tokens';
 import { chainClient } from '@/lib/walletChain';
 import { addressGroups, assessRecipient, type CheckLevel, type RecipientAssessment } from '@/lib/recipientCheck';
@@ -14,6 +15,7 @@ const ICONS = { ok: CheckCircle2, info: Info, warn: AlertTriangle, danger: Shiel
 /** Assess a recipient against contacts, past sends and the chain. `loading` stays true until history is in. */
 export function useRecipientAssessment(recipient: string): { assessment: RecipientAssessment | null; loading: boolean } {
  const { walletAddress } = useWallet();
+ const blockedAddresses = useWalletBlocklist(walletAddress);
  const history = useTransactions();
  const [code, setCode] = useState<string | null | undefined>(undefined);
  const valid = isAddress(recipient);
@@ -25,13 +27,13 @@ export function useRecipientAssessment(recipient: string): { assessment: Recipie
   return () => { active = false; };
  }, [recipient, valid]);
  const assessment = useMemo(() => valid && walletAddress ? assessRecipient({
-  recipient, wallet: walletAddress, contacts: getWalletContacts(walletAddress), history: history.data ?? [], tokenContracts: TOKEN_CONTRACTS, code,
- }) : null, [recipient, valid, walletAddress, history.data, code]);
+  recipient, wallet: walletAddress, contacts: getWalletContacts(walletAddress), history: history.data ?? [], tokenContracts: TOKEN_CONTRACTS, blockedAddresses, code,
+ }) : null, [recipient, valid, walletAddress, history.data, blockedAddresses, code]);
  return { assessment, loading: valid && (history.isPending || code === undefined) };
 }
 
 /** Recipients that must never receive a send: your own account or a token contract. */
-export const isBlockedRecipient = (a: RecipientAssessment | null) => !!a?.items.some(i => i.code === 'self' || i.code === 'token-contract');
+export const isBlockedRecipient = (a: RecipientAssessment | null) => !!a?.items.some(i => i.code === 'self' || i.code === 'token-contract' || i.code === 'user-blocked');
 
 export function RecipientCheck({ recipient, assessment, loading, showAddress = false }: { recipient: string; assessment: RecipientAssessment | null; loading: boolean; showAddress?: boolean }) {
  if (!assessment) return null;

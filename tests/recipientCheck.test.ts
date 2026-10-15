@@ -44,6 +44,12 @@ describe('address-poisoning protection', () => {
     expect(codes(token)).toContain('token-contract');
   });
 
+  test('blocks addresses on the device-local blocklist', () => {
+    const blocked = assessRecipient({ ...base, recipient: friend, blockedAddresses: [friend.toLowerCase()] });
+    expect(blocked.level).toBe('danger');
+    expect(codes(blocked)).toContain('user-blocked');
+  });
+
   test('bridge mode blocks your own address, uses bridge history and names the chain', () => {
     const own = assessRecipient({ ...base, recipient: wallet, mode: 'bridge', chainName: 'Base' });
     expect(own.items[0].code).toBe('self');
