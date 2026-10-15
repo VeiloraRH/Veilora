@@ -14,6 +14,7 @@ import { saveSpendingPolicy, useSpendingPolicy } from '@/lib/spendingPolicy';
 import { KeyRotationPanel, ReplaceRecoveryKeyDialog } from '@/components/app/KeyRotation';
 import { DRILL_VALID_DAYS, downloadDeviceKeyBackup, drillIsCurrent, freezeWithKey, keyMatches, readFlag, unfreezeWithKey, writeFlag } from '@/lib/recovery';
 import { AddressBlocklist } from '@/components/app/AddressBlocklist';
+import { AddressBookBackup } from '@/components/app/AddressBookBackup';
 export const Route=createFileRoute('/app/security')({component:RecoveryCenter});
 
 const day=(iso:string)=>new Date(iso).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
@@ -61,6 +62,8 @@ export function RecoveryCenter() {
  <SpendingLimits />
 
  <AddressBlocklist />
+
+ <AddressBookBackup />
 
  <KeyRotationPanel wallet={walletAddress} onChanged={after}/>
  <section className="rc-section"><div className="wallet-section-heading"><h2>If you lose access</h2></div><div className="rc-playbook">

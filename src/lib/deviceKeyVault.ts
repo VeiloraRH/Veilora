@@ -33,13 +33,13 @@ export function validateDevicePassphrase(passphrase: string): string | null {
   return null;
 }
 
-export async function encryptDeviceKey(privateKey: string, passphrase: string): Promise<string> {
+export async function encryptTextWithPassphrase(text: string, passphrase: string): Promise<string> {
   const error = validateDevicePassphrase(passphrase);
   if (error) throw new Error(error);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(passphrase, salt);
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(privateKey));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(text));
   return JSON.stringify({
     version: ENCRYPTION_VERSION,
     kdf: "PBKDF2-SHA-256",
@@ -51,7 +51,7 @@ export async function encryptDeviceKey(privateKey: string, passphrase: string): 
   });
 }
 
-export async function decryptDeviceKey(payload: string, passphrase: string): Promise<string> {
+export async function decryptTextWithPassphrase(payload: string, passphrase: string): Promise<string> {
   try {
     const record = JSON.parse(payload) as {
       version?: number;
@@ -75,7 +75,16 @@ export async function decryptDeviceKey(payload: string, passphrase: string): Pro
     );
     return decoder.decode(plaintext);
   } catch {
-    throw new Error("Could not unlock the device key. Check your passphrase and try again.");
+    throw new Error("Could not decrypt this file. Check your passphrase and try again.");
   }
+}
+
+export async function encryptDeviceKey(privateKey: string, passphrase: string): Promise<string> {
+  return encryptTextWithPassphrase(privateKey, passphrase);
+}
+
+export async function decryptDeviceKey(payload: string, passphrase: string): Promise<string> {
+  try { return await decryptTextWithPassphrase(payload, passphrase); }
+  catch { throw new Error("Could not unlock the device key. Check your passphrase and try again."); }
 }
 

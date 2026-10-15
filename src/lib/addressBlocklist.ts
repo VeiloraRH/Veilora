@@ -4,6 +4,10 @@ import { getAddress, isAddress, zeroAddress } from 'viem';
 const eventName = 'veilora:address-blocklist:changed';
 const keyFor = (wallet: string) => `veilora:address-blocklist:${wallet.toLowerCase()}`;
 
+export function notifyBlocklistChanged(wallet: string) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(eventName, { detail: { wallet: wallet.toLowerCase() } }));
+}
+
 export function getBlockedAddresses(wallet: string): `0x${string}`[] {
   if (!wallet) return [];
   try {
@@ -21,13 +25,13 @@ export function saveBlockedAddresses(wallet: string, addresses: string[]) {
   const normalized = [...new Set(addresses.filter((address) => isAddress(address) && address.toLowerCase() !== zeroAddress).map((address) => getAddress(address)))];
   if (normalized.length > 100) throw new Error('You can block up to 100 addresses per wallet.');
   localStorage.setItem(keyFor(wallet), JSON.stringify(normalized));
-  window.dispatchEvent(new CustomEvent(eventName, { detail: { wallet: wallet.toLowerCase() } }));
+  notifyBlocklistChanged(wallet);
 }
 
 export function clearBlockedAddresses(wallet: string) {
   if (!wallet) return;
   localStorage.removeItem(keyFor(wallet));
-  window.dispatchEvent(new CustomEvent(eventName, { detail: { wallet: wallet.toLowerCase() } }));
+  notifyBlocklistChanged(wallet);
 }
 
 export function useWalletBlocklist(wallet: string) {
