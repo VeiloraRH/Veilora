@@ -12,6 +12,7 @@ import { getAutoLockSettings, lockDue, type LockReason } from "./autoLock";
 import { removePasskeyRecord, unlockWithPasskey } from "./passkeyUnlock";
 import { clearWatchList } from "./watchList";
 import { clearBlockedAddresses } from "./addressBlocklist";
+import { clearBridgeNotifications } from "./bridgeTracking";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
@@ -336,6 +337,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(`veilora:veily:history:${walletAddress.toLowerCase()}`);
     const bridgeTrackingKey = `veilora:bridge:tracking:${walletAddress.toLowerCase()}`;
     localStorage.removeItem(bridgeTrackingKey);
+    clearBridgeNotifications(walletAddress);
     localStorage.removeItem(`veilora:contacts:${walletAddress.toLowerCase()}`);
     clearBlockedAddresses(walletAddress);
     clearWatchList(walletAddress);

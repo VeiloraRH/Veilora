@@ -37,9 +37,9 @@ function AlertsScreen() {
     <Toggle label="Price alerts" hint="When an asset crosses one of your price targets." on={data?.settings.prices??true} disabled={!data||!!busy} onChange={v=>savePreference('prices',v)}/>
     <Toggle label="Rule runs" hint="When a rule needs your approval or is skipped." on={data?.settings.rules??true} disabled={!data||!!busy} onChange={v=>savePreference('rules',v)}/>
     <Toggle label="Security events" hint="Freezes, unfreezes and refused transactions. Always on." on disabled onChange={()=>{}}/>
-    <Toggle label="Desktop notifications" hint="Pop-ups while Veilora is open in a tab. In privacy mode they say only “New alert”." on={desktop} disabled={!!busy} onChange={v=>void setDesktopNotifications(v).then(setDesktop).catch(e=>setError(e instanceof Error?e.message:'Notifications are unavailable.'))}/>
+    <Toggle label="Desktop notifications" hint="Pop-ups for alerts and bridge outcomes while Veilora is open. Privacy mode hides transaction details." on={desktop} disabled={!!busy} onChange={v=>void setDesktopNotifications(v).then(setDesktop).catch(e=>setError(e instanceof Error?e.message:'Notifications are unavailable.'))}/>
    </div>
-   <p className="alerts-note">Alerts are checked about once a minute. Incoming alerts cover tokens, not plain ETH transfers, and start from when you first open this page.</p></div>
+   <p className="alerts-note">Account alerts are checked about once a minute. Bridge status is checked on this device while Veilora is open; incoming alerts cover tokens, not plain ETH transfers, and start from when you first open this page.</p></div>
  </aside></div></>;
 }
 

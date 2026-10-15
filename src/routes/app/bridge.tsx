@@ -23,6 +23,9 @@ import { RecipientCheck, isBlockedRecipient } from '@/components/wallet/Recipien
 import { assessRecipient } from '@/lib/recipientCheck';
 import { getWalletContacts } from '@/lib/contacts';
 import { useWalletBlocklist } from '@/lib/addressBlocklist';
+import { usePrivacyMode } from '@/lib/privacyMode';
+import { bridgeTrackingChangedEvent, isBridgeStatusFinal, loadBridgeRecords, saveBridgeRecords, type BridgeRecord } from '@/lib/bridgeTracking';
+import { notifyBridgeOutcome } from '@/lib/bridgeNotifications';
 
 export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
 
@@ -57,15 +60,6 @@ const SOURCES = [
   { symbol: 'ETH', currency: NATIVE, decimals: 18 },
   { symbol: 'USDG', currency: USDG, decimals: 6 },
 ] as const;
-type BridgeRecord = {
-  requestId: string; chainId: number; chainName: string; explorer: string; sourceSymbol: string; amount: string;
-  outputSymbol: string; outputAmount: string; recipient: string; approvalHash?: string; sourceHash?: string; status: string;
-  error?: string; destinationHashes: string[]; updatedAt?: string;
-};
-const storageKey = (wallet: string) => `veilora:bridge:tracking:${wallet.toLowerCase()}`;
-const recordsFor = (wallet: string): BridgeRecord[] => {
-  try { return JSON.parse(localStorage.getItem(storageKey(wallet)) || '[]') as BridgeRecord[]; } catch { return []; }
-};
 const outputSummary = (value: string, decimals: number, symbol: string) => `${Number(formatUnits(BigInt(value), decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 })} ${symbol}`;
 const feeSummary = (fees: BridgeQuote['fees']) => Object.values(fees || {})
   .filter((fee) => Number(fee.amountUsd || 0) > 0)
@@ -73,6 +67,7 @@ const feeSummary = (fees: BridgeQuote['fees']) => Object.values(fees || {})
 
 function BridgeScreen() {
   const { walletAddress, getStoredDeviceKey } = useWallet();
+  const privacy = usePrivacyMode();
   const blockedAddresses = useWalletBlocklist(walletAddress);
   const holdings = useHoldings();
   const spendingPolicy = useSpendingPolicy();
@@ -160,9 +155,15 @@ function BridgeScreen() {
   }
 
   useEffect(() => {
-    setRecords(recordsFor(walletAddress));
+    setRecords(loadBridgeRecords(walletAddress));
+    const changed = (event: Event) => {
+      const owner = (event as CustomEvent<{ wallet?: string }>).detail?.wallet;
+      if (!owner || owner === walletAddress.toLowerCase()) setRecords(loadBridgeRecords(walletAddress));
+    };
+    window.addEventListener(bridgeTrackingChangedEvent, changed);
+    window.addEventListener('storage', changed);
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); window.removeEventListener(bridgeTrackingChangedEvent, changed); window.removeEventListener('storage', changed); };
   }, [walletAddress]);
 
   useEffect(() => {
@@ -193,7 +194,7 @@ function BridgeScreen() {
 
   const persistRecords = (next: BridgeRecord[]) => {
     setRecords(next);
-    localStorage.setItem(storageKey(walletAddress), JSON.stringify(next.slice(0, 20)));
+    saveBridgeRecords(walletAddress, next);
   };
 
   const refreshRecord = async (record: BridgeRecord) => {
@@ -209,14 +210,15 @@ function BridgeScreen() {
       destinationHashes: status.outTxHashes,
       updatedAt: status.updatedAt || undefined,
     };
-    const next = recordsFor(walletAddress).map((item) => item.requestId === record.requestId ? updated : item);
+    if (!isBridgeStatusFinal(record.status) && isBridgeStatusFinal(updated.status)) notifyBridgeOutcome(walletAddress, updated, privacy);
+    const next = loadBridgeRecords(walletAddress).map((item) => item.requestId === record.requestId ? updated : item);
     persistRecords(next);
   };
 
   const refreshAll = async () => {
     if (!records.length || refreshing) return;
     setRefreshing(true);
-    await Promise.allSettled(records.filter((record) => !['success', 'completed', 'failure', 'failed', 'refund', 'refunded', 'action_required', 'rejected'].includes(record.status.toLowerCase())).map(refreshRecord));
+    await Promise.allSettled(records.filter((record) => !isBridgeStatusFinal(record.status)).map(refreshRecord));
     setRefreshing(false);
   };
 
@@ -252,7 +254,7 @@ function BridgeScreen() {
       status: 'preparing',
       destinationHashes: [],
     };
-    const saveTracking = () => persistRecords([trackingRecord, ...recordsFor(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
+    const saveTracking = () => persistRecords([trackingRecord, ...loadBridgeRecords(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
     saveTracking();
     let sourceHash: string | undefined;
     try {
