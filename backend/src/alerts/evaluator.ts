@@ -1,7 +1,7 @@
 import { formatUnits, getAddress, parseAbiItem, parseUnits, type Address } from "viem";
 import { publicClient } from "../config";
 import { db, query } from "../db/index";
-import { quoteUsdgPrice } from "../rules/prices";
+import { quoteUsdgPrice, reportQuotePerformance } from "../rules/prices";
 import { ROBINHOOD_TOKEN_REGISTRY } from "../tokens";
 import { recordAlert } from "./store";
 
@@ -92,14 +92,21 @@ async function checkPrices(deps: AlertDeps): Promise<number> {
 }
 
 export async function evaluateAlerts(deps: AlertDeps = alertChainDeps): Promise<number> {
+  const started = performance.now();
   let created = 0;
-  try { created += await scanIncoming(deps); } catch (error) {
-    console.warn(JSON.stringify({ msg: "incoming alert scan failed", error: error instanceof Error ? error.message : String(error) }));
+  try {
+    try { created += await scanIncoming(deps); } catch (error) {
+      console.warn(JSON.stringify({ msg: "incoming alert scan failed", error: error instanceof Error ? error.message : String(error) }));
+    }
+    try { created += await checkPrices(deps); } catch (error) {
+      console.warn(JSON.stringify({ msg: "price alert check failed", error: error instanceof Error ? error.message : String(error) }));
+    }
+    return created;
+  } finally {
+    const duration = performance.now() - started;
+    console.info(JSON.stringify({ msg: "alerts evaluator pass", duration_ms: Math.round(duration), alerts_created: created }));
+    reportQuotePerformance("alerts", duration);
   }
-  try { created += await checkPrices(deps); } catch (error) {
-    console.warn(JSON.stringify({ msg: "price alert check failed", error: error instanceof Error ? error.message : String(error) }));
-  }
-  return created;
 }
 
 /** Background loop; a session advisory lock keeps one evaluator active across replicas. */

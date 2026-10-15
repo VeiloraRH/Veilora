@@ -2,13 +2,17 @@ import { getAddress, parseAbiItem, parseUnits } from "viem";
 import { publicClient } from "../config";
 import { db, query } from "../db/index";
 import { getFreezeState } from "../freeze";
-import { quoteUsdgPrice } from "./prices";
+import { quoteUsdgPrice, reportQuotePerformance } from "./prices";
 import { recordAlert } from "../alerts/store";
 import { RULE_ASSETS, nextScheduledRun, planExecution, toRaw, type RuleSpec } from "./spec";
 
 const TICK_MS = Math.max(15_000, Number(process.env.RULES_TICK_MS) || 60_000);
 const MAX_BLOCKS_PER_SCAN = 5_000n;
 const MAX_PENDING_PER_RULE = 5;
+const configuredRuleConcurrency = Number(process.env.RULES_EVALUATOR_CONCURRENCY);
+const MAX_RULE_CONCURRENCY = Number.isFinite(configuredRuleConcurrency) && configuredRuleConcurrency > 0
+  ? Math.max(1, Math.min(32, Math.floor(configuredRuleConcurrency)))
+  : 8;
 export const APPROVAL_WINDOW_HOURS = 24;
 const LOCK_KEY = "veilora:wallet-rules:evaluator";
 const transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
@@ -138,38 +142,61 @@ async function evaluatePrice(rule: RuleRow, deps: EvaluatorDeps, now: Date): Pro
 
 /** One evaluation pass over every active rule. Returns how many executions were recorded. */
 export async function evaluateRules(deps: EvaluatorDeps = chainDeps): Promise<number> {
+  const started = performance.now();
   const now = deps.now();
-  await query("UPDATE wallet_rules SET status = 'expired', updated_at = now() WHERE status IN ('active', 'paused') AND expires_at <= $1", [now]);
-  await query(
-    `UPDATE wallet_rule_executions SET status = 'expired', reason = COALESCE(reason, 'Approval window closed'), resolved_at = $1
-     WHERE status = 'pending' AND expires_at <= $1`,
-    [now],
-  );
-  const rules = await query<RuleRow>(
-    `SELECT id, wallet_address, spec, trigger_type, next_run_at, last_scanned_block::text, price_armed
-     FROM wallet_rules WHERE status = 'active' ORDER BY id LIMIT 1000`,
-  );
-  let latest: bigint | null = null;
-  const frozen = new Map<string, boolean>();
+  let rulesCount = 0;
   let created = 0;
-  for (const rule of rules.rows) {
-    try {
-      if (!frozen.has(rule.wallet_address)) frozen.set(rule.wallet_address, (await getFreezeState(rule.wallet_address)).frozen);
-      if (frozen.get(rule.wallet_address)) continue;
-      if (rule.trigger_type === "incoming") {
-        latest ??= await deps.latestBlock();
-        created += await evaluateIncoming(rule, deps, latest, now);
-      } else if (rule.trigger_type === "schedule") {
-        created += await evaluateSchedule(rule, now);
-      } else {
-        created += await evaluatePrice(rule, deps, now);
+  try {
+    await query("UPDATE wallet_rules SET status = 'expired', updated_at = now() WHERE status IN ('active', 'paused') AND expires_at <= $1", [now]);
+    await query(
+      `UPDATE wallet_rule_executions SET status = 'expired', reason = COALESCE(reason, 'Approval window closed'), resolved_at = $1
+       WHERE status = 'pending' AND expires_at <= $1`,
+      [now],
+    );
+    const rules = await query<RuleRow>(
+      `SELECT id, wallet_address, spec, trigger_type, next_run_at, last_scanned_block::text, price_armed
+       FROM wallet_rules WHERE status = 'active' ORDER BY id LIMIT 1000`,
+    );
+    rulesCount = rules.rows.length;
+    let latest: Promise<bigint> | undefined;
+    const frozen = new Map<string, Promise<boolean>>();
+    let nextRule = 0;
+    const worker = async () => {
+      while (true) {
+        const index = nextRule++;
+        const rule = rules.rows[index];
+        if (!rule) return;
+        try {
+          let freezeCheck = frozen.get(rule.wallet_address);
+          if (!freezeCheck) {
+            freezeCheck = getFreezeState(rule.wallet_address).then((state) => state.frozen);
+            frozen.set(rule.wallet_address, freezeCheck);
+          }
+          if (await freezeCheck) continue;
+          if (rule.trigger_type === "incoming") {
+            latest ??= deps.latestBlock();
+            const count = await evaluateIncoming(rule, deps, await latest, now);
+            created += count;
+          } else if (rule.trigger_type === "schedule") {
+            const count = await evaluateSchedule(rule, now);
+            created += count;
+          } else {
+            const count = await evaluatePrice(rule, deps, now);
+            created += count;
+          }
+        } catch (error) {
+          // One unreachable quote or RPC call must not stall every other rule.
+          console.warn(JSON.stringify({ msg: "rule evaluation failed", rule_id: rule.id, error: error instanceof Error ? error.message : String(error) }));
+        }
       }
-    } catch (error) {
-      // One unreachable quote or RPC call must not stall every other rule.
-      console.warn(JSON.stringify({ msg: "rule evaluation failed", rule_id: rule.id, error: error instanceof Error ? error.message : String(error) }));
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(MAX_RULE_CONCURRENCY, rules.rows.length) }, () => worker()));
+    return created;
+  } finally {
+    const duration = performance.now() - started;
+    console.info(JSON.stringify({ msg: "rules evaluator pass", duration_ms: Math.round(duration), active_rules: rulesCount, executions_recorded: created, concurrency: MAX_RULE_CONCURRENCY }));
+    reportQuotePerformance("rules", duration);
   }
-  return created;
 }
 
 /** Background loop. A session advisory lock keeps one evaluator active across replicas. */
