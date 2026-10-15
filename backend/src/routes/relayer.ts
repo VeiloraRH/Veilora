@@ -170,14 +170,14 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const walletResult = await query<{ shard_a_address: string; shard_b_address: string; shard_c_address: string; factory_address: string; account_version: number; salt: string; chain_id: number }>(
-      "SELECT shard_a_address, shard_b_address, shard_c_address, factory_address, account_version, salt::text, chain_id FROM wallets WHERE address = $1",
+    const walletResult = await query<{ shard_a_address: string; shard_b_address: string; shard_c_address: string; initial_shard_a_address: string; initial_shard_c_address: string; factory_address: string; account_version: number; salt: string; chain_id: number }>(
+      "SELECT shard_a_address, shard_b_address, shard_c_address, COALESCE(initial_shard_a_address, shard_a_address) AS initial_shard_a_address, COALESCE(initial_shard_c_address, shard_c_address) AS initial_shard_c_address, factory_address, account_version, salt::text, chain_id FROM wallets WHERE address = $1",
       [cleanWallet.toLowerCase()],
     );
     const wallet = walletResult.rows[0];
     if (!wallet) { res.status(404).json({ error: "Wallet is not registered with Veilora" }); return; }
     if (Number(wallet.chain_id) !== CHAIN_ID) { res.status(400).json({ error: "Wallet is registered for another chain" }); return; }
-    if ((await getFreezeState(cleanWallet)).frozen) { res.status(403).json({ error: "Wallet is frozen; the relayer will not submit transactions" }); return; }
+    const frozen = (await getFreezeState(cleanWallet)).frozen;
 
     const accountVersion = Number(wallet.account_version) === 2 ? 2 : 1;
     if (accountVersion === 2 && (!V2_FACTORY_ADDRESS || wallet.factory_address.toLowerCase() !== V2_FACTORY_ADDRESS.toLowerCase())) {
@@ -196,23 +196,28 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
       recoverMessageAddress({ message: { raw: digest }, signature: secondSignature }),
     ]);
     const signers = [firstSigner.toLowerCase(), secondSigner.toLowerCase()];
-    const expectedSigners = [wallet.shard_a_address.toLowerCase(), wallet.shard_b_address.toLowerCase()];
+    const approved = await query<{ metadata: { rotationId?: string; signerShard?: "A" | "C"; allowWhileFrozen?: boolean } | null }>(
+      `SELECT metadata FROM cosign_audit WHERE wallet_address = $1 AND user_op_hash = $2 AND status = 'APPROVED' AND shard_b_signature IS NOT NULL LIMIT 1`,
+      [cleanWallet.toLowerCase(), digest],
+    );
+    if (!approved.rows.length) { res.status(403).json({ error: "This transaction has no Shard B co-signer approval" }); return; }
+    // A key rotation approved by the co-signer may be signed with the recovery
+    // key (replacing a lost device key) and may run while the account is frozen.
+    const rotation = approved.rows[0].metadata?.rotationId ? approved.rows[0].metadata : null;
+    if (frozen && !rotation?.allowWhileFrozen) { res.status(403).json({ error: "Wallet is frozen; the relayer will not submit transactions" }); return; }
+    const userShard = rotation?.signerShard === "C" ? wallet.shard_c_address : wallet.shard_a_address;
+    const expectedSigners = [userShard.toLowerCase(), wallet.shard_b_address.toLowerCase()];
     if (signers[0] === signers[1] || !expectedSigners.every((signer) => signers.includes(signer))) {
       res.status(403).json({ error: "Relayer submissions require this wallet's exact Shard A and Shard B signatures" });
       return;
     }
-    const approved = await query(
-      `SELECT id FROM cosign_audit WHERE wallet_address = $1 AND user_op_hash = $2 AND status = 'APPROVED' AND shard_b_signature IS NOT NULL LIMIT 1`,
-      [cleanWallet.toLowerCase(), digest],
-    );
-    if (!approved.rows.length) { res.status(403).json({ error: "This transaction has no Shard B co-signer approval" }); return; }
 
     const factoryAddress = getAddress(wallet.factory_address || LEGACY_FACTORY_ADDRESS);
     const factoryAbi = accountVersion === 2 ? veiloraFactoryV2Abi : veiloraFactoryAbi;
     const salt = BigInt(wallet.salt || "0");
     const expectedWallet = await publicClient.readContract({
       address: factoryAddress, abi: factoryAbi, functionName: "getAddress",
-      args: [getAddress(wallet.shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.shard_c_address), salt],
+      args: [getAddress(wallet.initial_shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.initial_shard_c_address), salt],
     });
     if (expectedWallet.toLowerCase() !== cleanWallet.toLowerCase()) {
       res.status(409).json({ error: "Registered shard configuration does not match the wallet address" });
@@ -223,7 +228,7 @@ relayerRouter.post("/broadcast", async (req: Request, res: Response): Promise<vo
     let isDeployed = Boolean(code && code !== "0x");
     if (!isDeployed) {
       const deployment = { address: factoryAddress, abi: factoryAbi, functionName: "createAccount" as const,
-        args: [getAddress(wallet.shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.shard_c_address), salt] as const,
+        args: [getAddress(wallet.initial_shard_a_address), getAddress(wallet.shard_b_address), getAddress(wallet.initial_shard_c_address), salt] as const,
         account: relayerAccount.address };
       await publicClient.simulateContract(deployment);
       const deployGas = await publicClient.estimateContractGas(deployment);

@@ -5,17 +5,18 @@ import { isAddress, type Hex } from 'viem';
 import { Logo } from '@/components/ui';
 import { getWallet, type WalletMetadata } from '@/lib/api';
 import { WalletProvider, useWallet } from '@/lib/walletContext';
+import { ReplaceDeviceTool } from '@/components/app/ReplaceDeviceTool';
 import { freezeWithKey, keyMatches, parseDeviceKeyBackup, unfreezeWithKey, unlockBackup, type DeviceKeyBackup } from '@/lib/recovery';
 import '@/components/wallet/wallet.css';
 export const Route=createFileRoute('/recover')({component:()=><WalletProvider><RecoverPage/></WalletProvider>});
 
 function RecoverPage() {
- const [tab,setTab]=useState<'freeze'|'restore'>('freeze');
+ const [tab,setTab]=useState<'freeze'|'replace'|'restore'>('freeze');
  return <div className="wallet-app rc-recover-page"><main className="rc-recover"><Link to="/" className="rc-recover-brand" aria-label="Veilora home"><Logo size={32}/></Link>
   <h1>Lost access to your device?</h1><p className="rc-recover-lead">Stop anything from moving, then get back in. Your keys are used only in this browser and never sent.</p>
-  <div className="builder-segments rc-recover-tabs" role="tablist"><button role="tab" aria-selected={tab==='freeze'} className={tab==='freeze'?'on':''} onClick={()=>setTab('freeze')}><Snowflake size={16}/>Freeze with recovery key</button><button role="tab" aria-selected={tab==='restore'} className={tab==='restore'?'on':''} onClick={()=>setTab('restore')}><FileKey2 size={16}/>Restore from backup</button></div>
-  <section className="wallet-panel rc-recover-card">{tab==='freeze'?<FreezeTool/>:<RestoreTool/>}</section>
-  <div className="rc-recover-note"><KeyRound size={16}/><p><strong>Only have your recovery key?</strong> Freeze first. Your assets stay in your smart account and nothing can move with one key. Replacing a lost device key with your recovery key and Veilora’s co-signer needs guided key rotation, which is planned.</p></div>
+  <div className="builder-segments rc-recover-tabs" role="tablist"><button role="tab" aria-selected={tab==='freeze'} className={tab==='freeze'?'on':''} onClick={()=>setTab('freeze')}><Snowflake size={16}/>Freeze with recovery key</button><button role="tab" aria-selected={tab==='replace'} className={tab==='replace'?'on':''} onClick={()=>setTab('replace')}><KeyRound size={16}/>Replace device key</button><button role="tab" aria-selected={tab==='restore'} className={tab==='restore'?'on':''} onClick={()=>setTab('restore')}><FileKey2 size={16}/>Restore from backup</button></div>
+  <section className="wallet-panel rc-recover-card">{tab==='freeze'?<FreezeTool/>:tab==='replace'?<ReplaceDeviceTool/>:<RestoreTool/>}</section>
+  <div className="rc-recover-note"><KeyRound size={16}/><p><strong>Only have your recovery key?</strong> Freeze first so nothing can move, then replace your device key. It finishes after a 48-hour wait, during which your old device key can cancel it, so a stolen recovery key can’t take over quietly.</p></div>
   <Link to="/app" className="rc-recover-back"><ArrowLeft size={14}/>Back to the wallet</Link></main></div>;
 }
 

@@ -60,10 +60,8 @@ export type Holding = Awaited<ReturnType<typeof readHoldings>>[number];
 export const amountText = (value: bigint, decimals: number) => Number(formatUnits(value, decimals)).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
 // Leave a minute of headroom under the backend's five-minute limit for client/server clock skew.
-export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240) {
- const nonce = await chainClient.readContract({ address: wallet, abi: parseAbi(['function nonce() view returns (uint256)']), functionName: 'nonce' });
- if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Account nonce exceeds the supported range.');
- const accountVersion = localStorage.getItem(`veilora:account-version:${wallet.toLowerCase()}`) === '2' ? 2 : 1;
+/** The exact digest the account checks for an execution; version 2 also binds the account address. */
+export function executionDigest(wallet: Address, accountVersion: 1 | 2, target: Address, value: bigint, data: Hex, nonce: bigint, deadline: number | bigint): Hex {
  const type = accountVersion === 2
   ? 'VeiloraExecutionV2(address account,address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)'
   : 'VeiloraExecution(address target,uint256 value,bytes data,uint256 nonce,uint256 deadline,uint256 chainId)';
@@ -74,7 +72,17 @@ export async function executeWalletCall(wallet: Address, privateKey: Hex, target
  const values = accountVersion === 2
   ? [typeHash,wallet,target,value,keccak256(data),nonce,BigInt(deadline),4663n] as const
   : [typeHash,target,value,keccak256(data),nonce,BigInt(deadline),4663n] as const;
- const digest = keccak256(encodeAbiParameters(fields, values));
+ return keccak256(encodeAbiParameters(fields, values));
+}
+export async function readAccountNonce(wallet: Address): Promise<bigint> {
+ const nonce = await chainClient.readContract({ address: wallet, abi: parseAbi(['function nonce() view returns (uint256)']), functionName: 'nonce' });
+ if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Account nonce exceeds the supported range.');
+ return nonce;
+}
+export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240) {
+ const nonce = await readAccountNonce(wallet);
+ const accountVersion = localStorage.getItem(`veilora:account-version:${wallet.toLowerCase()}`) === '2' ? 2 : 1;
+ const digest = executionDigest(wallet, accountVersion, target, value, data, nonce, deadline);
  const shardASignature = await privateKeyToAccount(privateKey).signMessage({ message: { raw: digest } });
  const payload = { target, value: value.toString(), data, nonce: Number(nonce), deadline };
  const cosigned = await cosignTransaction(wallet, { ...payload, shardASignature });

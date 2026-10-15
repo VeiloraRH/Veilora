@@ -11,6 +11,7 @@ import { CompletionDialog, type CompletionNotice } from '@/components/app/Comple
 import { getQuorumStatus } from '@/lib/api';
 import { useWallet } from '@/lib/walletContext';
 import { saveSpendingPolicy, useSpendingPolicy } from '@/lib/spendingPolicy';
+import { KeyRotationPanel, ReplaceRecoveryKeyDialog } from '@/components/app/KeyRotation';
 import { DRILL_VALID_DAYS, downloadDeviceKeyBackup, drillIsCurrent, freezeWithKey, keyMatches, readFlag, unfreezeWithKey, writeFlag } from '@/lib/recovery';
 export const Route=createFileRoute('/app/security')({component:RecoveryCenter});
 
@@ -22,7 +23,7 @@ export function RecoveryCenter() {
  const quorum=useQuery({queryKey:['quorum',walletAddress],enabled:!!walletAddress,refetchInterval:30000,queryFn:()=>getQuorumStatus(walletAddress)});
  const [flags,setFlags]=useState(()=>({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')}));
  const syncFlags=()=>setFlags({backup:readFlag(walletAddress,'backup'),drill:readFlag(walletAddress,'drill')});
- const [dialog,setDialog]=useState<null|'drill'|'recovery-freeze'|'device-freeze'|'view-key'|'import-key'>(null);
+ const [dialog,setDialog]=useState<null|'drill'|'recovery-freeze'|'device-freeze'|'view-key'|'import-key'|'replace-recovery'>(null);
  const [completion,setCompletion]=useState<CompletionNotice|null>(null);const [error,setError]=useState('');
  const q=quorum.data; const freeze=q?.freeze; const shardC=q?.onChain?.shardC??wallet?.shardC??'';
  const after=(message:string,title='Security update complete')=>{setDialog(null);setCompletion({title,description:message});syncFlags();void quorum.refetch();void refresh();};
@@ -58,11 +59,12 @@ export function RecoveryCenter() {
 
  <SpendingLimits />
 
+ <KeyRotationPanel wallet={walletAddress} onChanged={after}/>
  <section className="rc-section"><div className="wallet-section-heading"><h2>If you lose access</h2></div><div className="rc-playbook">
   <Scenario icon={Smartphone} title="New phone or browser" tag="available" text="Restore your encrypted device-key backup on the new device, or import the device key. Your account address does not change.">{deviceKeyPresent&&<button className="rule-button" onClick={backup}><Download size={14}/>Download backup</button>}<Link className="rule-button" to="/recover">Open restore page</Link></Scenario>
   <Scenario icon={ShieldAlert} title="Device lost or stolen" tag="available" text="Freeze from any browser with your recovery key. The co-signer stops signing, and only the recovery key can lift that freeze."><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Snowflake size={14}/>Freeze with recovery key</button></Scenario>
-  <Scenario icon={KeyRound} title="Device key gone for good" tag="planned" text="Your account accepts the recovery key plus the co-signer, so the device key can be replaced on-chain. Veilora’s guided key rotation for this is planned. Freeze first: your assets stay in your account and nothing can move with one key."/>
-  <Scenario icon={Fingerprint} title="Recovery key lost" tag="available" text="Your device key and the co-signer still work, so you keep full access. Swapping in a new recovery key needs key rotation (planned). Until then, back up your device key, or move your assets to a new account you set up in a separate browser profile."/>
+  <Scenario icon={KeyRound} title="Device key gone for good" tag="available" text="Replace it with your recovery key from any browser. It finishes after a 48-hour wait, during which your device key can cancel it, so a stolen recovery key can't take over quietly. Freeze with your recovery key first if your device might be in someone else's hands."><Link className="rule-button" to="/recover">Replace device key</Link></Scenario>
+  <Scenario icon={Fingerprint} title="Recovery key lost" tag="available" text="Your device key and the co-signer still work, so you keep full access. Set a new recovery key with your device key; it finishes after a 48-hour wait that your old recovery key can cancel."><button className="rule-button" disabled={!deviceKeyUnlocked} onClick={()=>setDialog('replace-recovery')}><Fingerprint size={14}/>Replace recovery key</button></Scenario>
  </div></section>
 
  <div className="rc-bottom"><section className="wallet-panel rc-emergency"><span className="rules-aside-icon"><Lock size={18}/></span><h3>Emergency freeze</h3><p>Stops Veilora’s co-signer from signing anything for up to 7 days. It cannot move or lock your on-chain assets; it removes the second signature every transaction needs.</p><div className="rc-shard-actions"><button className="rule-button" disabled={!deviceKeyUnlocked||freeze?.initiatedBy==='recovery'} onClick={()=>setDialog('device-freeze')}><Laptop size={14}/>Freeze with device key</button><button className="rule-button danger" onClick={()=>setDialog('recovery-freeze')}><Fingerprint size={14}/>Use recovery key</button></div></section>
@@ -73,6 +75,7 @@ export function RecoveryCenter() {
  {dialog==='device-freeze'&&<DeviceFreezeDialog wallet={walletAddress} onClose={()=>setDialog(null)} onDone={after}/>}
  {dialog==='view-key'&&<ViewKeyDialog wallet={walletAddress} onClose={()=>{setDialog(null);syncFlags();}}/>}
  {dialog==='import-key'&&<ImportKeyDialog onClose={()=>setDialog(null)} onDone={after}/>}
+ {dialog==='replace-recovery'&&<ReplaceRecoveryKeyDialog wallet={walletAddress} onClose={()=>setDialog(null)} onDone={after}/>}
  <CompletionDialog notice={completion} onClose={()=>setCompletion(null)}/></>;
 }
 

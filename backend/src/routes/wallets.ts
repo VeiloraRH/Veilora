@@ -239,13 +239,16 @@ walletsRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     await query(
       `INSERT INTO wallets (
         address, factory_address, account_version, salt, chain_id, shard_a_address, shard_b_address, shard_b_encrypted,
-        shard_c_address, api_key_hash, threshold, totp_secret_encrypted, registration_request_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 2, $11, $12)
+        shard_c_address, api_key_hash, threshold, totp_secret_encrypted, registration_request_id,
+        initial_shard_a_address, initial_shard_c_address
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 2, $11, $12, $6, $9)
       ON CONFLICT (address) DO UPDATE SET
         shard_a_address = EXCLUDED.shard_a_address,
         shard_b_address = EXCLUDED.shard_b_address,
         shard_b_encrypted = EXCLUDED.shard_b_encrypted,
         shard_c_address = EXCLUDED.shard_c_address,
+        initial_shard_a_address = EXCLUDED.initial_shard_a_address,
+        initial_shard_c_address = EXCLUDED.initial_shard_c_address,
         factory_address = EXCLUDED.factory_address,
         account_version = EXCLUDED.account_version,
         salt = EXCLUDED.salt,
@@ -387,7 +390,12 @@ walletsRouter.get("/:address", async (req: Request, res: Response): Promise<void
           syncedShardA = chainShardA;
           syncedShardC = chainShardC;
           if (syncedShardA.toLowerCase() !== String(wallet.shard_a_address).toLowerCase() || syncedShardC.toLowerCase() !== String(wallet.shard_c_address).toLowerCase()) {
-            await query("UPDATE wallets SET shard_a_address=$2,shard_c_address=$3,updated_at=now() WHERE address=$1", [address, syncedShardA.toLowerCase(), syncedShardC.toLowerCase()]);
+            await query(
+              `UPDATE wallets SET initial_shard_a_address=COALESCE(initial_shard_a_address,shard_a_address),
+                 initial_shard_c_address=COALESCE(initial_shard_c_address,shard_c_address),
+                 shard_a_address=$2,shard_c_address=$3,updated_at=now() WHERE address=$1`,
+              [address, syncedShardA.toLowerCase(), syncedShardC.toLowerCase()],
+            );
           }
         }
       }
