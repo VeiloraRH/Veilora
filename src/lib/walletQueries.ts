@@ -5,12 +5,13 @@ import { readHoldings, quoteSwap } from './walletChain';
 import { ROBINHOOD_TOKEN_REGISTRY } from './tokens';
 import { API_BASE } from './api';
 import { getRpcOverride } from './rpcSettings';
-export function useHoldings() {
- const {walletAddress} = useWallet();
+/** Balances for your wallet, or for another address (watch-only) when one is given. */
+export function useHoldings(address?: string) {
+ const {walletAddress:own} = useWallet(); const walletAddress=address ?? own;
  return useQuery({queryKey:['holdings',walletAddress,getRpcOverride() || 'veilora-gateway'],queryFn:()=>readHoldings(getAddress(walletAddress)),enabled:!!walletAddress,refetchInterval:30000});
 }
-export function usePortfolioValue() {
- const holdings=useHoldings();
+export function usePortfolioValue(address?: string) {
+ const holdings=useHoldings(address);
  const key=holdings.data?.map(h=>`${h.token.symbol}:${h.raw}`).join('|');
  const prices=useQuery({queryKey:['portfolio-value',key],enabled:!!holdings.data,staleTime:30000,queryFn:async()=> {
   const values=await Promise.all((holdings.data ?? []).map(async h=> {
@@ -27,8 +28,8 @@ export type WalletTransaction={id:string;hash:string;timestamp:string;direction:
 type ExplorerItem={hash?:string;transaction_hash?:string;timestamp?:string;from?:{hash?:string};to?:{hash?:string};value?:string;status?:string;result?:string;error?:string|null;success?:boolean;index?:number;log_index?:number;total?:{value?:string;decimals?:string};token?:{symbol?:string;decimals?:string}};
 /** History rows; `partial` is set when some history types could not be loaded and the list is incomplete. */
 export type TransactionList=WalletTransaction[]&{partial?:boolean};
-export function useTransactions() {
- const {walletAddress}=useWallet();
+export function useTransactions(address?: string) {
+ const {walletAddress:own}=useWallet(); const walletAddress=address ?? own;
  return useQuery({queryKey:['transactions',walletAddress],enabled:!!walletAddress,staleTime:30000,retry:1,structuralSharing:false,queryFn:async({signal}):Promise<TransactionList>=> {
   const wallet=walletAddress.toLowerCase();
   const loadKind=async(kind:string)=> {

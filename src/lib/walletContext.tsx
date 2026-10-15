@@ -10,6 +10,7 @@ import {
 import { decryptDeviceKey, encryptDeviceKey } from "./deviceKeyVault";
 import { getAutoLockSettings, lockDue, type LockReason } from "./autoLock";
 import { removePasskeyRecord, unlockWithPasskey } from "./passkeyUnlock";
+import { clearWatchList } from "./watchList";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
@@ -335,6 +336,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const bridgeTrackingKey = `veilora:bridge:tracking:${walletAddress.toLowerCase()}`;
     localStorage.removeItem(bridgeTrackingKey);
     localStorage.removeItem(`veilora:contacts:${walletAddress.toLowerCase()}`);
+    clearWatchList(walletAddress);
     removePasskeyRecord(walletAddress);
     setWalletAddressState("");
     setWallet(null);

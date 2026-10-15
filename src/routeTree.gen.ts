@@ -25,6 +25,7 @@ import { Route as AppRulesRouteImport } from './routes/app/rules'
 import { Route as AppSecurityRouteImport } from './routes/app/security'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
 import { Route as AppSwapRouteImport } from './routes/app/swap'
+import { Route as AppWatchRouteImport } from './routes/app/watch'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -106,6 +107,11 @@ const AppSwapRoute = AppSwapRouteImport.update({
   path: '/swap',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppWatchRoute = AppWatchRouteImport.update({
+  id: '/watch',
+  path: '/watch',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/app/security': typeof AppSecurityRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
+  '/app/watch': typeof AppWatchRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/app/security': typeof AppSecurityRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
+  '/app/watch': typeof AppWatchRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/app/security': typeof AppSecurityRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
+  '/app/watch': typeof AppWatchRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/app/security'
     | '/app/settings'
     | '/app/swap'
+    | '/app/watch'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/app/security'
     | '/app/settings'
     | '/app/swap'
+    | '/app/watch'
     | '/app'
   id:
     | '__root__'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/app/security'
     | '/app/settings'
     | '/app/swap'
+    | '/app/watch'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
@@ -340,6 +352,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSwapRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/watch': {
+      id: '/app/watch'
+      path: '/watch'
+      fullPath: '/app/watch'
+      preLoaderRoute: typeof AppWatchRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
@@ -353,6 +372,7 @@ interface AppRouteRouteChildren {
   AppSecurityRoute: typeof AppSecurityRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSwapRoute: typeof AppSwapRoute
+  AppWatchRoute: typeof AppWatchRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -366,6 +386,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppSecurityRoute: AppSecurityRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSwapRoute: AppSwapRoute,
+  AppWatchRoute: AppWatchRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

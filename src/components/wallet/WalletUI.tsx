@@ -14,8 +14,8 @@ export function TokenIcon({token,size=40}:{token:WalletToken;size?:number}) {
 export function PageTitle({title,description,action}:{title:string;description:string;action?:ReactNode}) {
  return <div className="wallet-page-title"><div><h1>{title}</h1><p>{description}</p></div>{action}</div>;
 }
-export function TransactionsTable({records,loading,error,onRetry,compact=false,partial=false}:{records:WalletTransaction[];loading:boolean;error:unknown;onRetry:()=>void;compact?:boolean;partial?:boolean}) {
- const {walletAddress}=useWallet(); const [explain,setExplain]=useState<string|null>(null);
+export function TransactionsTable({records,loading,error,onRetry,compact=false,partial=false,perspective}:{records:WalletTransaction[];loading:boolean;error:unknown;onRetry:()=>void;compact?:boolean;partial?:boolean;perspective?:string}) {
+ const {walletAddress:own}=useWallet(); const walletAddress=perspective??own; const [explain,setExplain]=useState<string|null>(null);
  if(loading) return <div className="wallet-empty" role="status"><RefreshCw className="animate-spin"/><h3>Loading transactions</h3><p>Gathering your on-chain activity.</p></div>;
  if(error) return <div className="wallet-empty"><SearchX/><h3>History is unavailable</h3><p>{error instanceof Error ? error.message : 'Please try again.'}</p><button className="wallet-soft-button" onClick={onRetry}><RefreshCw size={15}/>Try again</button></div>;
  const partialNotice=partial?<div className="wallet-partial" role="status"><span>Some history could not load from the explorer, so this list may be incomplete.</span><button className="wallet-soft-button" onClick={onRetry}><RefreshCw size={14}/>Retry</button></div>:null;
