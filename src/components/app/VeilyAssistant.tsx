@@ -99,6 +99,19 @@ export function VeilyAssistant() {
     setHistoryOpen(false);
   }, [walletAddress]);
   useEffect(() => {
+    const onUniversalSearchPrompt = (event: Event) => {
+      const prompt = (event as CustomEvent<{ prompt?: unknown }>).detail?.prompt;
+      if (typeof prompt !== "string" || !prompt.trim()) return;
+      setSettingsOpen(false);
+      setHistoryOpen(false);
+      setDraft(prompt.trim());
+      setError("");
+      setPanelOpen(true);
+    };
+    window.addEventListener("veilora:veily-prompt", onUniversalSearchPrompt);
+    return () => window.removeEventListener("veilora:veily-prompt", onUniversalSearchPrompt);
+  }, []);
+  useEffect(() => {
     try { localStorage.setItem(`${HISTORY_PREFIX}${historyAddress}`, JSON.stringify(conversations.slice(0, MAX_CONVERSATIONS))); }
     catch { /* Conversation history is a convenience; chat still works when storage is unavailable. */ }
   }, [conversations, historyAddress]);
