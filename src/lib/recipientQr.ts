@@ -1,5 +1,27 @@
-import jsQR from 'jsqr';
 import { getAddress, isAddress, zeroAddress } from 'viem';
+
+let readerPromise: Promise<typeof import('zxing-wasm/reader')> | undefined;
+
+function loadQrReader(): Promise<typeof import('zxing-wasm/reader')> {
+  if (!readerPromise) {
+    readerPromise = Promise.all([
+      import('zxing-wasm/reader'),
+      import('zxing-wasm/reader/zxing_reader.wasm?url'),
+    ]).then(async ([reader, wasm]) => {
+      await reader.prepareZXingModule({
+        overrides: {
+          locateFile: (path, prefix) => path.endsWith('.wasm') ? wasm.default : `${prefix}${path}`,
+        },
+        fireImmediately: true,
+      });
+      return reader;
+    }).catch(error => {
+      readerPromise = undefined;
+      throw error;
+    });
+  }
+  return readerPromise;
+}
 
 /** Accept only a plain wallet address or a basic EIP-681 address on Robinhood Chain. */
 export function parseRecipientQrPayload(payload: string): `0x${string}` | null {
@@ -27,9 +49,18 @@ export async function readRecipientQrImage(file: File): Promise<`0x${string}`> {
     if (!context) throw new Error('Could not read this image in your browser.');
     context.drawImage(bitmap, 0, 0);
     const image = context.getImageData(0, 0, canvas.width, canvas.height);
-    const result = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
+    const reader = await loadQrReader();
+    const [result] = await reader.readBarcodes(image, {
+      formats: ['QRCode'],
+      maxNumberOfSymbols: 1,
+      tryHarder: true,
+      tryRotate: true,
+      tryInvert: true,
+      tryDownscale: true,
+      tryDenoise: true,
+    });
     if (!result) throw new Error('No QR code was found. Try a clearer image.');
-    const recipient = parseRecipientQrPayload(result.data);
+    const recipient = parseRecipientQrPayload(result.text);
     if (!recipient) throw new Error('This QR code does not contain a supported Robinhood Chain wallet address.');
     return recipient;
   } catch (error) {
