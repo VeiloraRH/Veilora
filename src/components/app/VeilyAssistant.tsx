@@ -1,11 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Bot, Check, History, KeyRound, LoaderCircle, MessageSquare, Plus, Send, Settings2, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { getAddress, formatUnits } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { motion, useReducedMotion } from "framer-motion";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { askVeily, createVeilyPermission, listVeilyPermissions, revokeVeilyPermission, type VeilyAction, type VeilyMessage, type VeilyMode, type VeilyProvider, type VeilySessionPermission } from "@/lib/api";
 import { encryptDeviceKey, decryptDeviceKey } from "@/lib/deviceKeyVault";
 import { useWallet } from "@/lib/walletContext";
@@ -19,6 +17,7 @@ const models: Record<VeilyProvider, string> = { groq: "qwen/qwen3.8-27b", openai
 const bridgeChainNames: Record<number, string> = { 1: "Ethereum", 56: "BNB Chain", 137: "Polygon", 8453: "Base" };
 const initialMessages: VeilyMessage[] = [{ role: "assistant", content: "Hi, I’m Veily. I can help you understand your wallet and find your way around Veilora. I can’t sign or execute transactions for you." }];
 type VeilyConversation = { id: string; title: string; updatedAt: number; permissionId: string | null; messages: VeilyMessage[] };
+const VeilyMarkdown = lazy(() => import("./VeilyMarkdown").then(module => ({ default: module.VeilyMarkdown })));
 
 function readConversations(address: string): VeilyConversation[] {
   try {
@@ -32,24 +31,6 @@ function readConversations(address: string): VeilyConversation[] {
       })).slice(0, MAX_CONVERSATIONS);
   } catch { return []; }
 }
-
-const markdownComponents = {
-  p: ({ children }: { children?: React.ReactNode }) => <p className="mb-2 last:mb-0">{children}</p>,
-  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="mb-2 mt-3 text-base font-semibold first:mt-0">{children}</h1>,
-  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="mb-2 mt-3 text-sm font-semibold first:mt-0">{children}</h2>,
-  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="mb-1 mt-2 text-sm font-semibold first:mt-0">{children}</h3>,
-  ul: ({ children }: { children?: React.ReactNode }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
-  ol: ({ children }: { children?: React.ReactNode }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
-  li: ({ children }: { children?: React.ReactNode }) => <li>{children}</li>,
-  strong: ({ children }: { children?: React.ReactNode }) => <strong className="font-semibold">{children}</strong>,
-  blockquote: ({ children }: { children?: React.ReactNode }) => <blockquote className="my-2 border-l-2 border-[#f0ac5e] pl-3 text-slate-600 dark:text-mist">{children}</blockquote>,
-  a: ({ children, href }: { children?: React.ReactNode; href?: string }) => <a className="underline decoration-[#f0ac5e] underline-offset-2" href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
-  code: ({ children }: { children?: React.ReactNode }) => <code className="rounded bg-slate-200/70 px-1 py-0.5 font-mono text-[0.9em] dark:bg-ink-700">{children}</code>,
-  pre: ({ children }: { children?: React.ReactNode }) => <pre className="my-2 overflow-x-auto rounded-lg bg-slate-200/70 p-3 font-mono text-xs dark:bg-ink-900">{children}</pre>,
-  table: ({ children }: { children?: React.ReactNode }) => <div className="my-2 overflow-x-auto"><table className="w-full border-collapse text-left text-xs">{children}</table></div>,
-  th: ({ children }: { children?: React.ReactNode }) => <th className="border-b border-slate-300 px-2 py-1 font-semibold dark:border-ink-600">{children}</th>,
-  td: ({ children }: { children?: React.ReactNode }) => <td className="border-b border-slate-200 px-2 py-1 dark:border-ink-700">{children}</td>,
-};
 
 export function VeilyAssistant() {
   const { walletAddress, wallet, getStoredDeviceKey } = useWallet();
@@ -379,7 +360,7 @@ export function VeilyAssistant() {
         {activeConversation&&!conversationCanContinue&&<p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This conversation used a different or expired permission. Your next message starts fresh.</p>}
         <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
           {messages.length===1&&<div className="mb-5 mt-4"><p className="mb-1 text-lg font-medium text-slate-900 dark:text-cream">What can I help with?</p><p className="mb-4 text-xs leading-relaxed text-slate-500 dark:text-mist">Ask about your wallet, activity, spending limits, or where to find something.</p><div className="flex flex-wrap gap-2">{shortcuts.map(prompt=><button key={prompt} className="rounded-full border border-slate-200 px-3 py-2 text-[10px] text-slate-600 transition-colors hover:border-[#f0ac5e] hover:bg-[#f0ac5e]/10 dark:border-ink-700 dark:text-mist" onClick={()=>setDraft(prompt)}>{prompt}</button>)}</div></div>}
-          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{message.content}</ReactMarkdown>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}</div></div>)}
+          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<Suspense fallback={<span className="whitespace-pre-wrap">{message.content}</span>}><VeilyMarkdown content={message.content}/></Suspense>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}</div></div>)}
           {busy&&<div className="flex items-center gap-2 text-xs text-slate-500 dark:text-mist"><LoaderCircle className="animate-spin" size={15}/>Checking that with Veily…</div>}
         </div>
         {error&&<p role="alert" className="px-4 pb-2 text-xs text-rose-600">{error}</p>}

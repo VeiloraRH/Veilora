@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { createGlassScene, type GlassScene } from "./glass-scene";
+import type { GlassScene } from "./glass-scene";
 import { ThemeToggle } from "@/components/site/ThemeToggle";
 import { ContractAddress } from "@/components/site/ContractAddress";
 import { t, type Locale } from "@/lib/locale";
@@ -10,6 +10,7 @@ import "./hero.css";
 const DOTS = [0, 1, 2];
 
 export function GlassHero({ locale = "en" }: { locale?: Locale }) {
+  const heroRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<GlassScene | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -19,10 +20,38 @@ export function GlassHero({ locale = "en" }: { locale?: Locale }) {
   themeRef.current = theme;
 
   useEffect(() => {
-    const scene = createGlassScene(canvasRef.current!, () => setLoaded(true), themeRef.current);
-    sceneRef.current = scene;
+    let active = true;
+    let timer = 0;
+    let scene: GlassScene | null = null;
+    let observer: IntersectionObserver | null = null;
+    const loadScene = () => {
+      timer = window.setTimeout(() => {
+        void import("./glass-scene").then(({ createGlassScene }) => {
+          if (!active || !canvasRef.current) return;
+          scene = createGlassScene(canvasRef.current, () => setLoaded(true), themeRef.current);
+          sceneRef.current = scene;
+        }).catch(() => {
+          if (active) setLoaded(true);
+        });
+      }, 120);
+    };
+    const target = heroRef.current;
+    if (target && "IntersectionObserver" in window) {
+      observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          observer?.disconnect();
+          loadScene();
+        }
+      }, { rootMargin: "200px" });
+      observer.observe(target);
+    } else {
+      loadScene();
+    }
     return () => {
-      scene.dispose();
+      active = false;
+      window.clearTimeout(timer);
+      observer?.disconnect();
+      scene?.dispose();
       sceneRef.current = null;
     };
   }, []);
@@ -43,7 +72,7 @@ export function GlassHero({ locale = "en" }: { locale?: Locale }) {
   }, [locale]);
 
   return (
-    <section className="hero" id="hero" data-theme={theme} lang={locale === "zh" ? "zh-CN" : "en"}>
+    <section ref={heroRef} className="hero" id="hero" data-theme={theme} lang={locale === "zh" ? "zh-CN" : "en"}>
       <canvas id="scene" ref={canvasRef} aria-label="Rotatable glass cube. Drag to rotate." />
       <div className="ui">
         <h1 className="sr-only">Veilora: own every move</h1>
