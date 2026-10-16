@@ -160,7 +160,7 @@ function blankSpec():RuleSpec {return {version:1,name:'Split incoming USDG',trig
 
 function RuleBuilder({initial,onClose,onCreated}:{initial:RuleSpec;onClose:()=>void;onCreated:(name:string)=>void}) {
  const {walletAddress,getStoredDeviceKey}=useWallet(); const cache=useQueryClient();
- const [spec,setSpec]=useState<RuleSpec>(initial); const [days,setDays]=useState(90); const [busy,setBusy]=useState(false); const [error,setError]=useState(''); const [price,setPrice]=useState<string|null>(null);
+ const [spec,setSpec]=useState<RuleSpec>(initial); const [days,setDays]=useState(90); const [busy,setBusy]=useState(false); const [error,setError]=useState(''); const [price,setPrice]=useState<string|null>(null); const [reviewing,setReviewing]=useState(false);
  const t=spec.trigger; const sourceAsset=t.type==='incoming'?t.asset:spec.source.asset; const sending=spec.action?.type==='send';
  const percentTotal=sending?(t.type==='incoming'?(spec.action?.percent??0):100):spec.allocations.reduce((s,a)=>s+a.percent,0);
  const recipient=spec.action?.recipient??''; const recipientValid=isAddress(recipient)&&!/^0x0{40}$/i.test(recipient);
@@ -176,8 +176,10 @@ function RuleBuilder({initial,onClose,onCreated}:{initial:RuleSpec;onClose:()=>v
   try{const action=spec.action?{type:'send' as const,recipient:getAddress(spec.action.recipient),recipientName:spec.action.recipientName.trim()||`${spec.action.recipient.slice(0,6)}…${spec.action.recipient.slice(-4)}`,...(t.type==='incoming'?{percent:spec.action.percent??10}:{})}:undefined;
    const final:RuleSpec={...spec,...(action?{allocations:[],action}:{}),source:t.type==='incoming'?{asset:t.asset}:{asset:spec.source.asset,amount:spec.source.amount},limits:{...spec.limits,expiresAt:daysFromNow(days)}};await createRule(walletAddress,key as Hex,final);void cache.invalidateQueries({queryKey:['wallet-rules']});onCreated(final.name);}
   catch(e){setError(e instanceof Error?e.message:'Could not create the rule.');}finally{setBusy(false);}}
+ function reviewRule(){setError('');if(!spec.name.trim()){setError('Give this rule a name first.');return;}if(t.type==='incoming'&&(!Number.isFinite(Number(t.minAmount))||Number(t.minAmount)<=0)){setError('Enter a minimum incoming amount greater than zero.');return;}if(t.type!=='incoming'&&(!Number.isFinite(Number(spec.source.amount))||Number(spec.source.amount)<=0)){setError('Enter an amount per run greater than zero.');return;}if(!Number.isFinite(Number(spec.limits.maxPerRun))||Number(spec.limits.maxPerRun)<=0||!Number.isFinite(Number(spec.limits.dailyCap))||Number(spec.limits.dailyCap)<Number(spec.limits.maxPerRun)){setError('Set a valid per-run limit and a daily cap at least as large.');return;}if(percentTotal<1||percentTotal>100){setError('Target allocations must total between 1% and 100%.');return;}if(sending&&!sendReady){setError('Check the recipient address before reviewing this rule.');return;}setReviewing(true);}
  const targets=TOKEN_ASSETS.filter(s=>s!==sourceAsset);
  return <Dialog open onOpenChange={v=>{if(!v&&!busy)onClose();}}><DialogContent className="wallet-dialog rule-builder sm:max-w-xl"><DialogHeader><DialogTitle>New wallet rule</DialogTitle><DialogDescription>Rules prepare swaps. You approve each run.</DialogDescription></DialogHeader>
+  {!reviewing?<div className="rule-builder-edit">
   <label className="builder-field"><span>Name</span><input className="builder-input" maxLength={60} value={spec.name} onChange={e=>patch({name:e.target.value})}/></label>
   <fieldset className="builder-block"><legend>When</legend><div className="builder-segments" role="radiogroup">{([['incoming','Funds arrive',Workflow],['schedule','On a schedule',CalendarClock],['price','Price target',Target]] as const).map(([type,label,Icon])=><button key={type} role="radio" aria-checked={t.type===type} className={t.type===type?'on':''} onClick={()=>t.type!==type&&setTrigger(type==='incoming'?{type,asset:'USDG',minAmount:'10'}:type==='schedule'?{type,frequency:'weekly',hourUtc:14,weekday:1}:{type,asset:'NVDA',direction:'below',priceUsdg:'150'})}><Icon size={16}/>{label}</button>)}</div>
    {t.type==='incoming'&&<div className="builder-row"><label className="builder-field"><span>Asset received</span><select className="wallet-select" value={t.asset} onChange={e=>setTrigger({...t,asset:e.target.value})}>{TOKEN_ASSETS.filter(s=>s!=='ETH').map(s=><option key={s}>{s}</option>)}</select></label><label className="builder-field"><span>Minimum amount</span><input className="builder-input" inputMode="decimal" value={t.minAmount} onChange={e=>setTrigger({...t,minAmount:e.target.value})}/></label></div>}
@@ -206,6 +208,26 @@ function RuleBuilder({initial,onClose,onCreated}:{initial:RuleSpec;onClose:()=>v
   <fieldset className="builder-block"><legend>Execution mode</legend><div className="builder-modes"><div className="builder-mode on" role="radio" aria-checked="true"><ShieldCheck size={18}/><div><strong>Approval first</strong><span>Veilora prepares each run. You review live quotes and sign with your device key and co-signer.</span></div><Check size={16} className="ml-auto shrink-0"/></div><div className="builder-mode locked" role="radio" aria-checked="false" aria-disabled="true"><Lock size={18}/><div><strong>Automatic <em>Not available yet</em></strong><span>Needs an audited, scoped preauthorization in your smart account. Nothing will run unattended until it ships.</span></div></div></div></fieldset>
   <div className="builder-summary"><Sparkles size={16}/><p>{describeTrigger(t)}, {describeAction({...spec,source:t.type==='incoming'?{asset:t.asset}:spec.source})}. {describeLimits({...spec,source:{asset:sourceAsset},limits:{...spec.limits,expiresAt:daysFromNow(days)}})}. You approve every run.</p></div>
   {error&&<p role="alert" className="wallet-error mb-3">{error}</p>}
-  <button className="wallet-primary-button" disabled={busy||!spec.name.trim()||percentTotal<1||percentTotal>100||!sendReady} onClick={()=>void submit()}>{busy?<><Loader2 size={16} className="animate-spin"/>Signing rule…</>:'Sign & create rule'}</button>
+  <button className="wallet-primary-button" disabled={busy||!spec.name.trim()||percentTotal<1||percentTotal>100||!sendReady||recipientChecking} onClick={reviewRule}>Review rule <ArrowRight size={15}/></button>
+  </div>:<div className="rule-preview">
+   <div className="rule-preview-intro"><span className="rules-aside-icon"><ShieldCheck size={19}/></span><div><h3>Review your rule</h3><p>Check the details before signing it with your device key.</p></div></div>
+   <div className="rule-preview-name"><small>RULE NAME</small><strong>{spec.name.trim()}</strong></div>
+   <dl className="rule-preview-details">
+    <div><dt>When</dt><dd>{describeTrigger(t)}</dd></div>
+    <div><dt>What Veilora prepares</dt><dd>{sending?describeAction({...spec,source:t.type==='incoming'?{asset:t.asset}:spec.source}):describeAction({...spec,source:t.type==='incoming'?{asset:t.asset}:spec.source})}</dd></div>
+    {t.type==='incoming'&&<div><dt>Minimum arrival</dt><dd>{t.minAmount} {t.asset}</dd></div>}
+    {t.type==='price'&&<div><dt>Current reference price</dt><dd>{price===null?'Checking…':price==='unavailable'?'Unavailable':`${price} USDG`} <small>Quote can change before review.</small></dd></div>}
+    {t.type!=='incoming'&&<div><dt>Amount per run</dt><dd>{spec.source.amount} {spec.source.asset}</dd></div>}
+    {sending&&<div><dt>Recipient</dt><dd>{spec.action?.recipientName?.trim()||`${recipient.slice(0,6)}…${recipient.slice(-4)}`}<small className="font-mono">{getAddress(recipient)}</small></dd></div>}
+    {!sending&&<div><dt>Target allocation</dt><dd>{spec.allocations.map(a=>`${a.percent}% ${a.asset}`).join(' · ')}{t.type==='incoming'&&percentTotal<100&&<small>{100-percentTotal}% remains in {t.asset}</small>}</dd></div>}
+    <div><dt>Maximum per run</dt><dd>{spec.limits.maxPerRun} {sourceAsset}</dd></div>
+    <div><dt>Daily cap</dt><dd>{spec.limits.dailyCap} {sourceAsset}</dd></div>
+    {!sending&&<div><dt>Maximum slippage</dt><dd>{(spec.limits.slippageBps/100).toFixed(2)}%</dd></div>}
+    <div><dt>Expires</dt><dd>{new Date(daysFromNow(days)).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</dd></div>
+   </dl>
+   <div className="rule-preview-safety"><ShieldCheck size={16}/><p><strong>Approval required for every run.</strong> This rule cannot move funds on its own. When it triggers, Veilora prepares the action and you review the live details before signing.</p></div>
+   {error&&<p role="alert" className="wallet-error mb-3">{error}</p>}
+   <div className="rule-preview-actions"><button className="rule-button" disabled={busy} onClick={()=>{setError('');setReviewing(false);}}><ChevronLeft size={15}/>Back to edit</button><button className="wallet-primary-button" disabled={busy} onClick={()=>void submit()}>{busy?<><Loader2 size={16} className="animate-spin"/>Signing rule…</>:'Sign & create rule'}</button></div>
+  </div>}
  </DialogContent></Dialog>;
 }
