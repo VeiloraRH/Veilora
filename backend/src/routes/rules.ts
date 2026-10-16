@@ -184,6 +184,7 @@ rulesRouter.post("/", async (req: Request, res: Response): Promise<void> => {
     const timestamp = fresh(req.body.timestamp);
     const signature = signatureOf(req.body.shardASignature);
     const spec = parseRuleSpec(req.body.spec);
+    if (spec.action?.recipient.toLowerCase() === wallet.address.toLowerCase()) throw new RuleSpecError("A send rule cannot send to your own account");
     const specHash = hashSpec(req.body.spec);
     await assertShardA(wallet, ruleCreateMessage(wallet.address, specHash, timestamp), signature);
     if ((await getFreezeState(wallet.address)).frozen) throw new HttpError(403, "Wallet is frozen; unfreeze it before adding rules");

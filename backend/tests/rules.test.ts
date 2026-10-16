@@ -67,6 +67,36 @@ describe("rule spec validation", () => {
   });
 });
 
+describe("send rules (recurring transfers)", () => {
+  const sam = "0x2222222222222222222222222222222222222222";
+  const weekly = { trigger: { type: "schedule", frequency: "weekly", hourUtc: 9, weekday: 5 }, source: { asset: "USDG", amount: "50" }, allocations: [],
+    limits: { maxPerRun: "50", dailyCap: "50", slippageBps: 50, expiresAt: inDays(30, now) } };
+
+  test("a weekly send pays the fixed amount to one recipient", () => {
+    const parsed = parseRuleSpec(JSON.stringify(spec({ ...weekly, action: { type: "send", recipient: sam, recipientName: "Sam" } })), now);
+    expect(parsed.action).toEqual({ type: "send", recipient: sam, recipientName: "Sam", percent: 100 });
+    expect(parsed.allocations).toEqual([]);
+    const plan = planExecution(parsed, parseUnits("50", 6), 0n);
+    expect(plan.legs).toEqual([{ asset: "USDG", percent: 100, amountRaw: parseUnits("50", 6).toString(), recipient: sam, recipientName: "Sam" }]);
+  });
+
+  test("an incoming send forwards a percent of each arrival, under the caps", () => {
+    const parsed = parseRuleSpec(JSON.stringify(spec({ allocations: undefined, action: { type: "send", recipient: sam, recipientName: "Savings", percent: 10 } })), now);
+    expect(parsed.action?.percent).toBe(10);
+    expect(planExecution(parsed, parseUnits("1000", 6), 0n).totalRaw).toBe(parseUnits("100", 6));
+    expect(planExecution(parsed, parseUnits("10000", 6), 0n).totalRaw).toBe(parseUnits("500", 6));
+  });
+
+  test("rejects bad recipients and mixed swap and send", () => {
+    const send = (action: Record<string, unknown>, extra: Record<string, unknown> = {}) => () => parseRuleSpec(JSON.stringify(spec({ ...weekly, ...extra, action: { type: "send", ...action } })), now);
+    expect(send({ recipient: "0x1234" })).toThrow("valid, non-zero recipient");
+    expect(send({ recipient: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" })).toThrow("token contract");
+    expect(send({ recipient: sam }, { allocations: [{ asset: "NVDA", percent: 10 }] })).toThrow("no swap targets");
+    expect(send({ recipient: sam, percent: 50 })).toThrow("use the fixed amount");
+    expect(() => parseRuleSpec(JSON.stringify(spec({ action: { type: "burn" } })), now)).toThrow("only rule action");
+  });
+});
+
 describe("scheduling and sizing", () => {
   test("computes the next daily, weekly and monthly run in UTC", () => {
     expect(nextScheduledRun({ type: "schedule", frequency: "daily", hourUtc: 9 }, now).toISOString()).toBe("2026-10-15T09:00:00.000Z");
@@ -263,6 +293,13 @@ describe("Wallet Rules API and evaluator", () => {
     const listed = await list();
     const closed = listed.body.executions.filter((e: { ruleId: string }) => e.ruleId === priceRuleId);
     expect(closed.every((e: { status: string; reason: string }) => e.status === "expired" && e.reason === "Rule revoked")).toBe(true);
+  });
+
+  test("a send rule cannot send to the wallet itself", async () => {
+    const self = await create(spec({ trigger: { type: "schedule", frequency: "daily", hourUtc: 9 }, source: { asset: "USDG", amount: "5" }, allocations: [],
+      action: { type: "send", recipient: wallet, recipientName: "Me" }, limits: { maxPerRun: "5", dailyCap: "5", slippageBps: 50, expiresAt: inDays(30) } }));
+    expect(self.res.status).toBe(400);
+    expect(self.res.body.error).toContain("own account");
   });
 
   test("frozen wallets cannot add rules and are skipped by the evaluator", async () => {

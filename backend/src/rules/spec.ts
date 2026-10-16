@@ -1,4 +1,4 @@
-import { keccak256, parseUnits, stringToHex } from "viem";
+import { getAddress, isAddress, keccak256, parseUnits, stringToHex } from "viem";
 import { ROBINHOOD_TOKEN_REGISTRY } from "../tokens";
 
 /**
@@ -28,10 +28,15 @@ export type RuleSpec = {
   trigger: RuleTrigger;
   /** For incoming triggers the source is the received asset and the base is the received amount. */
   source: { asset: string; amount?: string };
+  /** Swap targets. Empty when the rule sends instead. */
   allocations: { asset: string; percent: number }[];
+  /** Omitted for swap rules (the original kind). A send rule transfers the source asset to one recipient. */
+  action?: SendAction;
   limits: { maxPerRun: string; dailyCap: string; slippageBps: number; expiresAt: string };
   mode: "approval";
 };
+/** Send `percent` of each run's base (the received amount, or the fixed amount) to `recipient`. */
+export type SendAction = { type: "send"; recipient: `0x${string}`; recipientName: string; percent: number };
 
 export class RuleSpecError extends Error {}
 
@@ -80,7 +85,7 @@ export function parseRuleSpec(specJson: unknown, now = new Date()): RuleSpec {
   let raw: unknown;
   try { raw = JSON.parse(specJson); } catch { fail("Rule spec is not valid JSON"); }
   if (!isObject(raw)) fail("Rule spec must be an object");
-  onlyKeys(raw, ["version", "name", "trigger", "source", "allocations", "limits", "mode"], "rule");
+  onlyKeys(raw, ["version", "name", "trigger", "source", "allocations", "action", "limits", "mode"], "rule");
   if (raw.version !== 1) fail("Unsupported rule version");
 
   if (raw.mode === "automatic") fail("Automatic execution is not available yet. Choose approval first.");
@@ -128,21 +133,38 @@ export function parseRuleSpec(specJson: unknown, now = new Date()): RuleSpec {
     toRaw(raw.source.amount, source.decimals, "Source amount");
   }
 
-  if (!Array.isArray(raw.allocations) || raw.allocations.length < 1 || raw.allocations.length > 4) fail("Add one to four target assets");
-  const seen = new Set<string>();
+  let action: SendAction | undefined;
+  let allocations: { asset: string; percent: number }[] = [];
   let total = 0;
-  const allocations = raw.allocations.map((entry, i) => {
-    if (!isObject(entry)) fail("Each allocation needs an asset and a percent");
-    onlyKeys(entry, ["asset", "percent"], "allocation");
-    const target = asset(entry.asset, `Target asset ${i + 1}`);
-    if (target.symbol === source.symbol) fail("A target asset must differ from the source asset");
-    if (seen.has(target.symbol)) fail("Each target asset can appear only once");
-    seen.add(target.symbol);
-    const percent = integer(entry.percent, 1, 100, `Allocation ${i + 1} percent`);
-    total += percent;
-    return { asset: target.symbol, percent };
-  });
-  if (total > 100) fail("Allocations cannot add up to more than 100%");
+  if (raw.action !== undefined) {
+    if (!isObject(raw.action) || raw.action.type !== "send") fail("The only rule action besides swapping is send");
+    onlyKeys(raw.action, ["type", "recipient", "recipientName", "percent"], "action");
+    const recipient = raw.action.recipient;
+    if (typeof recipient !== "string" || !isAddress(recipient) || /^0x0{40}$/i.test(recipient)) fail("A send rule needs a valid, non-zero recipient address");
+    if (Object.values(RULE_ASSETS).some((a) => a.address?.toLowerCase() === recipient.toLowerCase())) fail("The recipient is a token contract, not a wallet. Tokens sent there are lost.");
+    const recipientName = typeof raw.action.recipientName === "string" ? raw.action.recipientName.trim() : "";
+    if (recipientName.length > 40 || /[\r\n]/.test(recipientName)) fail("Recipient name must be up to 40 characters on one line");
+    const percent = trigger.type === "incoming" ? integer(raw.action.percent, 1, 100, "Percent to send") : 100;
+    if (trigger.type !== "incoming" && raw.action.percent !== undefined && raw.action.percent !== 100) fail("Scheduled and price sends use the fixed amount");
+    if (raw.allocations !== undefined && (!Array.isArray(raw.allocations) || raw.allocations.length > 0)) fail("A send rule has no swap targets");
+    action = { type: "send", recipient: getAddress(recipient), recipientName: recipientName || `${recipient.slice(0, 6)}…${recipient.slice(-4)}`, percent };
+    total = percent;
+  } else {
+    if (!Array.isArray(raw.allocations) || raw.allocations.length < 1 || raw.allocations.length > 4) fail("Add one to four target assets");
+    const seen = new Set<string>();
+    allocations = raw.allocations.map((entry, i) => {
+      if (!isObject(entry)) fail("Each allocation needs an asset and a percent");
+      onlyKeys(entry, ["asset", "percent"], "allocation");
+      const target = asset(entry.asset, `Target asset ${i + 1}`);
+      if (target.symbol === source.symbol) fail("A target asset must differ from the source asset");
+      if (seen.has(target.symbol)) fail("Each target asset can appear only once");
+      seen.add(target.symbol);
+      const percent = integer(entry.percent, 1, 100, `Allocation ${i + 1} percent`);
+      total += percent;
+      return { asset: target.symbol, percent };
+    });
+    if (total > 100) fail("Allocations cannot add up to more than 100%");
+  }
 
   if (!isObject(raw.limits)) fail("Rule limits are required");
   onlyKeys(raw.limits, ["maxPerRun", "dailyCap", "slippageBps", "expiresAt"], "limits");
@@ -163,6 +185,7 @@ export function parseRuleSpec(specJson: unknown, now = new Date()): RuleSpec {
     trigger,
     source: trigger.type === "incoming" ? { asset: source.symbol } : { asset: source.symbol, amount: raw.source.amount as string },
     allocations,
+    ...(action ? { action } : {}),
     limits: { maxPerRun: raw.limits.maxPerRun as string, dailyCap: raw.limits.dailyCap as string, slippageBps, expiresAt: expiresAt.toISOString() },
     mode: "approval",
   };
@@ -186,7 +209,7 @@ export function nextScheduledRun(trigger: ScheduleTrigger, after: Date): Date {
   return candidate;
 }
 
-export type PlannedLeg = { asset: string; percent: number; amountRaw: string };
+export type PlannedLeg = { asset: string; percent: number; amountRaw: string; recipient?: string; recipientName?: string };
 export type ExecutionPlan =
   | { status: "pending"; totalRaw: bigint; legs: PlannedLeg[]; capped: boolean; reason: string | null }
   | { status: "skipped"; totalRaw: 0n; legs: []; capped: false; reason: string };
@@ -199,7 +222,7 @@ export function planExecution(spec: RuleSpec, baseRaw: bigint, spentTodayRaw: bi
   const source = RULE_ASSETS[spec.source.asset];
   const maxPerRun = parseUnits(spec.limits.maxPerRun, source.decimals);
   const dailyCap = parseUnits(spec.limits.dailyCap, source.decimals);
-  const percentTotal = spec.allocations.reduce((sum, a) => sum + a.percent, 0);
+  const percentTotal = spec.action ? spec.action.percent : spec.allocations.reduce((sum, a) => sum + a.percent, 0);
   const requested = (baseRaw * BigInt(percentTotal)) / 100n;
   const remaining = dailyCap > spentTodayRaw ? dailyCap - spentTodayRaw : 0n;
   if (remaining === 0n) return { status: "skipped", totalRaw: 0n, legs: [], capped: false, reason: "Daily cap reached" };
@@ -208,7 +231,9 @@ export function planExecution(spec: RuleSpec, baseRaw: bigint, spentTodayRaw: bi
   if (total > maxPerRun) { total = maxPerRun; reason = "Reduced to your maximum per run"; }
   if (total > remaining) { total = remaining; reason = "Reduced to what is left of today's cap"; }
   if (total <= 0n) return { status: "skipped", totalRaw: 0n, legs: [], capped: false, reason: "Amount too small to split" };
-  const legs = spec.allocations.map((a) => ({ asset: a.asset, percent: a.percent, amountRaw: ((total * BigInt(a.percent)) / BigInt(percentTotal)).toString() }));
+  const legs: PlannedLeg[] = spec.action
+    ? [{ asset: spec.source.asset, percent: spec.action.percent, amountRaw: total.toString(), recipient: spec.action.recipient, recipientName: spec.action.recipientName }]
+    : spec.allocations.map((a) => ({ asset: a.asset, percent: a.percent, amountRaw: ((total * BigInt(a.percent)) / BigInt(percentTotal)).toString() }));
   if (legs.some((leg) => leg.amountRaw === "0")) return { status: "skipped", totalRaw: 0n, legs: [], capped: false, reason: "Amount too small to split" };
   const planned = legs.reduce((sum, leg) => sum + BigInt(leg.amountRaw), 0n);
   return { status: "pending", totalRaw: planned, legs, capped: reason !== null, reason };

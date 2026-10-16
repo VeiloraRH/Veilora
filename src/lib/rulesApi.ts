@@ -10,9 +10,10 @@ export type RuleTrigger =
  | { type: 'incoming'; asset: string; minAmount: string }
  | { type: 'schedule'; frequency: 'daily' | 'weekly' | 'monthly'; hourUtc: number; weekday?: number; dayOfMonth?: number }
  | { type: 'price'; asset: string; direction: 'above' | 'below'; priceUsdg: string };
-export type RuleSpec = { version: 1; name: string; trigger: RuleTrigger; source: { asset: string; amount?: string }; allocations: { asset: string; percent: number }[]; limits: { maxPerRun: string; dailyCap: string; slippageBps: number; expiresAt: string }; mode: 'approval' };
+export type SendAction = { type: 'send'; recipient: string; recipientName: string; percent?: number };
+export type RuleSpec = { version: 1; name: string; trigger: RuleTrigger; source: { asset: string; amount?: string }; allocations: { asset: string; percent: number }[]; action?: SendAction; limits: { maxPerRun: string; dailyCap: string; slippageBps: number; expiresAt: string }; mode: 'approval' };
 export type WalletRule = { id: string; name: string; status: 'active' | 'paused' | 'revoked' | 'expired'; mode: 'approval'; spec: RuleSpec; expiresAt: string; nextRunAt: string | null; lastPriceRaw: string | null; lastCheckedAt: string | null; lastTriggeredAt: string | null; createdAt: string };
-export type RuleExecution = { id: string; ruleId: string; ruleName: string; status: 'pending' | 'executed' | 'failed' | 'declined' | 'skipped' | 'expired'; trigger: { kind: string; baseRaw?: string; txHash?: string; asset?: string; priceRaw?: string; dueAt?: string }; sourceAsset: string; totalRaw: string; legs: { asset: string; percent: number; amountRaw: string }[]; slippageBps: number; reason: string | null; txHashes: string[]; error: string | null; createdAt: string; expiresAt: string; resolvedAt: string | null };
+export type RuleExecution = { id: string; ruleId: string; ruleName: string; status: 'pending' | 'executed' | 'failed' | 'declined' | 'skipped' | 'expired'; trigger: { kind: string; baseRaw?: string; txHash?: string; asset?: string; priceRaw?: string; dueAt?: string }; sourceAsset: string; totalRaw: string; legs: { asset: string; percent: number; amountRaw: string; recipient?: string; recipientName?: string }[]; slippageBps: number; reason: string | null; txHashes: string[]; error: string | null; createdAt: string; expiresAt: string; resolvedAt: string | null };
 export type RulesState = { automaticExecutionAvailable: boolean; rules: WalletRule[]; executions: RuleExecution[] };
 export type RuleExecutionPage = { executions: RuleExecution[]; page: number; pageSize: number; total: number; pages: number };
 
@@ -64,6 +65,9 @@ export function describeTrigger(t: RuleTrigger): string {
  return `On day ${t.dayOfMonth} of every month at ${hourLabel(t.hourUtc)}`;
 }
 export function describeAction(spec: RuleSpec): string {
+ if (spec.action?.type === 'send') return spec.trigger.type === 'incoming'
+  ? `send ${spec.action.percent ?? 100}% of what arrives to ${spec.action.recipientName}`
+  : `send ${Number(spec.source.amount).toLocaleString()} ${spec.source.asset} to ${spec.action.recipientName}`;
  const split = spec.allocations.map(a => `${a.percent}% into ${a.asset}`).join(' and ');
  return spec.trigger.type === 'incoming' ? `swap ${split} of what arrives` : `swap ${split} of ${Number(spec.source.amount).toLocaleString()} ${spec.source.asset}`;
 }
