@@ -151,3 +151,6 @@
 @media(max-width:640px){.wallet-blocklist-form{align-items:stretch;flex-direction:column}.wallet-blocklist-form .rule-button{justify-content:center}.wallet-blocklist-card{padding:18px}.wallet-blocklist-list li{align-items:flex-start}}
 .wallet-address-backup{max-width:760px;padding:22px}.wallet-address-backup .wallet-blocklist-intro>span{background:#f0ac5e22;color:#b9772c}.wallet-address-backup-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .rule-action-switch{grid-template-columns:1fr 1fr}
+.away-cover{position:fixed;inset:0;z-index:200;display:grid;place-items:center;background:color-mix(in srgb,var(--w-bg,#f7f8fc) 78%,transparent);-webkit-backdrop-filter:blur(28px) saturate(.8);backdrop-filter:blur(28px) saturate(.8)}
+.away-cover-card{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;color:var(--w-text)}.away-cover-card strong{font-size:16px;font-weight:600}.away-cover-card span{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--w-muted)}
+@media(prefers-reduced-transparency:reduce){.away-cover{background:var(--w-bg,#f7f8fc)}}

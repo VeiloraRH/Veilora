@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Check, Eye, EyeOff, Fingerprint, Lock, RotateCcw, Server, ShieldAlert } from 'lucide-react';
 import { enrollPasskey, getPasskeyRecord, passkeyUnlockAvailable, removePasskeyRecord } from '@/lib/passkeyUnlock';
 import { setPrivacyMode, usePrivacyMode } from '@/lib/privacyMode';
+import { setHideWhenAway, useHideWhenAway } from '@/lib/awayCover';
 import { IDLE_CHOICES, saveAutoLockSettings, useAutoLockSettings } from '@/lib/autoLock';
 import { PageTitle } from '@/components/wallet/WalletUI';
 import { CompletionDialog, type CompletionNotice } from '@/components/app/CompletionDialog';
@@ -39,6 +40,7 @@ function SettingsScreen() {
   const [completion, setCompletion] = useState<CompletionNotice | null>(null);
   const usingCustomRpc = !!getRpcOverride();
   const privacy = usePrivacyMode();
+  const hideWhenAway = useHideWhenAway();
   const autoLock = useAutoLockSettings();
 
   function refreshChainData() {
@@ -75,6 +77,7 @@ function SettingsScreen() {
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span>{privacy ? <EyeOff size={20}/> : <Eye size={20}/>}</span><div><h2>Privacy mode</h2><p>Hide balances and amounts across Veilora, for screen sharing, screenshots and using your wallet in public.</p></div><button role="switch" aria-checked={privacy} aria-label="Privacy mode" className={`wallet-toggle-switch ${privacy ? 'on' : ''}`} onClick={() => setPrivacyMode(!privacy)}><span/></button></div>
       <ul className="wallet-privacy-points"><li>Balances, holdings, history amounts, rule runs and transaction previews show •••• instead.</li><li>Tap any hidden amount to show it for 5 seconds.</li><li>Saved on this device only. It changes what is shown on screen; your balances are still public on Robinhood Chain.</li></ul>
+      <div className="wallet-settings-row"><div><strong>Hide when away</strong><p>Cover the wallet whenever this tab is hidden or the window loses focus, so balances don’t show in tab previews, the app switcher or a screen share. It lifts as soon as you come back.</p></div><button role="switch" aria-checked={hideWhenAway} aria-label="Hide when away" className={`wallet-toggle-switch ${hideWhenAway ? 'on' : ''}`} onClick={() => setHideWhenAway(!hideWhenAway)}><span/></button></div>
     </section>
     <section className="wallet-panel wallet-settings-card">
       <div className="wallet-settings-heading"><span><Fingerprint size={20}/></span><div><h2>Face ID / Touch ID unlock</h2><p>Unlock your device key with a passkey (Face ID, Touch ID, Windows Hello or your device PIN) instead of typing your passphrase.</p></div><span className={`wallet-status ${passkey ? 'confirmed' : 'pending'}`}>{passkey ? 'On' : 'Off'}</span></div>
