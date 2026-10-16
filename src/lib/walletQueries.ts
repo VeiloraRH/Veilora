@@ -24,7 +24,7 @@ export function usePortfolioValue(address?: string) {
  }});
  return {holdings,prices};
 }
-export type WalletTransaction={id:string;hash:string;timestamp:string;direction:'sent'|'received'|'contract';symbol:string;amount:string;from:string;to:string;status:'confirmed'|'failed'|'pending'};
+export type WalletTransaction={id:string;hash:string;timestamp:string;direction:'sent'|'received'|'contract';symbol:string;amount:string;from:string;to:string;status:'confirmed'|'failed'|'pending';kind?:'bridge';bridge?:{chainName:string;explorer:string;requestId:string;outputSymbol:string;outputAmount:string;sourceHash?:string;destinationHashes:string[];error?:string;statusLabel?:string}};
 type ExplorerItem={hash?:string;transaction_hash?:string;timestamp?:string;from?:{hash?:string};to?:{hash?:string};value?:string;status?:string;result?:string;error?:string|null;success?:boolean;index?:number;log_index?:number;total?:{value?:string;decimals?:string};token?:{symbol?:string;decimals?:string}};
 /** History rows; `partial` is set when some history types could not be loaded and the list is incomplete. */
 export type TransactionList=WalletTransaction[]&{partial?:boolean};

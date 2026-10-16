@@ -253,6 +253,7 @@ function BridgeScreen() {
       recipient: recipient.trim(),
       status: 'preparing',
       destinationHashes: [],
+      createdAt: new Date().toISOString(),
     };
     const saveTracking = () => persistRecords([trackingRecord, ...loadBridgeRecords(walletAddress).filter((item) => item.requestId !== quote.requestId)]);
     saveTracking();

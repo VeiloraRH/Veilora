@@ -1,10 +1,11 @@
 export type BridgeRecord = {
   requestId: string; chainId: number; chainName: string; explorer: string; sourceSymbol: string; amount: string;
   outputSymbol: string; outputAmount: string; recipient: string; approvalHash?: string; sourceHash?: string; status: string;
-  error?: string; destinationHashes: string[]; updatedAt?: string;
+  error?: string; destinationHashes: string[]; createdAt?: string; updatedAt?: string;
 };
 
 const keyFor = (wallet: string) => `veilora:bridge:tracking:${wallet.toLowerCase()}`;
+const MAX_TRACKED_BRIDGES = 500;
 const changedEvent = 'veilora:bridge:tracking:changed';
 const notificationKeyFor = (wallet: string) => `veilora:bridge:notifications:${wallet.toLowerCase()}`;
 const finalStatuses = new Set(['success', 'completed', 'failure', 'failed', 'refund', 'refunded', 'action_required', 'rejected', 'expired']);
@@ -22,13 +23,13 @@ export function loadBridgeRecords(wallet: string): BridgeRecord[] {
       typeof item.chainId === 'number' && typeof item.chainName === 'string' && typeof item.explorer === 'string' &&
       typeof item.sourceSymbol === 'string' && typeof item.amount === 'string' && typeof item.outputSymbol === 'string' &&
       typeof item.outputAmount === 'string' && typeof item.recipient === 'string' && typeof item.status === 'string' &&
-      Array.isArray(item.destinationHashes)).slice(0, 20);
+      Array.isArray(item.destinationHashes)).slice(0, MAX_TRACKED_BRIDGES);
   } catch { return []; }
 }
 
 export function saveBridgeRecords(wallet: string, records: BridgeRecord[]) {
   if (!wallet) return;
-  localStorage.setItem(keyFor(wallet), JSON.stringify(records.slice(0, 20)));
+  localStorage.setItem(keyFor(wallet), JSON.stringify(records.slice(0, MAX_TRACKED_BRIDGES)));
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(changedEvent, { detail: { wallet: wallet.toLowerCase() } }));
 }
 
