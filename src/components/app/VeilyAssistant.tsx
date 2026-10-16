@@ -6,7 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { motion, useReducedMotion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { askVeily, createVeilyPermission, listVeilyPermissions, revokeVeilyPermission, type VeilyMessage, type VeilyMode, type VeilyProvider, type VeilySessionPermission } from "@/lib/api";
+import { askVeily, createVeilyPermission, listVeilyPermissions, revokeVeilyPermission, type VeilyAction, type VeilyMessage, type VeilyMode, type VeilyProvider, type VeilySessionPermission } from "@/lib/api";
 import { encryptDeviceKey, decryptDeviceKey } from "@/lib/deviceKeyVault";
 import { useWallet } from "@/lib/walletContext";
 import { useHoldings } from "@/lib/walletQueries";
@@ -16,6 +16,7 @@ const HISTORY_PREFIX = "veilora:veily:history:";
 const MAX_CONVERSATIONS = 40;
 const DEFAULT_MODE: VeilyMode = "hosted";
 const models: Record<VeilyProvider, string> = { groq: "qwen/qwen3.8-27b", openai: "gpt-4o-mini", anthropic: "claude-3-5-haiku-latest" };
+const bridgeChainNames: Record<number, string> = { 1: "Ethereum", 56: "BNB Chain", 137: "Polygon", 8453: "Base" };
 const initialMessages: VeilyMessage[] = [{ role: "assistant", content: "Hi, I’m Veily. I can help you understand your wallet and find your way around Veilora. I can’t sign or execute transactions for you." }];
 type VeilyConversation = { id: string; title: string; updatedAt: number; permissionId: string | null; messages: VeilyMessage[] };
 
@@ -303,8 +304,17 @@ export function VeilyAssistant() {
   }
 
   const activePermissions = permissions.filter(p => p.status === "active" && Date.parse(p.expires_at) > Date.now());
-  const scopeOptions = [["wallet:read", "Wallet balances & spending limits"], ["activity:read", "Recent activity & transaction details"], ["navigation:prepare", "Open screens & prepare swaps"]] as const;
+  const scopeOptions = [["wallet:read", "Wallet balances & spending limits"], ["activity:read", "Recent activity & transaction details"], ["navigation:prepare", "Open screens & prepare swaps or bridge drafts"]] as const;
   const shortcuts = ["What can I spend today?", "Show my recent activity", "Find NVDA"];
+
+  function openAction(action: VeilyAction) {
+    if (action.screen === "dashboard") void navigate({ to: "/app" });
+    else if (action.screen === "market") void navigate({ to: "/app/market", search: { q: "" } });
+    else if (action.screen === "swap") void navigate({ to: "/app/swap", search: { buy: action.token ?? "NVDA" } });
+    else if (action.screen === "bridge") void navigate({ to: "/app/bridge", search: { sourceAsset: action.sourceAsset, destinationChainId: action.destinationChainId, destinationSymbol: action.destinationAsset, amount: action.amount, recipient: action.recipient } });
+    else if (action.screen === "history") void navigate({ to: "/app/activity" });
+    else void navigate({ to: "/app/rules" });
+  }
 
   return <div className="fixed bottom-24 right-4 z-[80] sm:bottom-6 sm:right-6">
     {panelOpen && <motion.section initial={reduceMotion?false:{opacity:0,y:14,scale:.97}} animate={{opacity:1,y:0,scale:1}} exit={reduceMotion?{}:{opacity:0,y:12,scale:.98}} transition={{duration:reduceMotion?0:.18}} aria-label="Veily assistant" className="wallet-panel absolute bottom-16 right-0 flex h-[min(78vh,700px)] w-[min(94vw,440px)] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-ink-700 dark:bg-ink-900">
@@ -356,7 +366,7 @@ export function VeilyAssistant() {
         {activeConversation&&!conversationCanContinue&&<p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This conversation used a different or expired permission. Your next message starts fresh.</p>}
         <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
           {messages.length===1&&<div className="mb-5 mt-4"><p className="mb-1 text-lg font-medium text-slate-900 dark:text-cream">What can I help with?</p><p className="mb-4 text-xs leading-relaxed text-slate-500 dark:text-mist">Ask about your wallet, activity, spending limits, or where to find something.</p><div className="flex flex-wrap gap-2">{shortcuts.map(prompt=><button key={prompt} className="rounded-full border border-slate-200 px-3 py-2 text-[10px] text-slate-600 transition-colors hover:border-[#f0ac5e] hover:bg-[#f0ac5e]/10 dark:border-ink-700 dark:text-mist" onClick={()=>setDraft(prompt)}>{prompt}</button>)}</div></div>}
-          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{message.content}</ReactMarkdown>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>{if(action.screen==="dashboard")void navigate({to:"/app"});else if(action.screen==="market")void navigate({to:"/app/market",search:{q:""}});else if(action.screen==="swap")void navigate({to:"/app/swap",search:{buy:action.token??"NVDA"}});else if(action.screen==="history")void navigate({to:"/app/activity"});else void navigate({to:"/app/rules"});}}>Open {action.screen}{action.token?` · ${action.token}`:""}<ArrowUpRight size={13}/></button>)}</div></div>)}
+          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{message.content}</ReactMarkdown>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}</div></div>)}
           {busy&&<div className="flex items-center gap-2 text-xs text-slate-500 dark:text-mist"><LoaderCircle className="animate-spin" size={15}/>Checking that with Veily…</div>}
         </div>
         {error&&<p role="alert" className="px-4 pb-2 text-xs text-rose-600">{error}</p>}

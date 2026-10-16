@@ -27,7 +27,16 @@ import { usePrivacyMode } from '@/lib/privacyMode';
 import { bridgeTrackingChangedEvent, isBridgeStatusFinal, loadBridgeRecords, saveBridgeRecords, type BridgeRecord } from '@/lib/bridgeTracking';
 import { notifyBridgeOutcome } from '@/lib/bridgeNotifications';
 
-export const Route = createFileRoute('/app/bridge')({ component: BridgeScreen });
+export const Route = createFileRoute('/app/bridge')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(search.sourceAsset === 'ETH' || search.sourceAsset === 'USDG' ? { sourceAsset: search.sourceAsset } : {}),
+    ...(typeof search.destinationChainId === 'number' && [1, 56, 137, 8453].includes(search.destinationChainId) ? { destinationChainId: search.destinationChainId } : {}),
+    ...(typeof search.destinationSymbol === 'string' ? { destinationSymbol: search.destinationSymbol.slice(0, 16) } : {}),
+    ...(typeof search.amount === 'string' ? { amount: search.amount.slice(0, 80) } : {}),
+    ...(typeof search.recipient === 'string' ? { recipient: search.recipient.slice(0, 80) } : {}),
+  }),
+  component: BridgeScreen,
+});
 
 const NATIVE = '0x0000000000000000000000000000000000000000';
 const USDG = '0x5fc5360d0400a0fd4f2af552add042d716f1d168';
@@ -66,18 +75,19 @@ const feeSummary = (fees: BridgeQuote['fees']) => Object.values(fees || {})
   .map((fee) => `${fee.amountFormatted ?? '—'} ${fee.currency?.symbol ?? ''}`.trim());
 
 function BridgeScreen() {
+  const search = Route.useSearch();
   const { walletAddress, getStoredDeviceKey } = useWallet();
   const privacy = usePrivacyMode();
   const blockedAddresses = useWalletBlocklist(walletAddress);
   const holdings = useHoldings();
   const spendingPolicy = useSpendingPolicy();
   const cache = useQueryClient();
-  const [sourceSymbol, setSourceSymbol] = useState<'ETH' | 'USDG'>('ETH');
-  const [destinationChainId, setDestinationChainId] = useState<number>(8453);
-  const [destinationSymbol, setDestinationSymbol] = useState('ETH');
+  const [sourceSymbol, setSourceSymbol] = useState<'ETH' | 'USDG'>(search.sourceAsset === 'USDG' ? 'USDG' : 'ETH');
+  const [destinationChainId, setDestinationChainId] = useState<number>(search.destinationChainId ?? 8453);
+  const [destinationSymbol, setDestinationSymbol] = useState(search.destinationSymbol ?? 'ETH');
   const [picker, setPicker] = useState<'source' | 'destination' | null>(null);
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
+  const [recipient, setRecipient] = useState(search.recipient ?? '');
+  const [amount, setAmount] = useState(search.amount ?? '');
   const [step, setStep] = useState(1);
   const [quote, setQuote] = useState<BridgeQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -167,9 +177,18 @@ function BridgeScreen() {
   }, [walletAddress]);
 
   useEffect(() => {
-    setDestinationSymbol('ETH');
+    const requestedAsset = search.destinationChainId === destinationChainId ? search.destinationSymbol : undefined;
+    setDestinationSymbol(destinationChain.assets.some((asset) => asset.symbol === requestedAsset) ? requestedAsset! : 'ETH');
     setQuote(null);
   }, [destinationChainId]);
+
+  useEffect(() => {
+    setSourceSymbol(search.sourceAsset === 'USDG' ? 'USDG' : 'ETH');
+    setDestinationChainId(search.destinationChainId ?? 8453);
+    setDestinationSymbol(search.destinationSymbol ?? 'ETH');
+    setRecipient(search.recipient ?? '');
+    setAmount(search.amount ?? '');
+  }, [search.sourceAsset, search.destinationChainId, search.destinationSymbol, search.recipient, search.amount]);
 
   useEffect(() => {
     setQuote(null);

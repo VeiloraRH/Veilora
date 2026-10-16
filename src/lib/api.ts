@@ -79,7 +79,7 @@ export async function getHealth() {
 
 export type VeilyMode = "hosted" | "byok";
 export type VeilyProvider = "groq" | "openai" | "anthropic";
-export type VeilyAction = { screen: "dashboard" | "market" | "swap" | "history" | "rules"; token?: string };
+export type VeilyAction = { screen: "dashboard" | "market" | "swap" | "bridge" | "history" | "rules"; token?: string; sourceAsset?: "ETH" | "USDG"; destinationChainId?: number; destinationAsset?: string; amount?: string; recipient?: string };
 export interface VeilyMessage { role: "user" | "assistant"; content: string; actions?: VeilyAction[] }
 
 export async function askVeily(payload: {
