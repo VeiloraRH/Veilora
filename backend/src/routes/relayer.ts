@@ -24,13 +24,13 @@ const DAILY_GAS_COST_LIMIT = parseEther(process.env.RELAYER_DAILY_GAS_BUDGET_ETH
 const WALLET_DAILY_GAS_COST_LIMIT = parseEther(process.env.RELAYER_WALLET_DAILY_GAS_BUDGET_ETH || "0.01");
 const DAILY_DEPLOYMENT_LIMIT = Math.max(1, Number(process.env.RELAYER_DAILY_DEPLOYMENT_LIMIT) || 10);
 
-async function relayerFeeOverrides() {
+export async function relayerFeeOverrides() {
   const block = await publicClient.getBlock({ blockTag: "latest" });
   const estimate = await publicClient.estimateFeesPerGas().catch(async () => ({ gasPrice: await publicClient.getGasPrice() }));
   return safeFeeOverrides(block.baseFeePerGas, estimate);
 }
 
-async function reserveGas(wallet: string, costWei: bigint): Promise<void> {
+export async function reserveGas(wallet: string, costWei: bigint): Promise<void> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");

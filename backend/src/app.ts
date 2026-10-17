@@ -13,6 +13,7 @@ import { explainRouter, walletExplainRouter } from "./routes/explain";
 import { veilyRouter } from "./routes/veily";
 import { bridgeRouter } from "./routes/bridge";
 import { rpcRouter } from "./routes/rpc";
+import { paymentLinksRouter, walletPaymentLinksRouter } from "./routes/paymentLinks";
 
 export const app = express();
 
@@ -81,6 +82,8 @@ app.use("/v1/wallets/:address/alerts", alertsRouter);
 app.use("/v1/wallets/:address/rotations", rotationsRouter);
 app.use("/v1/wallets/:address/spending-policy", spendingPolicyRouter);
 app.use("/v1/wallets/:address/quorum", quorumRouter);
+app.use("/v1/wallets/:address/payment-links", walletPaymentLinksRouter);
+app.use("/v1/payment-links", paymentLinksRouter);
 app.use("/v1/onramp", onrampRouter);
 app.use("/v1/explain", explainRouter);
 app.use("/v1/wallets/:address/explain", walletExplainRouter);

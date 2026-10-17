@@ -27,6 +27,7 @@ import { Route as AppSecurityRouteImport } from './routes/app/security'
 import { Route as AppSettingsRouteImport } from './routes/app/settings'
 import { Route as AppSwapRouteImport } from './routes/app/swap'
 import { Route as AppWatchRouteImport } from './routes/app/watch'
+import { Route as PaySlugRouteImport } from './routes/pay.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -118,6 +119,11 @@ const AppWatchRoute = AppWatchRouteImport.update({
   path: '/watch',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const PaySlugRoute = PaySlugRouteImport.update({
+  id: '/pay/$slug',
+  path: '/pay/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app/watch': typeof AppWatchRoute
+  '/pay/$slug': typeof PaySlugRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app/watch': typeof AppWatchRoute
+  '/pay/$slug': typeof PaySlugRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/app/settings': typeof AppSettingsRoute
   '/app/swap': typeof AppSwapRoute
   '/app/watch': typeof AppWatchRoute
+  '/pay/$slug': typeof PaySlugRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -199,6 +208,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/swap'
     | '/app/watch'
+    | '/pay/$slug'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/swap'
     | '/app/watch'
+    | '/pay/$slug'
     | '/app'
   id:
     | '__root__'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/app/swap'
     | '/app/watch'
+    | '/pay/$slug'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
@@ -249,6 +261,7 @@ export interface RootRouteChildren {
   RoadmapRoute: typeof RoadmapRoute
   WhitepaperRoute: typeof WhitepaperRoute
   ZhRoute: typeof ZhRoute
+  PaySlugRoute: typeof PaySlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -379,6 +392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWatchRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/pay/$slug': {
+      id: '/pay/$slug'
+      path: '/pay/$slug'
+      fullPath: '/pay/$slug'
+      preLoaderRoute: typeof PaySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -422,6 +442,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoadmapRoute: RoadmapRoute,
   WhitepaperRoute: WhitepaperRoute,
   ZhRoute: ZhRoute,
+  PaySlugRoute: PaySlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
