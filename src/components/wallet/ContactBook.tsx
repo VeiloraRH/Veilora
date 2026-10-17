@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ContactRound, Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ContactRound, Check, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { getAddress, isAddress, zeroAddress } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getWalletContacts, saveWalletContacts, type WalletContact } from '@/lib/contacts';
+import { MAX_CONTACT_NOTE, cleanContactNote, getWalletContacts, saveWalletContacts, searchContacts, type WalletContact } from '@/lib/contacts';
 import { shortAddress } from '@/components/wallet/WalletUI';
 
 type ContactBookProps = {
@@ -19,6 +19,8 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
   const [contacts, setContacts] = useState<WalletContact[]>([]);
   const [name, setName] = useState('');
   const [contactAddress, setContactAddress] = useState('');
+  const [note, setNote] = useState('');
+  const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -46,21 +48,24 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
     const normalized = getAddress(trimmedAddress);
     const duplicate = contacts.find((contact) => contact.address.toLowerCase() === normalized.toLowerCase() && contact.id !== editing);
     if (duplicate) { setError(`This address is already saved as ${duplicate.name}.`); return; }
+    const cleanNote = cleanContactNote(note);
     const next = editing
-      ? contacts.map((contact) => contact.id === editing ? { ...contact, name: trimmedName, address: normalized } : contact)
-      : [...contacts, { id: crypto.randomUUID(), name: trimmedName, address: normalized }];
+      ? contacts.map((contact) => contact.id === editing ? { id: contact.id, name: trimmedName, address: normalized, ...(cleanNote ? { note: cleanNote } : {}) } : contact)
+      : [...contacts, { id: crypto.randomUUID(), name: trimmedName, address: normalized, ...(cleanNote ? { note: cleanNote } : {}) }];
     persist(next);
-    setName(''); setContactAddress(''); setEditing(null);
+    setName(''); setContactAddress(''); setNote(''); setEditing(null);
   }
 
   function beginEdit(contact: WalletContact) {
-    setEditing(contact.id); setName(contact.name); setContactAddress(contact.address); setError('');
+    setEditing(contact.id); setName(contact.name); setContactAddress(contact.address); setNote(contact.note ?? ''); setError('');
   }
 
   const selected = contacts.find((contact) => contact.address.toLowerCase() === address.trim().toLowerCase());
   function openBook() {
     setContactAddress(address.trim());
     setName('');
+    setNote('');
+    setQuery('');
     setEditing(null);
     setError('');
     setOpen(true);
@@ -75,13 +80,20 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
       <DialogContent className="wallet-dialog sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Trusted contacts</DialogTitle>
-          <DialogDescription>Saved in this browser for this wallet. Contact names and addresses are never uploaded to Veilora.</DialogDescription>
+          <DialogDescription>Saved in this browser for this wallet. Contact names, notes and addresses are never uploaded to Veilora.</DialogDescription>
         </DialogHeader>
+        {contacts.length > 0 && <label className="relative block">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+          <Input aria-label="Search contacts" placeholder="Search by name, note or address" value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9"/>
+        </label>}
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {contacts.length === 0 && <p className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">No saved contacts yet.</p>}
-          {contacts.map((contact) => <div key={contact.id} className="flex items-center gap-2 rounded-xl border p-3">
+          {contacts.length > 0 && searchContacts(contacts, query).length === 0 && <p className="rounded-xl bg-muted/60 p-4 text-sm text-muted-foreground">No contacts match “{query.trim()}”.</p>}
+          {searchContacts(contacts, query).map((contact) => <div key={contact.id} className="flex items-center gap-2 rounded-xl border p-3">
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { onSelect(contact.address); setOpen(false); }}>
-              <span className="block truncate text-sm font-medium">{contact.name}</span><span className="block truncate font-mono text-xs text-muted-foreground">{contact.address}</span>
+              <span className="block truncate text-sm font-medium">{contact.name}</span>
+              {contact.note && <span className="block truncate text-xs text-muted-foreground" title={contact.note}>{contact.note}</span>}
+              <span className="block truncate font-mono text-xs text-muted-foreground">{contact.address}</span>
             </button>
             <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${contact.name}`} onClick={() => beginEdit(contact)}><Pencil size={15}/></Button>
             <Button type="button" variant="ghost" size="icon" aria-label={`Delete ${contact.name}`} onClick={() => persist(contacts.filter((item) => item.id !== contact.id))}><Trash2 size={15}/></Button>
@@ -91,9 +103,10 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
           <p className="text-sm font-medium">{editing ? 'Edit contact' : 'Add a contact'}</p>
           <Input aria-label="Contact name" maxLength={40} placeholder="Name, e.g. Cold wallet" value={name} onChange={(event) => setName(event.target.value)} />
           <Input aria-label="Contact wallet address" className="font-mono text-xs" placeholder="0x wallet address" value={contactAddress} onChange={(event) => setContactAddress(event.target.value.trim())} />
+          <Input aria-label="Contact note" maxLength={MAX_CONTACT_NOTE} placeholder="Note (optional), e.g. Pays rent monthly" value={note} onChange={(event) => setNote(event.target.value)} />
           {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
-            {editing && <Button type="button" variant="outline" onClick={() => { setEditing(null); setName(''); setContactAddress(''); setError(''); }}><X size={15}/>Cancel</Button>}
+            {editing && <Button type="button" variant="outline" onClick={() => { setEditing(null); setName(''); setContactAddress(''); setNote(''); setError(''); }}><X size={15}/>Cancel</Button>}
             <Button type="submit" className="flex-1">{editing ? <Check size={15}/> : <Plus size={15}/>} {editing ? 'Save changes' : 'Save contact'}</Button>
           </div>
         </form>

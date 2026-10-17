@@ -20,6 +20,16 @@ describe('encrypted address book backup', () => {
     expect(backup).not.toContain('Cold wallet');
   });
 
+  test('keeps contact notes through a backup', async () => {
+    const backup = await createAddressBookBackup(wallet, {
+      contacts: [{ id: 'local-id', name: 'Studio', address: contactAddress, note: 'Design invoices' }],
+      blockedAddresses: [],
+    }, passphrase);
+    expect(backup).not.toContain('Design invoices');
+    const restored = await openAddressBookBackup(backup, wallet, passphrase);
+    expect(restored.contacts[0].note).toBe('Design invoices');
+  });
+
   test('rejects a wrong passphrase', async () => {
     const backup = await createAddressBookBackup(wallet, { contacts: [], blockedAddresses: [] }, passphrase);
     await expect(openAddressBookBackup(backup, wallet, 'a different passphrase')).rejects.toThrow('Could not decrypt this file');

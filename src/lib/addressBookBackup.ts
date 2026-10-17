@@ -1,5 +1,5 @@
 import { getAddress, isAddress, zeroAddress } from 'viem';
-import type { WalletContact } from './contacts';
+import { cleanContactNote, type WalletContact } from './contacts';
 import { decryptTextWithPassphrase, encryptTextWithPassphrase } from './deviceKeyVault';
 
 const FORMAT = 'veilora-address-book-backup';
@@ -54,7 +54,8 @@ export async function openAddressBookBackup(fileText: string, wallet: string, pa
     const address = normalizeAddress(item.address);
     if (seenContacts.has(address.toLowerCase())) throw new Error('The backup contains duplicate contacts.');
     seenContacts.add(address.toLowerCase());
-    return { id: crypto.randomUUID(), name: item.name.trim(), address };
+    const note = cleanContactNote(item.note);
+    return { id: crypto.randomUUID(), name: item.name.trim(), address, ...(note ? { note } : {}) };
   });
   const blockedAddresses = [...new Set<string>(record.blockedAddresses.map((item: unknown) => normalizeAddress(item).toLowerCase()))]
     .map((address) => getAddress(address));
