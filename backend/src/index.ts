@@ -4,6 +4,7 @@ import { app } from "./app";
 import { migrate } from "./db/migrate";
 import { startRulesEvaluator } from "./rules/evaluator";
 import { startAlertsEvaluator } from "./alerts/evaluator";
+import { startPriceSampler } from "./priceHistory";
 
 const port = Number(process.env.PORT ?? 3001);
 
@@ -32,6 +33,10 @@ async function start() {
   if (process.env.DATABASE_URL && process.env.ALERTS_EVALUATOR !== "off") {
     startAlertsEvaluator();
     console.log("[veilora-backend] Alerts evaluator started");
+  }
+  if (process.env.DATABASE_URL && process.env.PRICE_SAMPLER !== "off") {
+    startPriceSampler();
+    console.log("[veilora-backend] Price sampler started");
   }
 }
 

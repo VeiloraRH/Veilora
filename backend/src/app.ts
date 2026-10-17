@@ -15,6 +15,7 @@ import { bridgeRouter } from "./routes/bridge";
 import { rpcRouter } from "./routes/rpc";
 import { paymentLinksRouter, walletPaymentLinksRouter } from "./routes/paymentLinks";
 import { authenticatorRouter } from "./routes/authenticator";
+import { pricesRouter } from "./priceHistory";
 
 export const app = express();
 
@@ -94,3 +95,4 @@ app.use("/v1/relayer", relayerRouter);
 app.use("/v1/veily", veilyRouter);
 app.use("/v1/bridge", bridgeRouter);
 app.use("/v1/rpc", rpcRouter);
+app.use("/v1/prices", pricesRouter);
