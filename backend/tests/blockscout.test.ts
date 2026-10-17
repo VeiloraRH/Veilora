@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import request from "supertest";
 import { app } from "../src/app";
-import { buildBlockscoutHistoryUrl } from "../src/blockscout";
+import { buildBlockscoutHistoryUrl, buildBlockscoutNftsUrl } from "../src/blockscout";
 
 test("builds a keyed Blockscout history URL for Robinhood Chain", () => {
   const priorBase = process.env.CHAIN_EXPLORER_API_URL;
@@ -22,10 +22,33 @@ test("builds a keyed Blockscout history URL for Robinhood Chain", () => {
   }
 });
 
+test("builds a keyed Blockscout NFT holdings URL for Robinhood Chain", () => {
+  const priorBase = process.env.CHAIN_EXPLORER_API_URL;
+  delete process.env.CHAIN_EXPLORER_API_URL;
+  try {
+    const url = buildBlockscoutNftsUrl("0xd8da6bf26964af9d7eed9e03e53415d37aa96045", "test-only-key");
+    expect(url.origin).toBe("https://api.blockscout.com");
+    expect(url.pathname.toLowerCase()).toBe("/4663/api/v2/addresses/0xd8da6bf26964af9d7eed9e03e53415d37aa96045/nft");
+    expect(url.searchParams.get("apikey")).toBe("test-only-key");
+    expect(url.searchParams.get("type")).toBe("ERC-721,ERC-1155");
+  } finally {
+    if (priorBase === undefined) delete process.env.CHAIN_EXPLORER_API_URL;
+    else process.env.CHAIN_EXPLORER_API_URL = priorBase;
+  }
+});
+
 test("rejects history cursors that try to replace reserved provider parameters", async () => {
   const cursor = encodeURIComponent(JSON.stringify({ apikey: "attacker-controlled" }));
   const response = await request(app)
     .get(`/v1/wallets/0xd8da6bf26964af9d7eed9e03e53415d37aa96045/transactions?kind=token-transfers&cursor=${cursor}`);
   expect(response.status).toBe(400);
   expect(response.body.error).toBe("Invalid history cursor");
+});
+
+test("rejects NFT cursors that try to replace reserved provider parameters", async () => {
+  const cursor = encodeURIComponent(JSON.stringify({ apikey: "attacker-controlled" }));
+  const response = await request(app)
+    .get(`/v1/wallets/0xd8da6bf26964af9d7eed9e03e53415d37aa96045/nfts?cursor=${cursor}`);
+  expect(response.status).toBe(400);
+  expect(response.body.error).toBe("Invalid NFT cursor");
 });

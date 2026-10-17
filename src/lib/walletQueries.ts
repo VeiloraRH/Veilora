@@ -1,14 +1,41 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { getAddress, formatUnits } from 'viem';
 import { useWallet } from './walletContext';
 import { readHoldings, quoteSwap } from './walletChain';
 import { ROBINHOOD_TOKEN_REGISTRY } from './tokens';
 import { API_BASE } from './api';
 import { getRpcOverride } from './rpcSettings';
+import { parseExplorerNft, type ExplorerNft, type WalletNft } from './nftHoldings';
 /** Balances for your wallet, or for another address (watch-only) when one is given. */
 export function useHoldings(address?: string) {
  const {walletAddress:own} = useWallet(); const walletAddress=address ?? own;
  return useQuery({queryKey:['holdings',walletAddress,getRpcOverride() || 'veilora-gateway'],queryFn:()=>readHoldings(getAddress(walletAddress)),enabled:!!walletAddress,refetchInterval:30000});
+}
+
+type NftCursor=Record<string,string|number|boolean>;
+interface WalletNftPage {items:WalletNft[];next_page_params:NftCursor|null}
+/** Read-only, indexed NFT holdings. The Blockscout API key remains on the server. */
+export function useWalletNfts(address?:string,enabled=true) {
+ const {walletAddress:own}=useWallet();const walletAddress=address??own;
+ return useInfiniteQuery({
+  queryKey:['wallet-nfts',walletAddress],
+  enabled:enabled&&!!walletAddress,
+  initialPageParam:null as NftCursor|null,
+  staleTime:60_000,
+  queryFn:async({pageParam,signal}):Promise<WalletNftPage>=>{
+   const params=new URLSearchParams();if(pageParam)params.set('cursor',JSON.stringify(pageParam));
+   const response=await fetch(`${API_BASE}/v1/wallets/${encodeURIComponent(walletAddress)}/nfts${params.size?`?${params}`:''}`,{signal});
+   const body=await response.json() as {items?:ExplorerNft[];next_page_params?:Record<string,unknown>|null;error?:string};
+   if(!response.ok)throw new Error(body.error||'Collectibles are temporarily unavailable.');
+   if(!Array.isArray(body.items))throw new Error('The collectibles response was invalid.');
+   const next=body.next_page_params&&typeof body.next_page_params==='object'
+    ?Object.fromEntries(Object.entries(body.next_page_params).filter(([,value])=>['string','number','boolean'].includes(typeof value))) as NftCursor
+    :null;
+   return {items:body.items.map(parseExplorerNft).filter((nft):nft is WalletNft=>nft!==null),next_page_params:next&&Object.keys(next).length?next:null};
+  },
+  getNextPageParam:lastPage=>lastPage.next_page_params??undefined,
+  retry:1,
+ });
 }
 export function usePortfolioValue(address?: string) {
  const holdings=useHoldings(address);

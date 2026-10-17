@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { ArrowUpRight, ExternalLink, RefreshCw, Search, Star } from 'lucide-react';
 import { Private } from '@/components/wallet/Private';
 import { PageTitle, TokenIcon, shortAddress } from '@/components/wallet/WalletUI';
+import { NftGallery } from '@/components/wallet/NftGallery';
 import { amountText, EXPLORER } from '@/lib/walletChain';
 import { useHoldings } from '@/lib/walletQueries';
 import { WALLET_TOKENS } from '@/lib/tokens';
 
 const WATCHLIST_KEY = 'veilora:market:watchlist';
-const categories = ['All', 'Crypto', 'Stocks', 'ETFs', 'Watchlist'] as const;
+const categories = ['All', 'Crypto', 'Stocks', 'ETFs', 'Watchlist', 'Collectibles'] as const;
 
 function readWatchlist(): string[] {
   try {
@@ -66,6 +67,7 @@ function MarketScreen() {
       </div>
       <div className="wallet-search"><Search size={17} /><input aria-label="Filter market" placeholder="Search by name, symbol or address" value={q} onChange={event => void navigate({ search: { q: event.target.value }, replace: true })} /></div>
     </div>
+    {category === 'Collectibles' ? <NftGallery query={q}/> : <>
     {holdings.error && <p className="wallet-error" role="alert">Balances could not be loaded. Asset listings are still available.</p>}
     <div className="wallet-panel wallet-table-scroll">
       <table className="wallet-table">
@@ -86,5 +88,6 @@ function MarketScreen() {
       {!tokens.length && <div className="wallet-empty"><Search /><h3>{category === 'Watchlist' && !watchlist.length ? 'Your watchlist is ready' : 'No matching assets'}</h3><p>{category === 'Watchlist' && !watchlist.length ? 'Star an asset to keep it close at hand. Your watchlist stays on this device.' : 'Try another name or token symbol.'}</p></div>}
     </div>
     <p className="wallet-count">{tokens.length} assets · Robinhood Chain · Balances in token units{category === 'Watchlist' ? ' · Watchlist saved on this device' : ''}</p>
+    </>}
   </>;
 }

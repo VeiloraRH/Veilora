@@ -22,7 +22,7 @@ import {
   signUserOpHash,
   concatSignatures,
 } from "../crypto";
-import { buildBlockscoutHistoryUrl } from "../blockscout";
+import { buildBlockscoutHistoryUrl, buildBlockscoutNftsUrl } from "../blockscout";
 import { getFreezeState, freezeWallet, unfreezeWallet } from "../freeze";
 import { enforceExecutionPolicy } from "../txPolicy";
 import { recordAlert } from "../alerts/store";
@@ -676,5 +676,34 @@ walletsRouter.get("/:address/transactions", async (req: Request, res: Response):
     res.json({items:result.items,next_page_params:result.next_page_params ?? null});
   } catch {
     res.status(502).json({error:"The chain explorer is temporarily unavailable. Your transactions are still on-chain. Please retry shortly."});
+  }
+});
+
+/** Read-only NFT holdings from the configured Blockscout indexer. */
+walletsRouter.get("/:address/nfts", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const address = String(req.params.address);
+    if (!isAddress(address)) { res.status(400).json({ error: "Invalid wallet address" }); return; }
+    const url = buildBlockscoutNftsUrl(getAddress(address));
+    if (req.query.cursor) {
+      const serialized = String(req.query.cursor);
+      if (serialized.length > 2048) { res.status(400).json({ error: "Invalid NFT cursor" }); return; }
+      let cursor: unknown;
+      try { cursor = JSON.parse(serialized); } catch { res.status(400).json({ error: "Invalid NFT cursor" }); return; }
+      if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) { res.status(400).json({ error: "Invalid NFT cursor" }); return; }
+      for (const [key, value] of Object.entries(cursor)) {
+        if (!/^[a-z_]+$/.test(key) || ["apikey", "type"].includes(key) || !["string", "number", "boolean"].includes(typeof value)) {
+          res.status(400).json({ error: "Invalid NFT cursor" }); return;
+        }
+        url.searchParams.set(key, String(value));
+      }
+    }
+    const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error("NFT provider unavailable");
+    const result = await response.json() as { items?: unknown[]; next_page_params?: unknown };
+    if (!Array.isArray(result.items)) throw new Error("Invalid NFT response");
+    res.json({ items: result.items, next_page_params: result.next_page_params ?? null });
+  } catch {
+    res.status(502).json({ error: "Collectibles are temporarily unavailable. Please try again shortly." });
   }
 });
