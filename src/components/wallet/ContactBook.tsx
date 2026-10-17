@@ -24,8 +24,8 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState('');
 
+  // Loaded up front too, so the button shows the saved name for a typed address.
   useEffect(() => {
-    if (!open) return;
     setContacts(getWalletContacts(wallet));
   }, [open, wallet]);
 

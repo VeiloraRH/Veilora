@@ -310,7 +310,7 @@ export function VeilyAssistant() {
     else void navigate({ to: "/app/rules" });
   }
 
-  return <div className="fixed bottom-24 right-4 z-[80] sm:bottom-6 sm:right-6">
+  return <div className="veily-dock fixed bottom-24 right-4 z-[80] sm:bottom-6 sm:right-6">
     {panelOpen && <motion.section initial={reduceMotion?false:{opacity:0,y:14,scale:.97}} animate={{opacity:1,y:0,scale:1}} exit={reduceMotion?{}:{opacity:0,y:12,scale:.98}} transition={{duration:reduceMotion?0:.18}} aria-label="Veily assistant" className="wallet-panel absolute bottom-16 right-0 flex h-[min(78vh,700px)] w-[min(94vw,440px)] flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl dark:border-ink-700 dark:bg-ink-900">
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-ink-700">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f0ac5e]/15 text-[#bb762e]"><Sparkles size={18}/></span>
