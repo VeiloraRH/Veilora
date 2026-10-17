@@ -22,10 +22,10 @@ export function PortfolioChange({ holdings }: { holdings: Holding[] | undefined 
  if (!held.some(h => h.symbol !== 'USDG') || history.isError) return null;
  if (!result) return history.isPending ? null : <p className="mt-2 text-xs text-muted-foreground">Your 24h change appears once Veilora has collected a few price samples.</p>;
  const up = result.change >= 0;
- return <div className="mt-2 flex items-center gap-3" aria-label={`Change over the past ${result.hours} hours`}>
-  <p className={`text-xs font-medium ${up ? 'text-emerald-600' : 'text-red-500'}`}>
+ return <div className="mt-2 flex items-center justify-center gap-3" aria-label={`Change over the past ${result.hours} hours`}>
+  <p className={`whitespace-nowrap text-xs font-medium ${up ? 'text-emerald-600' : 'text-red-500'}`}>
    <Private>{money.format(result.change)} ({up ? '+' : ''}{result.percent.toFixed(2)}%)</Private>
-   <span className="ml-1 font-normal text-muted-foreground">past {result.hours === 24 ? '24h' : `${result.hours}h`}</span>
+   <span className="ml-1 whitespace-nowrap font-normal text-muted-foreground">past {result.hours === 24 ? '24h' : `${result.hours}h`}</span>
   </p>
   <Sparkline values={result.points.map(p => p.value)} up={up}/>
  </div>;

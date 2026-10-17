@@ -143,6 +143,10 @@
 }
 
 @layer base {
+  /* Tailwind v4 draws bare `border` utilities in currentColor; use the theme's border colour instead. */
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--color-border, currentColor);
+  }
   html {
     scroll-behavior: smooth;
   }
