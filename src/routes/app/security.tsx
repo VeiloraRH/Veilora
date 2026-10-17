@@ -14,6 +14,7 @@ import { saveSpendingPolicy, useSpendingPolicy } from '@/lib/spendingPolicy';
 import { KeyRotationPanel, ReplaceRecoveryKeyDialog } from '@/components/app/KeyRotation';
 import { DRILL_VALID_DAYS, downloadDeviceKeyBackup, drillIsCurrent, freezeWithKey, keyMatches, readFlag, unfreezeWithKey, writeFlag } from '@/lib/recovery';
 import { AddressBlocklist } from '@/components/app/AddressBlocklist';
+import { ApprovedRecipients } from '@/components/app/ApprovedRecipients';
 import { AddressBookBackup } from '@/components/app/AddressBookBackup';
 export const Route=createFileRoute('/app/security')({component:RecoveryCenter});
 
@@ -60,6 +61,8 @@ export function RecoveryCenter() {
  <section className="rc-section"><div className="wallet-section-heading"><h2>Shards</h2></div><div className="rc-shards">{shards.map(s=><article key={s.id} className="wallet-panel rc-shard"><div className="rc-shard-head"><span className={`rc-shard-icon s${s.id}`}><s.icon size={19}/></span><div className="min-w-0 flex-1"><small>Shard {s.id}</small><h3>{s.name}</h3></div><span className={`rc-pill ${s.status[1]}`}>{s.status[0]}</span></div><p className="rc-where">{s.where}</p><AddressLine address={s.address} match={s.match} deployed={q?.deployed}/>{s.actions&&<div className="rc-shard-actions">{s.actions}</div>}</article>)}</div></section>
 
  <SpendingLimits />
+
+ <ApprovedRecipients />
 
  <AddressBlocklist />
 

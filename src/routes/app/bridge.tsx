@@ -23,6 +23,7 @@ import { RecipientCheck, isBlockedRecipient } from '@/components/wallet/Recipien
 import { assessRecipient } from '@/lib/recipientCheck';
 import { getWalletContacts } from '@/lib/contacts';
 import { useWalletBlocklist } from '@/lib/addressBlocklist';
+import { useWalletApprovedRecipients } from '@/lib/approvedRecipients';
 import { usePrivacyMode } from '@/lib/privacyMode';
 import { bridgeTrackingChangedEvent, isBridgeStatusFinal, loadBridgeRecords, saveBridgeRecords, type BridgeRecord } from '@/lib/bridgeTracking';
 import { notifyBridgeOutcome } from '@/lib/bridgeNotifications';
@@ -79,6 +80,7 @@ function BridgeScreen() {
   const { walletAddress, getStoredDeviceKey } = useWallet();
   const privacy = usePrivacyMode();
   const blockedAddresses = useWalletBlocklist(walletAddress);
+  const approvedRecipients = useWalletApprovedRecipients(walletAddress);
   const holdings = useHoldings();
   const spendingPolicy = useSpendingPolicy();
   const cache = useQueryClient();
@@ -133,10 +135,10 @@ function BridgeScreen() {
   // Address-poisoning check for the destination: contacts, past bridge recipients, and your own
   // Veilora address, which does not exist on other chains.
   const recipientCheck = useMemo(() => validRecipient && walletAddress ? assessRecipient({
-    recipient: recipient.trim(), wallet: walletAddress, contacts: getWalletContacts(walletAddress), blockedAddresses, mode: 'bridge', chainName: destinationChain.name,
+    recipient: recipient.trim(), wallet: walletAddress, contacts: getWalletContacts(walletAddress), blockedAddresses, approvedAddresses: approvedRecipients.entries.map(entry => entry.address), requireApprovedRecipient: approvedRecipients.policy.requireApproval, mode: 'bridge', chainName: destinationChain.name,
     history: records.map((r) => ({ direction: 'sent' as const, from: walletAddress, to: r.recipient, amount: r.amount })),
     tokenContracts: destinationChain.assets.filter((a) => a.currency !== NATIVE).map((a) => ({ symbol: a.symbol, address: a.currency })),
-  }) : null, [validRecipient, recipient, walletAddress, records, destinationChain, blockedAddresses]);
+  }) : null, [validRecipient, recipient, walletAddress, records, destinationChain, blockedAddresses, approvedRecipients]);
   const recipientBlocked = isBlockedRecipient(recipientCheck);
   const recipientNeedsAck = (recipientCheck?.level === 'danger' || recipientCheck?.level === 'warn') && !recipientBlocked;
   const [recipientAck, setRecipientAck] = useState(false);

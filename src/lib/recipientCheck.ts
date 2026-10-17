@@ -16,6 +16,8 @@ export type RecipientInputs = {
  history: RecipientHistory;
  tokenContracts: { symbol: string; address: string }[];
  blockedAddresses?: string[];
+ approvedAddresses?: string[];
+ requireApprovedRecipient?: boolean;
  /** Bytecode at the recipient, if known. Veilora accounts are contracts too, so this is informational. */
  code?: string | null;
  /** "bridge" checks a destination on another chain, where your Veilora account does not exist. */
@@ -34,7 +36,7 @@ export function looksAlike(a: string, b: string, n: number): boolean {
  return x !== y && x.slice(0, n) === y.slice(0, n) && x.slice(-n) === y.slice(-n);
 }
 
-export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, blockedAddresses, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
+export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, blockedAddresses, approvedAddresses, requireApprovedRecipient, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
  const bridge = mode === 'bridge';
  const verb = bridge ? 'bridged' : 'sent';
  const r = lower(recipient);
@@ -49,10 +51,14 @@ export function assessRecipient({ recipient, wallet, contacts, history, tokenCon
  const token = tokenContracts.find(t => lower(t.address) === r);
  if (token) items.push({ level: 'danger', code: 'token-contract', text: `This is the ${token.symbol} token contract${bridge ? ` on ${chainName}` : ''}, not a wallet. Tokens sent here are usually lost for good.` });
  if (blockedAddresses?.some(address => lower(address) === r)) items.push({ level: 'danger', code: 'user-blocked', text: 'This address is on your device’s blocklist. Remove it in Quorum & recovery before sending or bridging here.' });
+ const approved = approvedAddresses?.some(address => lower(address) === r) ?? false;
+ if (requireApprovedRecipient && !approved) items.push({ level: 'danger', code: 'recipient-not-approved', text: 'This device requires an approved recipient. Add this address in Quorum & recovery before sending or bridging.' });
+ else if (requireApprovedRecipient && approved) items.push({ level: 'ok', code: 'approved-recipient', text: 'This destination is on your device’s approved-recipient list.' });
 
  // Lookalikes of anything you trust: contacts, past recipients, your own account.
  const trusted = new Map<string, string>();
  for (const c of contacts) trusted.set(lower(c.address), `your contact “${c.name}”`);
+ for (const address of approvedAddresses ?? []) if (!trusted.has(lower(address))) trusted.set(lower(address), 'an approved recipient');
  for (const t of history) if (t.direction === 'sent' && t.to && !trusted.has(lower(t.to))) trusted.set(lower(t.to), `${short(t.to)}, which you have ${verb} to before`);
  trusted.set(lower(wallet), 'your own account');
  const strong = [...trusted].find(([addr]) => looksAlike(r, addr, 4));
@@ -63,7 +69,7 @@ export function assessRecipient({ recipient, wallet, contacts, history, tokenCon
  if (contact) items.push({ level: 'ok', code: 'contact', text: `Saved contact: ${contact.name}.` });
  if (timesSent) items.push({ level: 'ok', code: 'known', text: `You have ${verb} to this address ${timesSent === 1 ? 'once' : `${timesSent} times`} before.` });
  if (receivedOnly) items.push({ level: 'warn', code: 'received-only', text: 'This address only appears in your history because it sent to you. Scammers send tiny transfers so you copy their address.' });
- if (!contact && !timesSent && !receivedOnly && !items.some(i => i.level === 'danger')) {
+ if (!contact && !timesSent && !receivedOnly && !items.some(i => i.level === 'danger' || i.code === 'approved-recipient')) {
   items.push({ level: 'warn', code: 'new', text: bridge
    ? `First time bridging to this address. Make sure you control it on ${chainName}: bridged funds can't be called back.`
    : 'First time sending to this address. Confirm it with the recipient through another channel.' });

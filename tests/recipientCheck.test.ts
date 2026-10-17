@@ -50,6 +50,16 @@ describe('address-poisoning protection', () => {
     expect(codes(blocked)).toContain('user-blocked');
   });
 
+  test('strict approved-recipient mode blocks unknown addresses and accepts saved ones', () => {
+    const blocked = assessRecipient({ ...base, recipient: friend, requireApprovedRecipient: true, approvedAddresses: [] });
+    expect(blocked.level).toBe('danger');
+    expect(codes(blocked)).toContain('recipient-not-approved');
+    const approved = assessRecipient({ ...base, recipient: friend, requireApprovedRecipient: true, approvedAddresses: [friend] });
+    expect(approved.level).toBe('ok');
+    expect(codes(approved)).toContain('approved-recipient');
+    expect(codes(approved)).not.toContain('new');
+  });
+
   test('bridge mode blocks your own address, uses bridge history and names the chain', () => {
     const own = assessRecipient({ ...base, recipient: wallet, mode: 'bridge', chainName: 'Base' });
     expect(own.items[0].code).toBe('self');
