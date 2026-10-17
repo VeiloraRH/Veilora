@@ -11,6 +11,7 @@ import {
 import { ESCROW_FACTORY_ADDRESS, publicClient } from "./config";
 import { db, query } from "./db/index";
 import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
+import { ERC1155_INTERFACE_ID, ERC721_INTERFACE_ID, decodeNftTransfer, type NftTransfer } from "./nftTransfer";
 
 export const NATIVE_ASSET = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const SWAP_ROUTER = getAddress("0xcaf681a66d020601342297493863e78c959e5cb2");
@@ -34,6 +35,11 @@ const v4Abi = parseAbi([
 ]);
 const WETH9_ABI = parseAbi(["function WETH9() view returns (address)"]);
 const BALANCE_ABI = parseAbi(["function balanceOf(address account) view returns (uint256)"]);
+const NFT_READ_ABI = parseAbi([
+  "function supportsInterface(bytes4 interfaceId) view returns (bool)",
+  "function ownerOf(uint256 tokenId) view returns (address)",
+  "function balanceOf(address account,uint256 id) view returns (uint256)",
+]);
 const escrowActionAbi = parseAbi(["function approveOutcome(bytes32 digest)"]);
 const escrowFactoryAbi = parseAbi(["function isEscrow(address escrow) view returns (bool)"]);
 const trustedEscrows = new Set<string>((process.env.VEILORA_TRUSTED_ESCROW_ADDRESSES || "")
@@ -68,6 +74,51 @@ export function dailyLimitMessage(asset: string, amount: bigint, maxDailySpend: 
     `. This needs ${amountText(amount, decimals)} ${symbol}. The limit resets at 00:00 UTC.`;
 }
 
+/** NFT transfers have no balance to take a percentage of, so they are capped by count per UTC day. */
+export const NFT_ASSET = "nft";
+export const NFT_DAILY_TRANSFER_LIMIT = 5;
+
+export function nftLimitMessage(usedToday: bigint): string {
+  return `you can send up to ${NFT_DAILY_TRANSFER_LIMIT} NFTs a day and have used ${usedToday} today. The limit resets at 00:00 UTC.`;
+}
+
+/**
+ * Shape checks for an NFT transfer, without network access. Returns null when
+ * the call is not an NFT transfer; denies when it is one Veilora will not sign.
+ */
+export function checkNftTransfer(walletAddress: Address, targetAddress: Address, value: bigint, data: Hex): NftTransfer | null {
+  const transfer = decodeNftTransfer(data);
+  if (!transfer) return null;
+  const wallet = getAddress(walletAddress).toLowerCase();
+  const target = getAddress(targetAddress).toLowerCase();
+  const to = transfer.to.toLowerCase();
+  if (target === wallet || tokenAddresses.has(target) || value !== 0n) deny();
+  if (transfer.from.toLowerCase() !== wallet) deny("an NFT transfer must move an NFT out of your own account");
+  if (to === "0x0000000000000000000000000000000000000000" || to === target) deny("this NFT recipient would destroy the NFT");
+  if (to === wallet) deny("a transfer to your own account does nothing");
+  if (transfer.standard === "ERC-1155" && (transfer.amount <= 0n || transfer.data !== "0x")) deny();
+  return transfer;
+}
+
+async function verifyNftHolding(wallet: Address, target: Address, transfer: NftTransfer): Promise<void> {
+  const interfaceId = transfer.standard === "ERC-721" ? ERC721_INTERFACE_ID : ERC1155_INTERFACE_ID;
+  const isCollection = await publicClient.readContract({ address: target, abi: NFT_READ_ABI, functionName: "supportsInterface", args: [interfaceId] }).catch(() => false);
+  if (!isCollection) deny(`this contract does not identify itself as an ${transfer.standard} collection`);
+  if (transfer.standard === "ERC-721") {
+    const owner = await publicClient.readContract({ address: target, abi: NFT_READ_ABI, functionName: "ownerOf", args: [transfer.tokenId] }).catch(() => null);
+    if (!owner || owner.toLowerCase() !== wallet.toLowerCase()) deny("your account does not own this NFT");
+  } else {
+    const held = await publicClient.readContract({ address: target, abi: NFT_READ_ABI, functionName: "balanceOf", args: [wallet, transfer.tokenId] }).catch(() => 0n);
+    if (held < transfer.amount) deny("your account does not hold that many of this NFT");
+  }
+}
+
+export async function reserveNftTransfer(wallet: Address, digest: Hex, deadline: bigint): Promise<void> {
+  await reserveForToday(wallet, NFT_ASSET, 1n, digest, deadline, 0n, (usedToday) => {
+    if (usedToday + 1n > BigInt(NFT_DAILY_TRANSFER_LIMIT)) deny(nftLimitMessage(usedToday));
+  });
+}
+
 function isSupportedToken(value: unknown): value is Address {
   return typeof value === "string" && isAddress(value) && tokenAddresses.has(value.toLowerCase());
 }
@@ -90,6 +141,26 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint,
     const { symbol, decimals } = describeAsset(asset);
     deny(`a single transaction can use up to ${amountText(maxTransactionSpend, decimals)} ${symbol} (${perTransactionPercent}% of your current balance). This needs ${amountText(amount, decimals)} ${symbol}`);
   }
+  await reserveForToday(wallet, asset, amount, digest, deadline, balance, (usedToday, balanceAtDayStart) => {
+    const maxDailySpend = balanceAtDayStart * BigInt(dailyPercent) / 100n;
+    if (usedToday + amount > maxDailySpend) deny(dailyLimitMessage(asset, amount, maxDailySpend, usedToday, dailyPercent));
+  });
+}
+
+/**
+ * Reserve `amount` of today's allowance for one execution digest. `checkLimit`
+ * sees what is already spent or reserved today (UTC) and denies if this would
+ * exceed the cap; a retry of the same digest reuses its reservation.
+ */
+async function reserveForToday(
+  wallet: Address,
+  asset: string,
+  amount: bigint,
+  digest: Hex,
+  deadline: bigint,
+  startBalance: bigint,
+  checkLimit: (usedToday: bigint, balanceAtDayStart: bigint) => void,
+): Promise<void> {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
@@ -98,7 +169,7 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint,
     await client.query(
       `INSERT INTO wallet_daily_spend (wallet_address, utc_day, asset_address, amount_wei, daily_balance_wei)
        VALUES ($1, $2, $3, 0, $4) ON CONFLICT (wallet_address, utc_day, asset_address) DO NOTHING`,
-      [wallet.toLowerCase(), utcDay, asset, balance.toString()],
+      [wallet.toLowerCase(), utcDay, asset, startBalance.toString()],
     );
     const daily = await client.query<{ amount_wei: string; daily_balance_wei: string | null }>(
       `SELECT amount_wei::text, daily_balance_wei::text FROM wallet_daily_spend
@@ -106,8 +177,7 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint,
       [wallet.toLowerCase(), utcDay, asset],
     );
     const spentToday = BigInt(daily.rows[0].amount_wei);
-    const balanceAtDayStart = BigInt(daily.rows[0].daily_balance_wei ?? balance.toString());
-    const maxDailySpend = balanceAtDayStart * BigInt(dailyPercent) / 100n;
+    const balanceAtDayStart = BigInt(daily.rows[0].daily_balance_wei ?? startBalance.toString());
     const existing = await client.query<{ amount_wei: string; status: string; active: boolean }>(
       `SELECT amount_wei::text, status, expires_at > now() AS active FROM wallet_spend_reservations
        WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3 AND execution_digest=$4 FOR UPDATE`,
@@ -128,10 +198,7 @@ async function reserveDailySpend(wallet: Address, asset: string, amount: bigint,
        WHERE wallet_address=$1 AND utc_day=$2 AND asset_address=$3 AND status='reserved' AND expires_at > now()`,
       [wallet.toLowerCase(), utcDay, asset],
     );
-    const reservedToday = BigInt(pending.rows[0].amount_wei);
-    if (spentToday + reservedToday + amount > maxDailySpend) {
-      deny(dailyLimitMessage(asset, amount, maxDailySpend, spentToday + reservedToday, dailyPercent));
-    }
+    checkLimit(spentToday + BigInt(pending.rows[0].amount_wei), balanceAtDayStart);
     await client.query(
       `INSERT INTO wallet_spend_reservations (wallet_address,utc_day,asset_address,execution_digest,amount_wei,status,expires_at)
        VALUES ($1,$2,$3,$4,$5,'reserved',to_timestamp($6)+interval '5 minutes')
@@ -184,8 +251,9 @@ export async function settleDailySpend(wallet: Address, digest: Hex, succeeded: 
 
 /**
  * Apply an allowlist and per-asset daily spend cap before Shard B co-signs.
- * Every accepted action is limited to a direct asset transfer or the currently
- * wired Uniswap routers; arbitrary contract calls are denied.
+ * Every accepted action is limited to a direct asset transfer, a single NFT
+ * transfer out of the account, or the currently wired Uniswap routers;
+ * arbitrary contract calls are denied.
  */
 export async function enforceExecutionPolicy(
   walletAddress: Address,
@@ -339,6 +407,13 @@ export async function enforceExecutionPolicy(
         (swapRecipient.toLowerCase() === SWAP_ROUTER.toLowerCase() && (!didUnwrap || outputAsset.toLowerCase() !== weth.toLowerCase())) ||
         (didUnwrap && (swapRecipient.toLowerCase() !== SWAP_ROUTER.toLowerCase() || outputAsset.toLowerCase() !== weth.toLowerCase()))) deny();
     await reserveDailySpend(wallet, inputAsset, inputAmount, digest, deadline);
+    return;
+  }
+
+  const nft = checkNftTransfer(wallet, target, value, data);
+  if (nft) {
+    await verifyNftHolding(wallet, target, nft);
+    await reserveNftTransfer(wallet, digest, deadline);
     return;
   }
 

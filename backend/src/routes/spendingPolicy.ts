@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
 import { query } from "../db/index";
 import { getFreezeState } from "../freeze";
+import { NFT_DAILY_TRANSFER_LIMIT } from "../txPolicy";
 
 export const spendingPolicyRouter = Router({ mergeParams: true });
 const fresh = (value: unknown): number => {
@@ -42,7 +43,7 @@ spendingPolicyRouter.get("/", async (req, res) => {
     await authorize(wallet.shardA, accessMessage(wallet.address, timestamp), signature(req.header("x-veilora-signature")));
     const result = await query("SELECT per_transaction_percent, daily_total_percent FROM wallet_spending_policies WHERE wallet_address = $1", [wallet.address]);
     const spend = await query("SELECT asset_address, amount_wei::text, daily_balance_wei::text FROM wallet_daily_spend WHERE wallet_address = $1 AND utc_day = (now() AT TIME ZONE 'UTC')::date", [wallet.address]);
-    res.json({ perTransactionPercent: result.rows[0]?.per_transaction_percent ?? 20, dailyTotalPercent: result.rows[0]?.daily_total_percent ?? 20,
+    res.json({ perTransactionPercent: result.rows[0]?.per_transaction_percent ?? 20, dailyTotalPercent: result.rows[0]?.daily_total_percent ?? 20, nftDailyLimit: NFT_DAILY_TRANSFER_LIMIT,
       dailySpend: Object.fromEntries(spend.rows.map((row) => [String(row.asset_address).toLowerCase(), { spent: String(row.amount_wei), balance: row.daily_balance_wei == null ? null : String(row.daily_balance_wei) }])) });
   } catch (error) { send(res, error); }
 });

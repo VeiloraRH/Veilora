@@ -7,6 +7,8 @@ const GATES = [
   { file: 'src/components/dashboard/SendModal.tsx', state: 'acknowledged', setter: 'setAcknowledged' },
   { file: 'src/components/dashboard/SendModal.tsx', state: 'simulationAck', setter: 'setSimulationAck' },
   { file: 'src/routes/app/bridge.tsx', state: 'recipientAck', setter: 'setRecipientAck' },
+  { file: 'src/components/wallet/SendNftModal.tsx', state: 'acknowledged', setter: 'setAcknowledged' },
+  { file: 'src/components/wallet/SendNftModal.tsx', state: 'simulationAck', setter: 'setSimulationAck' },
 ];
 
 describe('review acknowledgements', () => {

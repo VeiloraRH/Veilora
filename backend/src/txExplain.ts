@@ -2,6 +2,7 @@ import { decodeEventLog, decodeFunctionData, formatUnits, getAddress, isAddress,
 import { publicClient } from "./config";
 import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
 import { RELAY_DEPOSITORY } from "./bridge";
+import { decodeNftTransfer } from "./nftTransfer";
 
 /**
  * Transaction explanations: a deterministic, plain-language reading of what a
@@ -13,7 +14,7 @@ import { RELAY_DEPOSITORY } from "./bridge";
 export type Flag = { level: "info" | "warn" | "danger"; code: string; text: string };
 export type Effect = { direction: "out" | "in" | "permission"; asset: string; amount: string | null; raw: string | null; counterparty: string | null };
 export type Explanation = {
-  kind: "send" | "token-send" | "approve" | "swap" | "bridge" | "shard-change" | "deployment" | "receive" | "contract-call";
+  kind: "send" | "token-send" | "nft-send" | "approve" | "swap" | "bridge" | "shard-change" | "deployment" | "receive" | "contract-call";
   title: string;
   summary: string[];
   effects: Effect[];
@@ -184,6 +185,18 @@ export function explainCall(walletAddress: string, call: Call): Explanation {
         effects: [{ direction: "out", asset: a.symbol, amount: amountOf(raw, a.decimals), raw: raw.toString(), counterparty: DEPOSITORY }],
         flags: [{ level: "info", code: "bridge-trust", text: "Delivery depends on Relay. If it cannot fill, funds are refunded to your account on Robinhood Chain." }] };
     }
+  }
+
+  const nft = target === wallet || tokensByAddress.has(target.toLowerCase()) ? null : decodeNftTransfer(data);
+  if (nft) {
+    const id = nft.tokenId.toString();
+    const item = `NFT #${id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id}`;
+    const what = nft.amount === 1n ? item : `${nft.amount} × ${item}`;
+    if (nft.from.toLowerCase() !== wallet.toLowerCase()) flags.push({ level: "danger", code: "foreign-owner", text: `This moves an NFT out of ${short(nft.from)}, not your account.` });
+    if (value > 0n) flags.push({ level: "warn", code: "eth-with-nft", text: `Also sends ${amountOf(value, 18)} ETH to the collection contract, which is unusual.` });
+    return { ...base, kind: "nft-send", title: `Send ${what}`,
+      summary: [`Sends ${what} from the ${short(target)} collection to ${short(nft.to)}.`, "Once it arrives, only the recipient can send it back."],
+      effects: [{ direction: "out", asset: `${short(target)} ${item}`, amount: nft.amount.toString(), raw: nft.amount.toString(), counterparty: nft.to }, ...(ethOut ? [ethOut] : [])], flags };
   }
 
   return { ...base, kind: "contract-call", title: target === wallet ? "Unrecognized call to your account" : `Call to ${label(target, wallet)}`, summary: [`Calls ${short(target)} with data Veilora cannot decode.`, ...(ethOut ? [`Also sends ${ethOut.amount} ETH.`] : [])],

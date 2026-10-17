@@ -7,6 +7,8 @@ import { useWallet } from './walletContext';
 export type SpendingPolicy = {
   perTransactionPercent: number;
   dailyTotalPercent: number;
+  /** NFT transfers allowed per UTC day; today's count is `dailySpend.nft.spent`. */
+  nftDailyLimit?: number;
   dailySpend: Record<string, { spent: string; balance: string | null }>;
 };
 const now = () => Math.floor(Date.now() / 1000);
