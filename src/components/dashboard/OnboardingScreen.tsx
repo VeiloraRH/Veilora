@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useWallet } from "@/lib/walletContext";
+import { useStoredAccounts } from "@/lib/deviceAccounts";
 import { validateDevicePassphrase } from "@/lib/deviceKeyVault";
 import { DevicePassphraseDialog } from "@/components/app/DevicePassphraseDialog";
 
@@ -88,7 +89,8 @@ function CoinWaves({ className }: { className?: string }) {
 }
 
 export function OnboardingScreen() {
-  const { createAccount, completeAccountCreation, connectExistingWallet, clearLatestRecoveryKey, pendingRecoveryDetails } = useWallet();
+  const { createAccount, completeAccountCreation, connectExistingWallet, clearLatestRecoveryKey, pendingRecoveryDetails, switchAccount } = useWallet();
+  const storedAccounts = useStoredAccounts();
   const [loading, setLoading] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importAddr, setImportAddr] = useState("");
@@ -235,6 +237,18 @@ export function OnboardingScreen() {
               <a href="/recover" className="block text-center text-sm text-slate-500 underline-offset-4 hover:text-slate-900 hover:underline dark:text-slate-400 dark:hover:text-white">
                 Lost your device? Restore a backup or freeze your account
               </a>
+              {storedAccounts.length > 0 && (
+                <div className="pt-3 text-left">
+                  <p className="mb-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400">Or open an account already on this device</p>
+                  {storedAccounts.map((account) => (
+                    <button key={account.address} type="button" onClick={() => switchAccount(account.address)}
+                      className="mb-2 flex w-full items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 transition-colors hover:bg-slate-100 dark:border-white/10 dark:text-white dark:hover:bg-[#1a2b4d]">
+                      <span className="font-mono">{account.address.slice(0, 6)}…{account.address.slice(-4)}</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Open</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Subtext with Clock */}

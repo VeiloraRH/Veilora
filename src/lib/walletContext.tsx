@@ -14,6 +14,7 @@ import { clearWatchList } from "./watchList";
 import { clearBlockedAddresses } from "./addressBlocklist";
 import { clearApprovedRecipients } from "./approvedRecipients";
 import { clearBridgeNotifications } from "./bridgeTracking";
+import { activateStoredAccount, getStoredAccounts, stashActiveAccount } from "./deviceAccounts";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { getAddress } from "viem";
 
@@ -71,6 +72,10 @@ interface WalletContextType {
   getStoredDeviceKey: () => string | null;
   freezeAccount: (hours?: number, reason?: string) => Promise<void>;
   removeWallet: () => Promise<void>;
+  /** Keep this account on the device and start setting up or importing another. */
+  addAnotherAccount: () => void;
+  /** Switch to another account kept on this device; the app reloads locked. */
+  switchAccount: (address: string) => void;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -283,6 +288,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       throw new Error("This key does not match the account's registered Shard A.");
     }
     localStorage.setItem(ENCRYPTED_DEVICE_KEY, await encryptDeviceKey(privateKey, passphrase));
+    localStorage.setItem("veilora:shardA:address", privateKeyToAddress(privateKey as `0x${string}`));
     localStorage.removeItem(LEGACY_DEVICE_KEY);
     if (walletAddress) removePasskeyRecord(walletAddress);
     setDeviceKey(privateKey);
@@ -330,10 +336,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(LEGACY_DEVICE_KEY);
     localStorage.removeItem(ENCRYPTED_DEVICE_KEY);
     localStorage.removeItem("veilora:shardA:address");
-    localStorage.removeItem("veilora:onboarded");
-    localStorage.removeItem("veilora:notes");
-    localStorage.removeItem("veilora:rpc:url");
-    localStorage.removeItem("veilora:view_keys");
+    const otherAccounts = getStoredAccounts();
+    // Device-wide settings stay while other accounts still use this device.
+    if (!otherAccounts.length) {
+      localStorage.removeItem("veilora:onboarded");
+      localStorage.removeItem("veilora:notes");
+      localStorage.removeItem("veilora:rpc:url");
+      localStorage.removeItem("veilora:view_keys");
+    }
     localStorage.removeItem(`veilora:veily:credential:${walletAddress.toLowerCase()}`);
     localStorage.removeItem(`veilora:veily:history:${walletAddress.toLowerCase()}`);
     const bridgeTrackingKey = `veilora:bridge:tracking:${walletAddress.toLowerCase()}`;
@@ -344,6 +354,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     clearApprovedRecipients(walletAddress);
     clearWatchList(walletAddress);
     removePasskeyRecord(walletAddress);
+    if (otherAccounts.length && !activateStoredAccount(otherAccounts[0].address)) {
+      window.location.assign("/app");
+      return;
+    }
     setWalletAddressState("");
     setWallet(null);
     setDeviceKeyPresent(false);
@@ -352,6 +366,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setLatestRecoveryKey(null);
     setPendingRecoveryDetails(null);
     setAuditTrail([]);
+  };
+
+  const addAnotherAccount = () => {
+    if (walletAddress && !localStorage.getItem("veilora:shardA:address") && wallet?.shardA) {
+      localStorage.setItem("veilora:shardA:address", getAddress(wallet.shardA));
+    }
+    const error = stashActiveAccount();
+    if (error) throw new Error(error);
+    window.location.assign("/app");
+  };
+
+  const switchAccount = (address: string) => {
+    const error = activateStoredAccount(address);
+    if (error) throw new Error(error);
+    window.location.assign("/app");
   };
 
   return (
@@ -380,6 +409,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         getStoredDeviceKey,
         freezeAccount,
         removeWallet,
+        addAnotherAccount,
+        switchAccount,
       }}
     >
       {children}
