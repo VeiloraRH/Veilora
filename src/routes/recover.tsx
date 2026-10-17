@@ -6,6 +6,7 @@ import { Logo } from '@/components/ui';
 import { getWallet, type WalletMetadata } from '@/lib/api';
 import { WalletProvider, useWallet } from '@/lib/walletContext';
 import { ReplaceDeviceTool } from '@/components/app/ReplaceDeviceTool';
+import { freezeWithCode } from '@/lib/authenticatorApi';
 import { freezeWithKey, keyMatches, parseDeviceKeyBackup, unfreezeWithKey, unlockBackup, type DeviceKeyBackup } from '@/lib/recovery';
 import '@/components/wallet/wallet.css';
 export const Route=createFileRoute('/recover')({component:()=><WalletProvider><RecoverPage/></WalletProvider>});
@@ -21,19 +22,23 @@ function RecoverPage() {
 }
 
 function FreezeTool() {
- const [address,setAddress]=useState('');const [key,setKey]=useState('');const [hours,setHours]=useState(72);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [done,setDone]=useState('');const [wallet,setWallet]=useState<WalletMetadata|null>(null);
+ const [address,setAddress]=useState('');const [key,setKey]=useState('');const [method,setMethod]=useState<'key'|'code'>('key');const [code,setCode]=useState('');const [hours,setHours]=useState(72);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [done,setDone]=useState('');const [wallet,setWallet]=useState<WalletMetadata|null>(null);
  const recoveryFrozen=!!wallet?.isFrozen&&wallet.freezeInitiatedBy==='recovery';
  async function lookup(value:string){setAddress(value);setWallet(null);setError('');if(!isAddress(value))return;try{setWallet(await getWallet(value));}catch{setError('No Veilora account was found at that address.');}}
- async function run(){if(!wallet)return;if(!keyMatches(key,wallet.shardC)){setError('This key does not match the recovery shard for that account.');return;}setBusy(true);setError('');
+ const byCode=method==='code'&&!recoveryFrozen;
+ async function run(){if(!wallet)return;if(byCode){setBusy(true);setError('');try{const s=await freezeWithCode(wallet.address,code,hours);setDone(`Frozen until ${new Date(s.frozenUntil??'').toLocaleString()}. Unfreezing needs your recovery key.`);setCode('');setWallet(await getWallet(wallet.address));}catch(e){setError(e instanceof Error?e.message:'Could not freeze the account.');}finally{setBusy(false);}return;}if(!keyMatches(key,wallet.shardC)){setError('This key does not match the recovery shard for that account.');return;}setBusy(true);setError('');
   try{if(recoveryFrozen){await unfreezeWithKey(wallet.address,key as Hex);setDone('Freeze lifted. The co-signer is signing again.');}else{const s=await freezeWithKey(wallet.address,key as Hex,hours,'Recovery freeze: device lost or stolen');setDone(`Frozen until ${new Date(s.frozenUntil??'').toLocaleString()}. Only your recovery key can lift this freeze.`);}setKey('');setWallet(await getWallet(wallet.address));}
   catch(e){setError(e instanceof Error?e.message:'Could not update the freeze.');}finally{setBusy(false);}}
  return <div className="rule-builder"><div className="rc-recover-head"><span className="rules-aside-icon"><Fingerprint size={18}/></span><div><h2>{recoveryFrozen?'Lift a recovery freeze':'Freeze your account'}</h2><p>Veilora’s co-signer stops signing, so no transaction can get the second signature it needs.</p></div></div>
   <label className="builder-field"><span>Smart account address</span><input className="builder-input font-mono" spellCheck={false} placeholder="0x…" value={address} onChange={e=>void lookup(e.target.value.trim())}/></label>
   {wallet&&<p className="builder-hint">{wallet.isFrozen?`Currently frozen until ${new Date(wallet.frozenUntil??'').toLocaleString()}${wallet.freezeInitiatedBy==='recovery'?' with the recovery key':''}.`:'Account found. Not frozen.'}</p>}
-  <label className="builder-field"><span>Recovery key (Shard C)</span><input className="builder-input font-mono" type="password" autoComplete="off" spellCheck={false} placeholder="0x…" value={key} onChange={e=>{setKey(e.target.value.trim());setError('');}}/></label>
+  {!recoveryFrozen&&<div className="builder-segments" role="radiogroup" aria-label="Freeze with"><button type="button" role="radio" aria-checked={method==='key'} className={method==='key'?'on':''} onClick={()=>{setMethod('key');setError('');}}>Recovery key</button><button type="button" role="radio" aria-checked={method==='code'} className={method==='code'?'on':''} onClick={()=>{setMethod('code');setError('');}}>Authenticator code</button></div>}
+  {byCode?<label className="builder-field"><span>6-digit code from your authenticator app</span><input className="builder-input font-mono tracking-widest" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="123456" value={code} onChange={e=>{setCode(e.target.value.replace(/\D/g,''));setError('');}}/></label>
+  :<label className="builder-field"><span>Recovery key (Shard C)</span><input className="builder-input font-mono" type="password" autoComplete="off" spellCheck={false} placeholder="0x…" value={key} onChange={e=>{setKey(e.target.value.trim());setError('');}}/></label>}
+  {byCode&&<p className="builder-hint">Works if you set up an authenticator in Quorum & recovery. A code can only freeze; lifting the freeze needs your recovery key.</p>}
   {!recoveryFrozen&&<label className="builder-field"><span>Duration</span><select className="wallet-select" value={hours} onChange={e=>setHours(Number(e.target.value))}>{[24,72,168].map(h=><option key={h} value={h}>{h===168?'7 days':`${h} hours`}</option>)}</select></label>}
   {error&&<p role="alert" className="wallet-error">{error}</p>}{done&&<div className="wallet-notice" role="status">{done}</div>}
-  <button className="wallet-primary-button" disabled={!wallet||!key||busy} onClick={()=>void run()}>{busy?<><Loader2 size={16} className="animate-spin"/>Signing…</>:recoveryFrozen?<><Unlock size={16}/>Lift freeze</>:<><Snowflake size={16}/>Freeze account</>}</button></div>;
+  <button className="wallet-primary-button" disabled={!wallet||(byCode?code.length!==6:!key)||busy} onClick={()=>void run()}>{busy?<><Loader2 size={16} className="animate-spin"/>Signing…</>:recoveryFrozen?<><Unlock size={16}/>Lift freeze</>:<><Snowflake size={16}/>Freeze account</>}</button></div>;
 }
 
 function RestoreTool() {

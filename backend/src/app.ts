@@ -14,6 +14,7 @@ import { veilyRouter } from "./routes/veily";
 import { bridgeRouter } from "./routes/bridge";
 import { rpcRouter } from "./routes/rpc";
 import { paymentLinksRouter, walletPaymentLinksRouter } from "./routes/paymentLinks";
+import { authenticatorRouter } from "./routes/authenticator";
 
 export const app = express();
 
@@ -84,6 +85,7 @@ app.use("/v1/wallets/:address/spending-policy", spendingPolicyRouter);
 app.use("/v1/wallets/:address/quorum", quorumRouter);
 app.use("/v1/wallets/:address/payment-links", walletPaymentLinksRouter);
 app.use("/v1/payment-links", paymentLinksRouter);
+app.use("/v1/wallets/:address/authenticator", authenticatorRouter);
 app.use("/v1/onramp", onrampRouter);
 app.use("/v1/explain", explainRouter);
 app.use("/v1/wallets/:address/explain", walletExplainRouter);
