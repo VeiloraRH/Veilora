@@ -40,3 +40,14 @@ describe('contact notes and search', async () => {
     expect(saved[2]).not.toHaveProperty('note');
   });
 });
+
+describe('contact names in text', async () => {
+  const { labelAddresses } = await import('../src/lib/contacts');
+  test('labels full addresses of saved contacts only', () => {
+    const contacts = [{ id: '1', name: 'Maya', address: '0x4444444444444444444444444444444444444444' as const }];
+    expect(labelAddresses('You sent 2,400 USDG to 0x4444444444444444444444444444444444444444 and 80 USDG to 0x2222222222222222222222222222222222222222.', contacts))
+      .toBe('You sent 2,400 USDG to Maya (0x4444…4444) and 80 USDG to 0x2222222222222222222222222222222222222222.');
+    expect(labelAddresses(`hash 0x${'44'.repeat(32)}`, contacts)).toBe(`hash 0x${'44'.repeat(32)}`);
+    expect(labelAddresses('no contacts', [])).toBe('no contacts');
+  });
+});

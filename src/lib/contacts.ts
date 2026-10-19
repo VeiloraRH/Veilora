@@ -38,3 +38,16 @@ export function getWalletContacts(wallet: string): WalletContact[] {
 export function saveWalletContacts(wallet: string, contacts: WalletContact[]) {
   localStorage.setItem(keyFor(wallet), JSON.stringify(contacts));
 }
+
+/**
+ * Show saved contact names next to full addresses in text, e.g. a Veily answer.
+ * Display only, on this device; the text itself (and any receipt for it) is unchanged.
+ */
+export function labelAddresses(text: string, contacts: WalletContact[]): string {
+  if (!contacts.length) return text;
+  const names = new Map(contacts.map((c) => [c.address.toLowerCase(), c.name]));
+  return text.replace(/0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/g, (address) => {
+    const name = names.get(address.toLowerCase());
+    return name ? `${name} (${address.slice(0, 6)}…${address.slice(-4)})` : address;
+  });
+}
