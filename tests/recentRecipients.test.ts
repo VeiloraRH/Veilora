@@ -26,3 +26,18 @@ test('stops at the limit', () => {
  const history = [2, 3, 4, 5, 6, 7, 8].map((n, i) => tx(a(n), 10 + i));
  expect(recentRecipients(history, wallet, [], [], 3).map(r => r.address.toLowerCase())).toEqual([a(8), a(7), a(6)]);
 });
+
+test('suggests contacts by name, note or address, then recent addresses, never for a full address', async () => {
+ const { suggestRecipients } = await import('../src/lib/recentRecipients');
+ const contacts = [
+  { id: '1', name: 'Cold wallet', address: a(3) as `0x${string}` },
+  { id: '2', name: 'Maya', address: a(4) as `0x${string}`, note: 'Landlord, rent' },
+ ];
+ const recent = [{ address: a(5) as `0x${string}`, name: null, lastSentAt: '' }, { address: a(3) as `0x${string}`, name: 'Cold wallet', lastSentAt: '' }];
+ expect(suggestRecipients('cold wa', contacts, recent).map(s => s.name)).toEqual(['Cold wallet']);
+ expect(suggestRecipients('RENT', contacts, recent).map(s => s.source)).toEqual(['contact']);
+ expect(suggestRecipients('0x5555', contacts, recent)).toEqual([{ address: a(5), name: null, source: 'recent' }]);
+ expect(suggestRecipients('0x3333', contacts, recent)).toHaveLength(1);
+ expect(suggestRecipients('', contacts, recent)).toEqual([]);
+ expect(suggestRecipients(a(3), contacts, recent)).toEqual([]);
+});

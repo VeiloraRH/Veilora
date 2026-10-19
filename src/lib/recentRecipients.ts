@@ -25,3 +25,26 @@ export function recentRecipients(transactions: WalletTransaction[], wallet: stri
  }
  return result;
 }
+
+export type RecipientSuggestion = { address: `0x${string}`; name: string | null; note?: string; source: 'contact' | 'recent' };
+
+/**
+ * Matches for what is typed in a recipient field: saved contacts by name, note
+ * or address, then recent recipients by address. Nothing is suggested once a
+ * full address is typed, so a pasted address is never swapped for another.
+ */
+export function suggestRecipients(query: string, contacts: WalletContact[], recent: RecentRecipient[], limit = 5): RecipientSuggestion[] {
+ const q = query.trim().toLowerCase();
+ if (!q || isAddress(q)) return [];
+ const words = q.split(/\s+/);
+ const seen = new Set<string>();
+ const out: RecipientSuggestion[] = [];
+ for (const c of contacts) {
+  const text = `${c.name} ${c.note ?? ''} ${c.address}`.toLowerCase();
+  if (words.every(w => text.includes(w)) && !seen.has(c.address.toLowerCase())) { seen.add(c.address.toLowerCase()); out.push({ address: c.address, name: c.name, note: c.note, source: 'contact' }); }
+ }
+ for (const r of recent) {
+  if (!seen.has(r.address.toLowerCase()) && r.address.toLowerCase().includes(q)) { seen.add(r.address.toLowerCase()); out.push({ address: r.address, name: r.name, source: 'recent' }); }
+ }
+ return out.slice(0, limit);
+}
