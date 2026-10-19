@@ -14,6 +14,7 @@ import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as ExitRouteImport } from './routes/exit'
 import { Route as RecoverRouteImport } from './routes/recover'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as VerifyReceiptRouteImport } from './routes/verify-receipt'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as ZhRouteImport } from './routes/zh'
 import { Route as AppIndexRouteImport } from './routes/app/index'
@@ -52,6 +53,11 @@ const RecoverRoute = RecoverRouteImport.update({
 const RoadmapRoute = RoadmapRouteImport.update({
   id: '/roadmap',
   path: '/roadmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyReceiptRoute = VerifyReceiptRouteImport.update({
+  id: '/verify-receipt',
+  path: '/verify-receipt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WhitepaperRoute = WhitepaperRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
+  '/verify-receipt': typeof VerifyReceiptRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
+  '/verify-receipt': typeof VerifyReceiptRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/exit': typeof ExitRoute
   '/recover': typeof RecoverRoute
   '/roadmap': typeof RoadmapRoute
+  '/verify-receipt': typeof VerifyReceiptRoute
   '/whitepaper': typeof WhitepaperRoute
   '/zh': typeof ZhRoute
   '/app/activity': typeof AppActivityRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/exit'
     | '/recover'
     | '/roadmap'
+    | '/verify-receipt'
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/exit'
     | '/recover'
     | '/roadmap'
+    | '/verify-receipt'
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/exit'
     | '/recover'
     | '/roadmap'
+    | '/verify-receipt'
     | '/whitepaper'
     | '/zh'
     | '/app/activity'
@@ -259,6 +271,7 @@ export interface RootRouteChildren {
   ExitRoute: typeof ExitRoute
   RecoverRoute: typeof RecoverRoute
   RoadmapRoute: typeof RoadmapRoute
+  VerifyReceiptRoute: typeof VerifyReceiptRoute
   WhitepaperRoute: typeof WhitepaperRoute
   ZhRoute: typeof ZhRoute
   PaySlugRoute: typeof PaySlugRoute
@@ -299,6 +312,13 @@ declare module '@tanstack/react-router' {
       path: '/roadmap'
       fullPath: '/roadmap'
       preLoaderRoute: typeof RoadmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify-receipt': {
+      id: '/verify-receipt'
+      path: '/verify-receipt'
+      fullPath: '/verify-receipt'
+      preLoaderRoute: typeof VerifyReceiptRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/whitepaper': {
@@ -440,6 +460,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExitRoute: ExitRoute,
   RecoverRoute: RecoverRoute,
   RoadmapRoute: RoadmapRoute,
+  VerifyReceiptRoute: VerifyReceiptRoute,
   WhitepaperRoute: WhitepaperRoute,
   ZhRoute: ZhRoute,
   PaySlugRoute: PaySlugRoute,

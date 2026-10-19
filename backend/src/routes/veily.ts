@@ -1,3 +1,4 @@
+import { attestationAccount, issueAnswerReceipt } from "../veilyAttestation";
 import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { erc20Abi, formatUnits, getAddress, isAddress, isHex, recoverMessageAddress } from "viem";
@@ -276,6 +277,12 @@ veilyRouter.post("/permissions/:permissionId/revoke", async (req: Request, res: 
   } catch { fail(res, 500, "Could not revoke Veily session permission"); }
 });
 
+/** The address that signs Veily answer receipts, for anyone verifying one. */
+veilyRouter.get("/attestation", (_req: Request, res: Response): void => {
+  try { res.json({ address: attestationAccount().address, format: "veily-answer-receipt", signing: "EIP-191 personal_sign over the receipt payload" }); }
+  catch { fail(res, 503, "Veily answer receipts are not configured"); }
+});
+
 veilyRouter.post("/chat", async (req: Request, res: Response): Promise<void> => {
   try {
     const { walletAddress, requestId, timestamp, shardASignature, mode, messages, permissionId } = req.body ?? {};
@@ -380,7 +387,13 @@ veilyRouter.post("/chat", async (req: Request, res: Response): Promise<void> => 
       } else { fail(res, 400, "Unsupported AI provider"); return; }
     } finally { clearTimeout(timeout); }
     console.info(JSON.stringify({ msg: "Veily response completed", provider, model, tool_calls: toolsUsed, duration_ms: Math.round(performance.now() - started) }));
-    res.json({ answer: String(answer).slice(0, 12000), actions, provider, model });
+    const finalAnswer = String(answer).slice(0, 12000);
+    const question = [...userMessages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? "";
+    const receipt = await issueAnswerReceipt({ wallet, requestId, requestDigest: digest, provider, model, question, answer: finalAnswer, actions, toolCalls: toolsUsed }).catch((error) => {
+      console.warn(JSON.stringify({ msg: "Veily receipt not issued", error: error instanceof Error ? error.message : String(error) }));
+      return null;
+    });
+    res.json({ answer: finalAnswer, actions, provider, model, receipt });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") { fail(res, 504, "The AI provider took too long to respond"); return; }
     fail(res, 500, "Veily could not complete the request");

@@ -8,6 +8,9 @@ import { askVeily, createVeilyPermission, listVeilyPermissions, revokeVeilyPermi
 import { encryptDeviceKey, decryptDeviceKey } from "@/lib/deviceKeyVault";
 import { useWallet } from "@/lib/walletContext";
 import { useHoldings } from "@/lib/walletQueries";
+import { downloadReceipt, type VeilyReceipt } from "@/lib/veilyReceipt";
+import { VeilyReceiptPanel } from "./VeilyReceiptPanel";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const KEY_PREFIX = "veilora:veily:credential:";
 const HISTORY_PREFIX = "veilora:veily:history:";
@@ -54,6 +57,7 @@ export function VeilyAssistant() {
   const [passphrase, setPassphrase] = useState("");
   const [credentialNotice, setCredentialNotice] = useState("");
   const [messages, setMessages] = useState<VeilyMessage[]>(initialMessages);
+  const [receiptView, setReceiptView] = useState<VeilyReceipt | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -271,7 +275,7 @@ export function VeilyAssistant() {
     const payload: Omit<Parameters<typeof askVeily>[0], "shardASignature"> = {
       walletAddress: getAddress(walletAddress), requestId: crypto.randomUUID(), timestamp: Math.floor(Date.now() / 1000),
       ...(permission ? { permissionId: permission.id } : {}),
-      mode, messages: next, context: permission?.scopes.includes("wallet:read") ? walletContext : "",
+      mode, messages: next.map(({ receipt: _receipt, ...m }) => m), context: permission?.scopes.includes("wallet:read") ? walletContext : "",
       ...(mode === "byok" ? { provider, model: model.trim(), apiKey } : {}),
     };
     const canonical = JSON.stringify(payload);
@@ -282,7 +286,7 @@ export function VeilyAssistant() {
     setDraft(""); setBusy(true); setError("");
     try {
       const result = await askVeily({ ...payload, shardASignature });
-      const completed = [...next, { role: "assistant" as const, content: result.answer || "I couldn't form a response. Please try again.", actions: result.actions ?? [] }];
+      const completed = [...next, { role: "assistant" as const, content: result.answer || "I couldn't form a response. Please try again.", actions: result.actions ?? [], ...(result.receipt ? { receipt: result.receipt } : {}) }];
       setMessages(completed);
       updateConversation(conversationId, permissionKey, completed);
     } catch (e) {
@@ -360,7 +364,7 @@ export function VeilyAssistant() {
         {activeConversation&&!conversationCanContinue&&<p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This conversation used a different or expired permission. Your next message starts fresh.</p>}
         <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
           {messages.length===1&&<div className="mb-5 mt-4"><p className="mb-1 text-lg font-medium text-slate-900 dark:text-cream">What can I help with?</p><p className="mb-4 text-xs leading-relaxed text-slate-500 dark:text-mist">Ask about your wallet, activity, spending limits, or where to find something.</p><div className="flex flex-wrap gap-2">{shortcuts.map(prompt=><button key={prompt} className="rounded-full border border-slate-200 px-3 py-2 text-[10px] text-slate-600 transition-colors hover:border-[#f0ac5e] hover:bg-[#f0ac5e]/10 dark:border-ink-700 dark:text-mist" onClick={()=>setDraft(prompt)}>{prompt}</button>)}</div></div>}
-          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<Suspense fallback={<span className="whitespace-pre-wrap">{message.content}</span>}><VeilyMarkdown content={message.content}/></Suspense>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}</div></div>)}
+          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<Suspense fallback={<span className="whitespace-pre-wrap">{message.content}</span>}><VeilyMarkdown content={message.content}/></Suspense>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}{message.receipt&&<button className="mt-2 flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 dark:text-mist dark:hover:text-cream" onClick={()=>setReceiptView(message.receipt!)}><ShieldCheck size={12}/>Answer receipt</button>}</div></div>)}
           {busy&&<div className="flex items-center gap-2 text-xs text-slate-500 dark:text-mist"><LoaderCircle className="animate-spin" size={15}/>Checking that with Veily…</div>}
         </div>
         {error&&<p role="alert" className="px-4 pb-2 text-xs text-rose-600">{error}</p>}
@@ -369,5 +373,18 @@ export function VeilyAssistant() {
       </>}
     </motion.section>}
     <motion.button type="button" whileTap={reduceMotion?undefined:{scale:.92}} onClick={()=>setPanelOpen(v=>!v)} aria-label={panelOpen?"Close Veily assistant":"Open Veily assistant"} aria-expanded={panelOpen} className="flex items-center gap-2 rounded-full bg-[#f0ac5e] px-4 py-3 text-sm font-semibold text-ink-900 shadow-xl ring-1 ring-black/5 transition-colors hover:bg-[#e99a46] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f0ac5e] focus-visible:ring-offset-2"><Sparkles size={18}/><span>{panelOpen?"Close":"Ask Veily"}</span></motion.button>
+    <Dialog open={!!receiptView} onOpenChange={open => { if (!open) setReceiptView(null); }}>
+      <DialogContent className="wallet-dialog sm:max-w-md">
+        <DialogHeader><DialogTitle>Answer receipt</DialogTitle><DialogDescription>Signed by Veilora when this answer was returned, and checked again on this device.</DialogDescription></DialogHeader>
+        {receiptView && <>
+          <VeilyReceiptPanel receipt={receiptView}/>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="wallet-soft-button" onClick={() => void navigator.clipboard.writeText(JSON.stringify(receiptView, null, 2))}>Copy receipt</button>
+            <button type="button" className="wallet-soft-button" onClick={() => downloadReceipt(receiptView)}>Download</button>
+            <a className="wallet-soft-button" href="/verify-receipt" target="_blank" rel="noreferrer">Open the verifier</a>
+          </div>
+        </>}
+      </DialogContent>
+    </Dialog>
   </div>;
 }

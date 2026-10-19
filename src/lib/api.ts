@@ -1,3 +1,4 @@
+import type { VeilyReceipt } from './veilyReceipt';
 import { resolveRpcEndpoint } from './rpcSettings';
 import { getAddress, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -80,7 +81,7 @@ export async function getHealth() {
 export type VeilyMode = "hosted" | "byok";
 export type VeilyProvider = "groq" | "openai" | "anthropic";
 export type VeilyAction = { screen: "dashboard" | "market" | "swap" | "bridge" | "history" | "rules"; token?: string; sourceAsset?: "ETH" | "USDG"; destinationChainId?: number; destinationAsset?: string; amount?: string; recipient?: string };
-export interface VeilyMessage { role: "user" | "assistant"; content: string; actions?: VeilyAction[] }
+export interface VeilyMessage { role: "user" | "assistant"; content: string; actions?: VeilyAction[]; receipt?: VeilyReceipt }
 
 export async function askVeily(payload: {
   walletAddress: string;
@@ -94,7 +95,7 @@ export async function askVeily(payload: {
   model?: string;
   apiKey?: string;
   shardASignature: string;
-}): Promise<{ answer: string; actions: VeilyAction[]; provider: string; model: string }> {
+}): Promise<{ answer: string; actions: VeilyAction[]; provider: string; model: string; receipt?: VeilyReceipt | null }> {
   return request("/v1/veily/chat", { method: "POST", body: JSON.stringify(payload) });
 }
 
