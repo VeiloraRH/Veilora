@@ -1,3 +1,4 @@
+import type { SigningStage } from './signingProgress';
 import { createPublicClient, custom, defineChain, erc20Abi, parseAbi, encodeAbiParameters, encodeFunctionData, keccak256, stringToHex, getAddress, parseUnits, formatUnits, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { API_BASE, cosignTransaction, broadcastTransaction } from './api';
@@ -79,21 +80,26 @@ export async function readAccountNonce(wallet: Address): Promise<bigint> {
  if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Account nonce exceeds the supported range.');
  return nonce;
 }
-export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240) {
+export async function executeWalletCall(wallet: Address, privateKey: Hex, target: Address, value: bigint, data: Hex, deadline = Math.floor(Date.now()/1000)+240, onStage: (stage: SigningStage) => void = () => {}) {
+ onStage('prepare');
  const nonce = await readAccountNonce(wallet);
  const accountVersion = localStorage.getItem(`veilora:account-version:${wallet.toLowerCase()}`) === '2' ? 2 : 1;
  const digest = executionDigest(wallet, accountVersion, target, value, data, nonce, deadline);
+ onStage('device');
  const shardASignature = await privateKeyToAccount(privateKey).signMessage({ message: { raw: digest } });
+ onStage('cosigner');
  const payload = { target, value: value.toString(), data, nonce: Number(nonce), deadline };
  const cosigned = await cosignTransaction(wallet, { ...payload, shardASignature });
  if (!cosigned.combinedSignatures) throw new Error('The co-signer did not return a complete signature.');
+ onStage('network');
  const result = await broadcastTransaction({ ...payload, walletAddress: wallet, signatures: cosigned.combinedSignatures });
  if (!result.success) throw new Error(`Transaction reverted: ${result.transactionHash}`);
+ onStage('done');
  return result.transactionHash;
 }
-export async function sendAsset(wallet: Address, privateKey: Hex, token: WalletToken, recipient: Address, amount: bigint) {
+export async function sendAsset(wallet: Address, privateKey: Hex, token: WalletToken, recipient: Address, amount: bigint, onStage?: (stage: SigningStage) => void) {
  if (amount > await tokenBalance(wallet,token)) throw new Error('Your balance is too low for this transfer.');
- return executeWalletCall(wallet,privateKey,token.native ? recipient : token.address,token.native ? amount : 0n, token.native ? '0x' : encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[recipient,amount]}));
+ return executeWalletCall(wallet,privateKey,token.native ? recipient : token.address,token.native ? amount : 0n, token.native ? '0x' : encodeFunctionData({abi:erc20Abi,functionName:'transfer',args:[recipient,amount]}), undefined, onStage);
 }
 export type SwapQuote = { amountOut: bigint; minOut: bigint; amountIn: bigint; fee: number; venue: 'uniswap-v3' | 'uniswap-v4'; gasEstimate: bigint; pool?: V4Pool; tokenIn: Address; tokenOut: Address; expiresAt: number };
 export async function quoteSwap(input: WalletToken, output: WalletToken, amountIn: bigint, slippageBps: number): Promise<SwapQuote> {

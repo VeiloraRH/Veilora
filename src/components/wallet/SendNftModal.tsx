@@ -15,6 +15,8 @@ import { RecipientCheck, isBlockedRecipient, useRecipientAssessment } from '@/co
 import { TransactionCheck, type TransactionCheckItem } from '@/components/wallet/TransactionCheck';
 import { SignPreview } from '@/components/wallet/TxExplanation';
 import type { TransferReceipt } from '@/lib/transferReceipt';
+import { advance, idleProgress, type SigningProgress } from '@/lib/signingProgress';
+import { SigningProgressList } from '@/components/wallet/SigningProgressList';
 
 type Simulation = null | { status: 'passed' | 'reverted' | 'unavailable'; detail: string };
 
@@ -28,8 +30,9 @@ export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; 
  const [simulation, setSimulation] = useState<Simulation>(null);
  const [simulationAck, setSimulationAck] = useState(false);
  const [busy, setBusy] = useState(false);
+ const [progress, setProgress] = useState<SigningProgress>(idleProgress);
  const [error, setError] = useState('');
- useEffect(() => { if (nft) { setStep(0); setRecipient(''); setQuantity('1'); setError(''); } }, [nft]);
+ useEffect(() => { if (nft) { setStep(0); setRecipient(''); setQuantity('1'); setError(''); setProgress(idleProgress()); } }, [nft]);
  useEffect(() => setAcknowledged(false), [recipient]);
 
  const held = nft ? nftHeld(nft) : 1n;
@@ -68,12 +71,12 @@ export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; 
   const key = getStoredDeviceKey();
   if (!key) { setError('Unlock your device key first.'); return; }
   if (!ready || !call || !nft) return;
-  setBusy(true); setError('');
+  setBusy(true); setError(''); setProgress(idleProgress());
   try {
-   const hash = await executeWalletCall(getAddress(walletAddress), key as Hex, call.target, call.value, call.data);
+   const hash = await executeWalletCall(getAddress(walletAddress), key as Hex, call.target, call.value, call.data, undefined, stage => setProgress(p => advance(p, stage)));
    onSent({ what: `${amount > 1n ? `${amount} × ` : ''}${nft.name}`, recipient: getAddress(recipient), recipientName: assessment?.contactName ?? null, from: getAddress(walletAddress), hash: hash as Hex, sentAt: new Date().toISOString() });
    onClose();
-  } catch (cause) { setError(cause instanceof Error ? cause.message : 'Transfer failed. Please try again.'); }
+  } catch (cause) { setProgress(idleProgress()); setError(cause instanceof Error ? cause.message : 'Transfer failed. Please try again.'); }
   finally { setBusy(false); }
  }
 
@@ -121,6 +124,7 @@ export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; 
      { label: 'Network fee', value: 'Paid by Veilora' },
     ]}/>
     {simulation?.status === 'unavailable' && <label className="recipient-ack"><input type="checkbox" checked={simulationAck} onChange={e=>setSimulationAck(e.target.checked)}/><span>The transfer could not be simulated. I reviewed the NFT and recipient and want to continue.</span></label>}
+    <SigningProgressList progress={progress}/>
     {error && <p role="alert" className="mb-4 rounded-xl bg-red-500/5 p-3 text-xs text-red-500">{error}</p>}
     <Button className="h-12 w-full rounded-xl" disabled={busy || !ready} onClick={() => void send()}>{busy ? <><Loader2 className="animate-spin"/>Signing & sending…</> : left === 0 ? 'Daily NFT limit reached' : simulation?.status === 'reverted' ? 'Transfer would revert' : simulation?.status === 'unavailable' && !simulationAck ? 'Confirm details to continue' : 'Confirm & send'}</Button>
    </div>}

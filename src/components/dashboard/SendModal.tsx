@@ -21,6 +21,8 @@ import { spendingAllowance } from '@/lib/spendingAllowance';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
 import { readRecipientQrImage } from '@/lib/recipientQr';
 import type { TransferReceipt } from '@/lib/transferReceipt';
+import { advance, idleProgress, type SigningProgress } from '@/lib/signingProgress';
+import { SigningProgressList } from '@/components/wallet/SigningProgressList';
 interface SendModalProps{open:boolean;onClose:()=>void;publicUsdg:number;ethBalance:number;onSuccess:(receipt:TransferReceipt)=>void}
 function BalanceDiffPreview({balance,amount,symbol,decimals,native}:{balance:bigint|null|undefined;amount:bigint;symbol:string;decimals:number;native:boolean}){
  if(balance==null||amount<=0n)return null;
@@ -31,9 +33,9 @@ function BalanceDiffPreview({balance,amount,symbol,decimals,native}:{balance:big
 export function SendModal({open,onClose,onSuccess}:SendModalProps){
  const {walletAddress,getStoredDeviceKey}=useWallet();const holdings=useHoldings();const spendingPolicy=useSpendingPolicy();const reduce=useReducedMotion();
  const [step,setStep]=useState(0);const [recipient,setRecipient]=useState('');const [amount,setAmount]=useState('');const [symbol,setSymbol]=useState('USDG');const [picker,setPicker]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [qrBusy,setQrBusy]=useState(false);const [qrMessage,setQrMessage]=useState('');
- const [acknowledged,setAcknowledged]=useState(false);
+ const [acknowledged,setAcknowledged]=useState(false);const [progress,setProgress]=useState<SigningProgress>(idleProgress);
  const [simulation,setSimulation]=useState<null|{status:'passed'|'reverted'|'unavailable';detail:string}>(null);const [simulationAck,setSimulationAck]=useState(false);
- useEffect(()=>{if(open){setStep(0);setError('');setAmount('');setRecipient('');}},[open]);
+ useEffect(()=>{if(open){setStep(0);setError('');setAmount('');setRecipient('');setProgress(idleProgress());}},[open]);
  useEffect(()=>setAcknowledged(false),[recipient]);
  const token=ROBINHOOD_TOKEN_REGISTRY[symbol];const balance=holdings.data?.find(h=>h.token.symbol===symbol)?.raw;
  const allowance=spendingAllowance(token,balance,spendingPolicy.data);const policyCap=allowance?.max??null;
@@ -60,7 +62,7 @@ export function SendModal({open,onClose,onSuccess}:SendModalProps){
    .finally(()=>{if(timeout!==undefined)window.clearTimeout(timeout);});
   return()=>{active=false;if(timeout!==undefined)window.clearTimeout(timeout);};
  },[step,validRecipient,validAmount,walletAddress,recipient,token,raw.toString()]);
- async function send(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}if(!validRecipient||!validAmount||!withinPolicy||blocked||checking||!assessment||(needsAck&&!acknowledged)||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck)return;setBusy(true);setError('');try{const hash=await sendAsset(getAddress(walletAddress),key as Hex,token,getAddress(recipient),raw);onSuccess({what:`${amount} ${symbol}`,recipient:getAddress(recipient),recipientName:assessment?.contactName??null,from:getAddress(walletAddress),hash:hash as Hex,sentAt:new Date().toISOString()});onClose();}catch(e){setError(e instanceof Error?e.message:'Transfer failed. Please try again.');}finally{setBusy(false);}}
+ async function send(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}if(!validRecipient||!validAmount||!withinPolicy||blocked||checking||!assessment||(needsAck&&!acknowledged)||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck)return;setBusy(true);setError('');setProgress(idleProgress());try{const hash=await sendAsset(getAddress(walletAddress),key as Hex,token,getAddress(recipient),raw,stage=>setProgress(p=>advance(p,stage)));onSuccess({what:`${amount} ${symbol}`,recipient:getAddress(recipient),recipientName:assessment?.contactName??null,from:getAddress(walletAddress),hash:hash as Hex,sentAt:new Date().toISOString()});onClose();}catch(e){setProgress(idleProgress());setError(e instanceof Error?e.message:'Transfer failed. Please try again.');}finally{setBusy(false);}}
  const formatLimit=(value:bigint|null|undefined)=>value==null?'—':Number(formatUnits(value,token.decimals)).toLocaleString(undefined,{maximumFractionDigits:6});
  const transactionChecks:TransactionCheckItem[]=[
   {label:'Wallet balance',detail:balance==null?'Balance unavailable':raw<=balance?`${amount} ${symbol} is available`:`Not enough ${symbol} for this transfer`,status:balance==null?(holdings.isLoading?'checking':'attention'):raw<=balance?'ready':'attention' as const},
@@ -79,6 +81,6 @@ export function SendModal({open,onClose,onSuccess}:SendModalProps){
   {label:'Per-transaction limit',value:allowance?<><Private>{formatLimit(allowance.perTransaction)}</Private> {symbol}</>:'Unavailable'},
   {label:'Daily allowance remaining',value:allowance?<><Private>{formatLimit(allowance.dailyRemaining)}</Private> {symbol}</>:'Unavailable'},
   {label:'Network fee',value:'Paid by Veilora'},
- ]}/>{simulation?.status==='unavailable'&&<label className="recipient-ack"><input type="checkbox" checked={simulationAck} onChange={e=>setSimulationAck(e.target.checked)}/><span>The call could not be simulated. I reviewed the amount, token and recipient and want to continue.</span></label>}{error&&<p role="alert" className="mb-4 rounded-xl bg-red-500/5 p-3 text-xs text-red-500">{error}</p>}<Button className="h-12 w-full rounded-xl" disabled={busy||!validAmount||!withinPolicy||blocked||checking||!assessment||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck||(needsAck&&!acknowledged)} onClick={()=>void send()}>{busy?<><Loader2 className="animate-spin"/>Signing & sending…</>:!validAmount?'Insufficient balance':!withinPolicy&&policyCap!=null?'Over co-signer allowance':simulation?.status==='reverted'?'Transfer would revert':simulation?.status==='unavailable'&&!simulationAck?'Confirm details to continue':'Confirm & send'}</Button></div>}
+ ]}/>{simulation?.status==='unavailable'&&<label className="recipient-ack"><input type="checkbox" checked={simulationAck} onChange={e=>setSimulationAck(e.target.checked)}/><span>The call could not be simulated. I reviewed the amount, token and recipient and want to continue.</span></label>}<SigningProgressList progress={progress}/>{error&&<p role="alert" className="mb-4 rounded-xl bg-red-500/5 p-3 text-xs text-red-500">{error}</p>}<Button className="h-12 w-full rounded-xl" disabled={busy||!validAmount||!withinPolicy||blocked||checking||!assessment||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck||(needsAck&&!acknowledged)} onClick={()=>void send()}>{busy?<><Loader2 className="animate-spin"/>Signing & sending…</>:!validAmount?'Insufficient balance':!withinPolicy&&policyCap!=null?'Over co-signer allowance':simulation?.status==='reverted'?'Transfer would revert':simulation?.status==='unavailable'&&!simulationAck?'Confirm details to continue':'Confirm & send'}</Button></div>}
  </motion.div></AnimatePresence></div></DialogContent></Dialog><TokenPicker open={picker} onClose={()=>setPicker(false)} onPick={t=>{setSymbol(t.symbol);setAmount('');}}/></>;
 }
