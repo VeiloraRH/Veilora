@@ -19,7 +19,8 @@ import { SignPreview } from '@/components/wallet/TxExplanation';
 import { spendingAllowance } from '@/lib/spendingAllowance';
 import { useSpendingPolicy } from '@/lib/spendingPolicy';
 import { readRecipientQrImage } from '@/lib/recipientQr';
-interface SendModalProps{open:boolean;onClose:()=>void;publicUsdg:number;ethBalance:number;onSuccess:(details:string)=>void}
+import type { TransferReceipt } from '@/lib/transferReceipt';
+interface SendModalProps{open:boolean;onClose:()=>void;publicUsdg:number;ethBalance:number;onSuccess:(receipt:TransferReceipt)=>void}
 function BalanceDiffPreview({balance,amount,symbol,decimals,native}:{balance:bigint|null|undefined;amount:bigint;symbol:string;decimals:number;native:boolean}){
  if(balance==null||amount<=0n)return null;
  const format=(value:bigint)=>Number(formatUnits(value,decimals)).toLocaleString(undefined,{maximumFractionDigits:6});
@@ -58,7 +59,7 @@ export function SendModal({open,onClose,onSuccess}:SendModalProps){
    .finally(()=>{if(timeout!==undefined)window.clearTimeout(timeout);});
   return()=>{active=false;if(timeout!==undefined)window.clearTimeout(timeout);};
  },[step,validRecipient,validAmount,walletAddress,recipient,token,raw.toString()]);
- async function send(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}if(!validRecipient||!validAmount||!withinPolicy||blocked||checking||!assessment||(needsAck&&!acknowledged)||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck)return;setBusy(true);setError('');try{await sendAsset(getAddress(walletAddress),key as Hex,token,getAddress(recipient),raw);onSuccess(`Sent ${amount} ${symbol} to ${shortAddress(recipient)}. Transaction confirmed.`);onClose();}catch(e){setError(e instanceof Error?e.message:'Transfer failed. Please try again.');}finally{setBusy(false);}}
+ async function send(){const key=getStoredDeviceKey();if(!key){setError('Unlock your device key first.');return;}if(!validRecipient||!validAmount||!withinPolicy||blocked||checking||!assessment||(needsAck&&!acknowledged)||!simulation||simulation.status==='reverted'||simulation.status==='unavailable'&&!simulationAck)return;setBusy(true);setError('');try{const hash=await sendAsset(getAddress(walletAddress),key as Hex,token,getAddress(recipient),raw);onSuccess({what:`${amount} ${symbol}`,recipient:getAddress(recipient),recipientName:assessment?.contactName??null,from:getAddress(walletAddress),hash:hash as Hex,sentAt:new Date().toISOString()});onClose();}catch(e){setError(e instanceof Error?e.message:'Transfer failed. Please try again.');}finally{setBusy(false);}}
  const formatLimit=(value:bigint|null|undefined)=>value==null?'—':Number(formatUnits(value,token.decimals)).toLocaleString(undefined,{maximumFractionDigits:6});
  const transactionChecks:TransactionCheckItem[]=[
   {label:'Wallet balance',detail:balance==null?'Balance unavailable':raw<=balance?`${amount} ${symbol} is available`:`Not enough ${symbol} for this transfer`,status:balance==null?(holdings.isLoading?'checking':'attention'):raw<=balance?'ready':'attention' as const},

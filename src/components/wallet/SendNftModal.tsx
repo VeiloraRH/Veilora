@@ -14,10 +14,11 @@ import { ContactBook } from '@/components/wallet/ContactBook';
 import { RecipientCheck, isBlockedRecipient, useRecipientAssessment } from '@/components/wallet/RecipientCheck';
 import { TransactionCheck, type TransactionCheckItem } from '@/components/wallet/TransactionCheck';
 import { SignPreview } from '@/components/wallet/TxExplanation';
+import type { TransferReceipt } from '@/lib/transferReceipt';
 
 type Simulation = null | { status: 'passed' | 'reverted' | 'unavailable'; detail: string };
 
-export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; onClose: () => void; onSent: (details: string) => void }) {
+export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; onClose: () => void; onSent: (receipt: TransferReceipt) => void }) {
  const { walletAddress, getStoredDeviceKey } = useWallet();
  const spendingPolicy = useSpendingPolicy();
  const [step, setStep] = useState(0);
@@ -69,8 +70,8 @@ export function SendNftModal({ nft, onClose, onSent }: { nft: WalletNft | null; 
   if (!ready || !call || !nft) return;
   setBusy(true); setError('');
   try {
-   await executeWalletCall(getAddress(walletAddress), key as Hex, call.target, call.value, call.data);
-   onSent(`Sent ${amount > 1n ? `${amount} × ` : ''}${nft.name} to ${shortAddress(recipient)}. Transaction confirmed.`);
+   const hash = await executeWalletCall(getAddress(walletAddress), key as Hex, call.target, call.value, call.data);
+   onSent({ what: `${amount > 1n ? `${amount} × ` : ''}${nft.name}`, recipient: getAddress(recipient), recipientName: assessment?.contactName ?? null, from: getAddress(walletAddress), hash: hash as Hex, sentAt: new Date().toISOString() });
    onClose();
   } catch (cause) { setError(cause instanceof Error ? cause.message : 'Transfer failed. Please try again.'); }
   finally { setBusy(false); }
