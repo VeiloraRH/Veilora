@@ -1,7 +1,7 @@
 import { CircleCheck, CircleDashed, Loader2 } from 'lucide-react';
 import { SIGNING_STEPS, stepStates, type SigningProgress } from '@/lib/signingProgress';
 
-const seconds = (ms: number) => ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+const seconds = (ms: number) => ms < 1 ? '<1 ms' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 
 /** Live 2-of-3 signing steps for the review screen. */
 export function SigningProgressList({ progress }: { progress: SigningProgress }) {

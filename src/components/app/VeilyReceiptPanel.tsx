@@ -23,12 +23,12 @@ export function VeilyReceiptPanel({ receipt }: { receipt: VeilyReceipt }) {
    {c.ok ? <CircleCheck size={14} className="mt-0.5 shrink-0 text-emerald-600"/> : <CircleX size={14} className="mt-0.5 shrink-0 text-red-500"/>}
    <span><strong className="font-medium">{c.label}</strong> · <span className="break-all text-muted-foreground">{c.detail}</span></span>
   </li>)}</ul>
-  {p && <div className="send-review">
-   <div><span>AI provider</span><strong className="font-normal">{p.provider}</strong></div>
-   <div><span>Model</span><strong className="max-w-48 truncate font-normal" title={p.model}>{p.model}</strong></div>
-   <div><span>Answered</span><strong className="font-normal">{new Date(p.issuedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</strong></div>
-   <div><span>Wallet tools used</span><strong className="font-normal">{p.toolCalls}</strong></div>
-  </div>}
+  {p && <dl className="grid gap-2 text-xs">{([
+   ['AI provider', p.provider],
+   ['Model', p.model],
+   ['Answered', new Date(p.issuedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })],
+   ['Wallet tools used', String(p.toolCalls)],
+  ] as const).map(([label, value]) => <div key={label} className="flex justify-between gap-3"><dt className="text-muted-foreground">{label}</dt><dd className="max-w-56 truncate" title={value}>{value}</dd></div>)}</dl>}
   <p className="text-[11px] leading-5 text-muted-foreground">A receipt proves what Veilora received from the AI provider and showed you. It does not prove the answer is right.</p>
  </div>;
 }

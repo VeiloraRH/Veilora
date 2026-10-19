@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
+import { ArrowLeft, FileUp } from 'lucide-react';
 import { Logo } from '@/components/ui';
 import { VeilyReceiptPanel } from '@/components/app/VeilyReceiptPanel';
 import { parseReceipt, type VeilyReceipt } from '@/lib/veilyReceipt';
 
 export const Route = createFileRoute('/verify-receipt')({ component: VerifyReceiptPage });
+const VeilyMarkdown = lazy(() => import('@/components/app/VeilyMarkdown').then(m => ({ default: m.VeilyMarkdown })));
 
 /** Public: check any Veily answer receipt in the browser. Nothing is uploaded. */
 function VerifyReceiptPage() {
@@ -22,7 +23,10 @@ function VerifyReceiptPage() {
   <section className="mt-8 w-full max-w-lg space-y-4 rounded-3xl border bg-card p-6 shadow-sm">
    <div><h1 className="text-lg font-medium">Verify a Veily answer receipt</h1>
     <p className="mt-1 text-sm text-muted-foreground">Paste a receipt or choose its file. It is checked in this browser against the key Veilora publishes. Nothing is uploaded.</p></div>
-   <input type="file" accept="application/json,.json" className="block text-xs" onChange={event => { const file = event.target.files?.[0]; if (file) void file.text().then(load); }}/>
+   <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition hover:bg-muted">
+    <input className="sr-only" type="file" accept="application/json,.json" onChange={event => { const file = event.target.files?.[0]; if (file) void file.text().then(load); event.currentTarget.value = ''; }}/>
+    <FileUp size={14}/>Choose a receipt file
+   </label>
    <textarea aria-label="Receipt" rows={6} spellCheck={false} value={text} onChange={event => load(event.target.value)} placeholder='{"format":"veily-answer-receipt", …}'
     className="w-full rounded-xl border bg-background p-3 font-mono text-xs"/>
    {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
@@ -30,7 +34,8 @@ function VerifyReceiptPage() {
     <VeilyReceiptPanel receipt={receipt}/>
     <div className="space-y-2 rounded-xl bg-muted/60 p-3 text-xs">
      <p><strong className="font-medium">Question</strong></p><p className="whitespace-pre-wrap text-muted-foreground">{receipt.question}</p>
-     <p><strong className="font-medium">Answer</strong></p><p className="whitespace-pre-wrap text-muted-foreground">{receipt.answer}</p>
+     <p><strong className="font-medium">Answer</strong></p><div className="text-muted-foreground"><Suspense fallback={<p className="whitespace-pre-wrap">{receipt.answer}</p>}><VeilyMarkdown content={receipt.answer}/></Suspense></div>
+     <p className="text-[11px] text-muted-foreground">Shown formatted; the check above is over the exact text that was signed.</p>
     </div>
    </>}
   </section>
