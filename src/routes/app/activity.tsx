@@ -10,7 +10,7 @@ import type { BridgeRecord } from '@/lib/bridgeTracking';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui';
 import { saveTransactionTag, transactionTagKey, useTransactionTags } from '@/lib/transactionTags';
 
-export const Route=createFileRoute('/app/activity')({component:ActivityScreen});
+export const Route=createFileRoute('/app/activity')({component:ActivityScreen,validateSearch:(search:Record<string,unknown>):{q?:string}=>typeof search.q==='string'&&search.q.trim()?{q:search.q.slice(0,64)}:{}});
 
 function bridgeStatus(status:string):Pick<WalletTransaction,'status'> & {label:string} {
  const normalized=status.toLowerCase();
@@ -33,7 +33,7 @@ function ActivityScreen() {
  const {walletAddress}=useWallet();const history=useTransactions();
  const tags=useTransactionTags(walletAddress);
  const [bridgeRecords,setBridgeRecords]=useState<BridgeRecord[]>([]);
- const [search,setSearch]=useState('');const [type,setType]=useState('all');const [status,setStatus]=useState('all');const [period,setPeriod]=useState('all');const [page,setPage]=useState(1);
+ const linked=Route.useSearch();const [search,setSearch]=useState(linked.q??'');useEffect(()=>{if(linked.q!=null)setSearch(linked.q);},[linked.q]);const [type,setType]=useState('all');const [status,setStatus]=useState('all');const [period,setPeriod]=useState('all');const [page,setPage]=useState(1);
  const [tagging,setTagging]=useState<WalletTransaction|null>(null);const [tag,setTag]=useState('');const [costCenter,setCostCenter]=useState('');
  useEffect(()=>{
   const refresh=()=>setBridgeRecords(loadBridgeRecords(walletAddress));

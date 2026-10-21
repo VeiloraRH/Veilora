@@ -74,3 +74,32 @@ export function summarizeLedger(walletAddress: string, transactions: ExplorerTra
     source: "Robinhood Chain Blockscout",
   };
 }
+
+export type ActivityFilters = { direction?: "sent" | "received"; asset?: string; counterparty?: string; minAmount?: number; maxAmount?: number; days?: number };
+
+/** Transfers matching the filters, newest first, from the explorer's latest pages. Addresses only. */
+export function searchActivity(walletAddress: string, transactions: ExplorerTransfer[], tokenTransfers: ExplorerTransfer[], filters: ActivityFilters, now = Date.now(), limit = 20) {
+  const wallet = walletAddress.toLowerCase();
+  const days = filters.days && filters.days >= 1 && filters.days <= 365 ? filters.days : 365;
+  const since = now - days * 86_400_000;
+  const other = filters.counterparty && isAddress(filters.counterparty) ? filters.counterparty.toLowerCase() : null;
+  const matches = movements(wallet, transactions, tokenTransfers).filter((m) => {
+    const direction = m.from === wallet ? "sent" : "received";
+    const amount = Number(formatUnits(m.raw, m.decimals));
+    return m.at >= since && m.at <= now &&
+      (!filters.direction || filters.direction === direction) &&
+      (!filters.asset || filters.asset.toUpperCase() === m.asset.toUpperCase()) &&
+      (!other || (direction === "sent" ? m.to : m.from) === other) &&
+      (filters.minAmount == null || amount >= filters.minAmount) &&
+      (filters.maxAmount == null || amount <= filters.maxAmount);
+  }).sort((a, b) => b.at - a.at);
+  return {
+    matches: matches.slice(0, limit).map((m) => ({
+      date: new Date(m.at).toISOString(), direction: m.from === wallet ? "sent" : "received", asset: m.asset,
+      amount: formatUnits(m.raw, m.decimals), counterparty: getAddress(m.from === wallet ? m.to : m.from),
+    })),
+    totalMatches: matches.length,
+    periodDays: days,
+    note: "Searches the explorer's latest transfers for this wallet; older history may not be included.",
+  };
+}

@@ -44,3 +44,17 @@ describe("Veily ledger summary for one address", () => {
     expect(summarizeLedger(me, [], [], 30, now).withCounterparty).toBeUndefined();
   });
 });
+
+describe("Veily activity search", () => {
+  test("filters by direction, asset, counterparty, amount and period, newest first", async () => {
+    const { searchActivity } = await import("../src/ledgerSummary");
+    const txs = [eth(me, studio, "10000000000000000", 3)];
+    const tokens = [usdg(me, maya, "1200000000", 2), usdg(me, maya, "50000000", 6), usdg(maya, me, "500000000", 1), usdg(me, studio, "80000000", 40)];
+    const sentToMaya = searchActivity(me, txs, tokens, { direction: "sent", counterparty: maya }, now);
+    expect(sentToMaya.matches.map((m) => m.amount)).toEqual(["1200", "50"]);
+    expect(searchActivity(me, txs, tokens, { direction: "sent", counterparty: maya, minAmount: 100 }, now).matches).toHaveLength(1);
+    expect(searchActivity(me, txs, tokens, { asset: "eth" }, now).matches[0]).toMatchObject({ direction: "sent", asset: "ETH", amount: "0.01" });
+    expect(searchActivity(me, txs, tokens, { days: 30 }, now).totalMatches).toBe(4);
+    expect(searchActivity(me, txs, tokens, { direction: "received" }, now).matches[0].counterparty).toBe("0x4444444444444444444444444444444444444444");
+  });
+});
