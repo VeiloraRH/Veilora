@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { query } from "../src/db/index";
-import { addressFacts, pendingReviews } from "../src/veilyReads";
+import { addressFacts, pendingReviews, walletHealth } from "../src/veilyReads";
 
 const wallet = "0x8888888888888888888888888888888888888888";
 
@@ -47,5 +47,20 @@ describe("Veily read-only wallet lookups", () => {
     expect(addressFacts(wallet, "0x000000000000000000000000000000000000dEaD", null, []).burnAddress).toBe(true);
     expect(addressFacts(wallet, "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", "0x60", []).tokenContract).toBe("USDG");
     expect(addressFacts(wallet, "0x12", null, [])).toEqual({ error: "That is not a valid address" });
+  });
+
+  test("wallet health compares registered keys with the chain and reports gaps", async () => {
+    const live = { shardA: wallet, shardB: wallet, shardC: wallet };
+    const ok = await walletHealth(wallet, async () => live);
+    if ("error" in ok) throw new Error(ok.error);
+    expect(ok.checks.filter((c) => c.status === "ok").map((c) => c.check)).toEqual(["On-chain account", "Device key (Shard A)", "Co-signer key (Shard B)", "Recovery key (Shard C)", "Co-signer", "Spending limits"]);
+    expect(ok.checks.find((c) => c.check === "Authenticator freeze")?.status).toBe("attention");
+    const changed = await walletHealth(wallet, async () => ({ ...live, shardC: "0x9999999999999999999999999999999999999999" }));
+    if ("error" in changed) throw new Error(changed.error);
+    expect(changed.checks.find((c) => c.check === "Recovery key (Shard C)")?.status).toBe("attention");
+    const offline = await walletHealth(wallet, async () => { throw new Error("rpc down"); });
+    if ("error" in offline) throw new Error(offline.error);
+    expect(offline.checks[0]).toMatchObject({ check: "On-chain account", status: "unknown" });
+    expect(await walletHealth("0x7777777777777777777777777777777777777770", async () => null)).toEqual({ error: "Wallet not found" });
   });
 });

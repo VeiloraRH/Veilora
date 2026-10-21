@@ -73,3 +73,44 @@ export function addressFacts(walletAddress: string, address: string, code: strin
     note: "Counts cover the explorer's latest transfers for this wallet. Your contacts, blocklist and approved list are checked in the app, on your device.",
   };
 }
+
+export type HealthCheck = { check: string; status: "ok" | "attention" | "unknown"; detail: string };
+type OnChain = { shardA: string; shardB: string; shardC: string } | null;
+
+/**
+ * Server-side health of the wallet: keys registered vs. the keys the deployed
+ * account accepts, freeze state, authenticator and spending limits. Checks only
+ * the device can make (backups, recovery drills) are shown in the app.
+ */
+export async function walletHealth(wallet: string, readChain: (address: `0x${string}`) => Promise<OnChain>) {
+  const rows = await query<{ shard_a_address: string; shard_b_address: string; shard_c_address: string; is_frozen: boolean; frozen_until: Date | null; totp_enabled_at: Date | null; per_transaction_percent: number | null; daily_total_percent: number | null }>(
+    `SELECT w.shard_a_address, w.shard_b_address, w.shard_c_address, w.is_frozen, w.frozen_until, w.totp_enabled_at, p.per_transaction_percent, p.daily_total_percent
+     FROM wallets w LEFT JOIN wallet_spending_policies p ON p.wallet_address = w.address WHERE w.address = $1`,
+    [wallet.toLowerCase()],
+  );
+  const w = rows.rows[0];
+  if (!w) return { error: "Wallet not found" };
+  let onChain: OnChain = null; let reachable = true;
+  try { onChain = await readChain(getAddress(wallet)); } catch { reachable = false; }
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const frozen = w.is_frozen && (!w.frozen_until || w.frozen_until > new Date());
+  const perTx = w.per_transaction_percent ?? 20; const daily = w.daily_total_percent ?? 20;
+  const checks: HealthCheck[] = [
+    !reachable ? { check: "On-chain account", status: "unknown", detail: "Robinhood Chain could not be reached, so the on-chain keys were not checked." }
+      : !onChain ? { check: "On-chain account", status: "attention", detail: "The smart account is not deployed yet." }
+      : { check: "On-chain account", status: "ok", detail: "Deployed on Robinhood Chain." },
+    ...(onChain ? (["A", "B", "C"] as const).map((k): HealthCheck => {
+      const registered = k === "A" ? w.shard_a_address : k === "B" ? w.shard_b_address : w.shard_c_address;
+      const live = k === "A" ? onChain!.shardA : k === "B" ? onChain!.shardB : onChain!.shardC;
+      const name = k === "A" ? "Device key (Shard A)" : k === "B" ? "Co-signer key (Shard B)" : "Recovery key (Shard C)";
+      return same(registered, live) ? { check: name, status: "ok", detail: "Matches the key the account accepts on-chain." }
+        : { check: name, status: "attention", detail: "Differs from the key the account accepts on-chain; check Quorum & recovery." };
+    }) : []),
+    frozen ? { check: "Co-signer", status: "attention", detail: `Frozen${w.frozen_until ? ` until ${w.frozen_until.toISOString()}` : ""}; nothing will be co-signed.` }
+      : { check: "Co-signer", status: "ok", detail: "Signing policy-approved requests." },
+    w.totp_enabled_at ? { check: "Authenticator freeze", status: "ok", detail: "An authenticator code can freeze the account from any device." }
+      : { check: "Authenticator freeze", status: "attention", detail: "Not set up. Adding one lets you freeze from any device without your recovery key." },
+    { check: "Spending limits", status: perTx <= 50 && daily <= 50 ? "ok" : "attention", detail: `Up to ${perTx}% of a balance per transaction and ${daily}% per day.` },
+  ];
+  return { checks, onDeviceChecks: "Backups and the recovery drill are checked on the device; see the dashboard health card.", fixIn: "Quorum & recovery (Security)" };
+}

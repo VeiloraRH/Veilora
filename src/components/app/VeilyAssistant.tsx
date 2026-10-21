@@ -318,6 +318,7 @@ export function VeilyAssistant() {
     else if (action.screen === "swap") void navigate({ to: "/app/swap", search: { buy: action.token ?? "NVDA" } });
     else if (action.screen === "bridge") void navigate({ to: "/app/bridge", search: { sourceAsset: action.sourceAsset, destinationChainId: action.destinationChainId, destinationSymbol: action.destinationAsset, amount: action.amount, recipient: action.recipient } });
     else if (action.screen === "history") void navigate({ to: "/app/activity" });
+    else if (action.screen === "security") void navigate({ to: "/app/security" });
     else void navigate({ to: "/app/rules" });
   }
 
