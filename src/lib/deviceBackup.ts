@@ -78,8 +78,10 @@ export async function openDeviceBackup(fileText: string, wallet: string, passphr
  return { walletAddress: getAddress(record.walletAddress), createdAt: record.createdAt, items };
 }
 
-/** Rough size of a section for the restore preview: items in a list or map, else stored. */
-export function sectionSize(value: string): number | null {
+/** Items in a section for the restore preview; settings and other single values have no count. */
+const LIST_SECTIONS = new Set(['contacts', 'blocklist', 'blocklist-reasons', 'approved', 'watch', 'bridge', 'bridge-notifications', 'tags', 'send-drafts', 'payment-links', 'veily', 'market-watchlist']);
+export function sectionSize(value: string, id?: string): number | null {
+ if (id && !LIST_SECTIONS.has(id)) return null;
  try { const parsed: unknown = JSON.parse(value); return Array.isArray(parsed) ? parsed.length : parsed && typeof parsed === 'object' ? Object.keys(parsed).length : null; }
  catch { return null; }
 }

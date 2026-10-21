@@ -101,11 +101,11 @@ export function AddressBookBackup() {
       <div className="wallet-panel wallet-address-backup">
         <div className="wallet-blocklist-intro"><span><FileLock2 size={18}/></span><div><strong>Take everything on this device with you</strong><p>One encrypted file with this wallet’s contacts, blocked and approved addresses, watchlists, bridge history, tags, payment link keys, Veily chats and settings. It never contains your device key or recovery key, and Veilora never receives the file or passphrase. Older address book backups still restore.</p></div></div>
         <div className="wallet-address-backup-actions"><button className="rule-button" onClick={() => { setMode('export'); setError(''); }}><Download size={14}/>Download encrypted backup</button><button className="rule-button" onClick={() => fileInput.current?.click()}><Upload size={14}/>Restore from backup</button></div>
-        <input ref={fileInput} className="sr-only" type="file" accept=".json,application/json" aria-label="Choose Veilora address book backup" onChange={(event) => {
+        <input ref={fileInput} className="sr-only" type="file" accept=".json,application/json" aria-label="Choose a Veilora backup file" onChange={(event) => {
           const selected = event.target.files?.[0] ?? null;
           event.target.value = '';
           if (!selected) return;
-          if (selected.size > 1_000_000) { setNotice({ title: 'Backup file too large', description: 'Choose a Veilora address book backup smaller than 1 MB.' }); return; }
+          if (selected.size > 5_000_000) { setNotice({ title: 'Backup file too large', description: 'Choose a Veilora backup file smaller than 5 MB.' }); return; }
           setFile(selected); setMode('import'); setPreview(null); setPassphrase(''); setError('');
         }}/>
       </div>
@@ -122,7 +122,7 @@ export function AddressBookBackup() {
           <p className="rc-muted">Encryption runs in this browser using PBKDF2 and AES-256-GCM. If you lose the passphrase, the backup cannot be opened.</p>
           <button className="wallet-primary-button" disabled={busy} onClick={() => void exportBackup()}>{busy ? 'Encrypting…' : 'Download backup'}</button>
         </div> : devicePreview ? <div className="grid gap-4">
-          <ul className="grid gap-1.5 rounded-xl border p-4 text-sm">{BACKUP_SECTIONS.filter(sec => sec.id in devicePreview.items).map(sec => { const n = sectionSize(devicePreview.items[sec.id]); return <li key={sec.id} className="flex justify-between gap-3"><span>{sec.label}</span><span className="text-muted-foreground">{n == null ? 'Saved' : n}</span></li>; })}</ul>
+          <ul className="grid gap-1.5 rounded-xl border p-4 text-sm">{BACKUP_SECTIONS.filter(sec => sec.id in devicePreview.items).map(sec => { const n = sectionSize(devicePreview.items[sec.id], sec.id); return <li key={sec.id} className="flex justify-between gap-3"><span>{sec.label}</span><span className="text-muted-foreground">{n == null ? 'Saved' : n}</span></li>; })}</ul>
           <p className="rc-muted">Backup from {new Date(devicePreview.createdAt).toLocaleString()}. Restoring replaces these items for this wallet in this browser; anything not in the backup is left as it is. Keys and funds are not included.</p>
           {error && <p role="alert" className="wallet-error">{error}</p>}
           <button className="wallet-primary-button" disabled={busy} onClick={restoreDevice}>{busy ? 'Restoring…' : 'Restore these items'}</button>

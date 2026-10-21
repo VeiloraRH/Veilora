@@ -31,6 +31,8 @@ describe('device backup', async () => {
   const opened = await b.openDeviceBackup(file, wallet, passphrase);
   expect(Object.keys(opened.items).sort()).toEqual(['approved', 'contacts', 'privacy-mode', 'tags']);
   expect(b.sectionSize(opened.items.contacts)).toBe(1);
+  expect(b.sectionSize('{"minutes":15,"onHidden":true}', 'auto-lock')).toBeNull();
+  expect(b.sectionSize(opened.items.contacts, 'contacts')).toBe(1);
 
   storage.clear();
   b.restoreDeviceBackup(wallet, opened);

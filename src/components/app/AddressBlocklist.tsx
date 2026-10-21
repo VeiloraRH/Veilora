@@ -43,7 +43,7 @@ export function AddressBlocklist() {
         <div className="wallet-blocklist-intro"><span><Ban size={18}/></span><div><strong>Stop accidental payments</strong><p>Addresses are stored only in this browser for this wallet. Veilora blocks send and bridge reviews to listed addresses; unlisted addresses are not considered trusted.</p></div></div>
         <form className="wallet-blocklist-form" onSubmit={add}>
           <label className="wallet-settings-field"><span>Address to block</span><input className="wallet-settings-address" aria-label="Address to block" value={input} onChange={(event) => { setInput(event.target.value.trim()); setError(''); }} placeholder="0x…" autoComplete="off" spellCheck={false}/></label>
-          <label className="wallet-settings-field"><span>Reason (optional)</span><input className="wallet-settings-address" aria-label="Reason for blocking" maxLength={MAX_BLOCK_REASON} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Scam DM on Telegram"/></label>
+          <label className="wallet-settings-field"><span>Reason (optional)</span><input className="wallet-settings-address !font-sans" aria-label="Reason for blocking" maxLength={MAX_BLOCK_REASON} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="e.g. Scam DM on Telegram"/></label>
           <button className="rule-button" type="submit" disabled={!input || addresses.length >= 100}><Ban size={14}/>Block address</button>
         </form>
         {error && <p className="wallet-error" role="alert">{error}</p>}
