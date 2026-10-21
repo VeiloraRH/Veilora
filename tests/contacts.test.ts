@@ -51,3 +51,18 @@ describe('contact names in text', async () => {
     expect(labelAddresses('no contacts', [])).toBe('no contacts');
   });
 });
+
+describe('starred contacts', async () => {
+  const c = await import('../src/lib/contacts');
+  const book = Array.from({ length: 8 }, (_, i) => ({ id: String(i), name: `P${i}`, address: `0x${String(i + 1).repeat(40)}` as `0x${string}` }));
+  test('star and unstar, up to the limit, and only true is kept', () => {
+    let list = book;
+    for (let i = 0; i < c.MAX_STARRED; i++) list = c.toggleStarred(list, String(i)).contacts;
+    expect(list.filter(x => x.starred)).toHaveLength(c.MAX_STARRED);
+    expect(c.toggleStarred(list, '7').error).toContain(`up to ${c.MAX_STARRED}`);
+    list = c.toggleStarred(list, '0').contacts;
+    expect(list[0]).not.toHaveProperty('starred');
+    c.saveWalletContacts(wallet, [{ ...book[0], starred: 'yes' } as never, { ...book[1], starred: true }]);
+    expect(c.getWalletContacts(wallet).map(x => x.starred)).toEqual([undefined, true]);
+  });
+});

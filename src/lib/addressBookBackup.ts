@@ -55,7 +55,7 @@ export async function openAddressBookBackup(fileText: string, wallet: string, pa
     if (seenContacts.has(address.toLowerCase())) throw new Error('The backup contains duplicate contacts.');
     seenContacts.add(address.toLowerCase());
     const note = cleanContactNote(item.note);
-    return { id: crypto.randomUUID(), name: item.name.trim(), address, ...(note ? { note } : {}) };
+    return { id: crypto.randomUUID(), name: item.name.trim(), address, ...(note ? { note } : {}), ...(item.starred === true ? { starred: true } : {}) };
   });
   const blockedAddresses = [...new Set<string>(record.blockedAddresses.map((item: unknown) => normalizeAddress(item).toLowerCase()))]
     .map((address) => getAddress(address));

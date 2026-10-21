@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ContactRound, Check, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ContactRound, Check, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react';
 import { getAddress, isAddress, zeroAddress } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MAX_CONTACT_NOTE, cleanContactNote, getWalletContacts, saveWalletContacts, searchContacts, type WalletContact } from '@/lib/contacts';
+import { MAX_CONTACT_NOTE, cleanContactNote, getWalletContacts, saveWalletContacts, searchContacts, toggleStarred, type WalletContact } from '@/lib/contacts';
 import { shortAddress } from '@/components/wallet/WalletUI';
 
 type ContactBookProps = {
@@ -50,7 +50,7 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
     if (duplicate) { setError(`This address is already saved as ${duplicate.name}.`); return; }
     const cleanNote = cleanContactNote(note);
     const next = editing
-      ? contacts.map((contact) => contact.id === editing ? { id: contact.id, name: trimmedName, address: normalized, ...(cleanNote ? { note: cleanNote } : {}) } : contact)
+      ? contacts.map((contact) => contact.id === editing ? { id: contact.id, name: trimmedName, address: normalized, ...(cleanNote ? { note: cleanNote } : {}), ...(contact.starred ? { starred: true } : {}) } : contact)
       : [...contacts, { id: crypto.randomUUID(), name: trimmedName, address: normalized, ...(cleanNote ? { note: cleanNote } : {}) }];
     persist(next);
     setName(''); setContactAddress(''); setNote(''); setEditing(null);
@@ -95,6 +95,7 @@ export function ContactBook({ wallet, address, onSelect, label = 'Saved contacts
               {contact.note && <span className="block truncate text-xs text-muted-foreground" title={contact.note}>{contact.note}</span>}
               <span className="block truncate font-mono text-xs text-muted-foreground">{contact.address}</span>
             </button>
+            <Button type="button" variant="ghost" size="icon" aria-pressed={!!contact.starred} aria-label={contact.starred ? `Unstar ${contact.name}` : `Star ${contact.name} for quick pay`} onClick={() => { const next = toggleStarred(contacts, contact.id); if (next.error) setError(next.error); else persist(next.contacts); }}><Star size={15} className={contact.starred ? 'fill-amber-400 text-amber-500' : ''}/></Button>
             <Button type="button" variant="ghost" size="icon" aria-label={`Edit ${contact.name}`} onClick={() => beginEdit(contact)}><Pencil size={15}/></Button>
             <Button type="button" variant="ghost" size="icon" aria-label={`Delete ${contact.name}`} onClick={() => persist(contacts.filter((item) => item.id !== contact.id))}><Trash2 size={15}/></Button>
           </div>)}

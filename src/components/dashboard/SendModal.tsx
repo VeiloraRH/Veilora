@@ -24,21 +24,21 @@ import { readRecipientQrImage } from '@/lib/recipientQr';
 import type { TransferReceipt } from '@/lib/transferReceipt';
 import { advance, idleProgress, type SigningProgress } from '@/lib/signingProgress';
 import { SigningProgressList } from '@/components/wallet/SigningProgressList';
-interface SendModalProps{open:boolean;onClose:()=>void;publicUsdg:number;ethBalance:number;onSuccess:(receipt:TransferReceipt)=>void}
+interface SendModalProps{open:boolean;onClose:()=>void;publicUsdg:number;ethBalance:number;onSuccess:(receipt:TransferReceipt)=>void;initialRecipient?:string}
 function BalanceDiffPreview({balance,amount,symbol,decimals,native}:{balance:bigint|null|undefined;amount:bigint;symbol:string;decimals:number;native:boolean}){
  if(balance==null||amount<=0n)return null;
  const format=(value:bigint)=>Number(formatUnits(value,decimals)).toLocaleString(undefined,{maximumFractionDigits:6});
  const after=balance-amount;
  return <section className="mt-4 rounded-xl border bg-muted/30 p-3" aria-label="Estimated balance change"><div className="mb-2 flex items-center justify-between text-xs"><strong>Estimated balance change</strong><span className="text-muted-foreground">After this transfer</span></div><div className="flex items-center justify-between gap-3 text-sm"><div><span className="block text-xs text-muted-foreground">Before</span><Private>{format(balance)}</Private> {symbol}</div><ArrowRight size={16} className="shrink-0 text-muted-foreground"/><div className="text-right"><span className="block text-xs text-muted-foreground">After</span><Private>{format(after)}</Private> {symbol}</div></div><p className="mt-2 text-xs text-muted-foreground">{native?'This estimate does not include gas. Veilora sponsors the network fee.':'Veilora sponsors the network fee; only the transferred asset changes.'}</p></section>;
 }
-export function SendModal({open,onClose,onSuccess}:SendModalProps){
+export function SendModal({open,onClose,onSuccess,initialRecipient=''}:SendModalProps){
  const {walletAddress,getStoredDeviceKey}=useWallet();const holdings=useHoldings();const spendingPolicy=useSpendingPolicy();const reduce=useReducedMotion();
  const [step,setStep]=useState(0);const [recipient,setRecipient]=useState('');const [amount,setAmount]=useState('');const [symbol,setSymbol]=useState('USDG');const [picker,setPicker]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [qrBusy,setQrBusy]=useState(false);const [qrMessage,setQrMessage]=useState('');
  const [acknowledged,setAcknowledged]=useState(false);const [draft,setDraft]=useState('');
  // The field keeps what is typed (spaces included, for names); the trimmed value drives every check.
  useEffect(()=>{setDraft(d=>d.trim()===recipient?d:recipient);},[recipient]);const [progress,setProgress]=useState<SigningProgress>(idleProgress);
  const [simulation,setSimulation]=useState<null|{status:'passed'|'reverted'|'unavailable';detail:string}>(null);const [simulationAck,setSimulationAck]=useState(false);
- useEffect(()=>{if(open){setStep(0);setError('');setAmount('');setRecipient('');setProgress(idleProgress());}},[open]);
+ useEffect(()=>{if(open){setStep(0);setError('');setAmount('');setRecipient(initialRecipient);setProgress(idleProgress());}},[open]);
  useEffect(()=>setAcknowledged(false),[recipient]);
  const token=ROBINHOOD_TOKEN_REGISTRY[symbol];const balance=holdings.data?.find(h=>h.token.symbol===symbol)?.raw;
  const allowance=spendingAllowance(token,balance,spendingPolicy.data);const policyCap=allowance?.max??null;

@@ -1,6 +1,8 @@
 import { getAddress, isAddress, zeroAddress } from 'viem';
 
-export type WalletContact = { id: string; name: string; address: `0x${string}`; note?: string };
+export type WalletContact = { id: string; name: string; address: `0x${string}`; note?: string; starred?: boolean };
+export const MAX_STARRED = 6;
+export const CONTACTS_CHANGED = 'veilora:contacts:changed';
 export const MAX_CONTACT_NOTE = 120;
 
 /** One line, trimmed, at most MAX_CONTACT_NOTE characters; undefined when empty. */
@@ -29,7 +31,7 @@ export function getWalletContacts(wallet: string): WalletContact[] {
     return parsed.filter((item): item is WalletContact =>
       !!item && typeof item.id === 'string' && typeof item.name === 'string' &&
       typeof item.address === 'string' && isAddress(item.address) && item.address.toLowerCase() !== zeroAddress,
-    ).map(({ note, ...item }) => ({ ...item, address: getAddress(item.address), ...(cleanContactNote(note) ? { note: cleanContactNote(note) } : {}) }));
+    ).map(({ note, starred, ...item }) => ({ ...item, address: getAddress(item.address), ...(cleanContactNote(note) ? { note: cleanContactNote(note) } : {}), ...(starred === true ? { starred: true } : {}) }));
   } catch {
     return [];
   }
@@ -37,6 +39,15 @@ export function getWalletContacts(wallet: string): WalletContact[] {
 
 export function saveWalletContacts(wallet: string, contacts: WalletContact[]) {
   localStorage.setItem(keyFor(wallet), JSON.stringify(contacts));
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(CONTACTS_CHANGED, { detail: { wallet: wallet.toLowerCase() } }));
+}
+
+/** Star or unstar a contact. Returns an error message when the starred list is full, else null. */
+export function toggleStarred(contacts: WalletContact[], id: string): { contacts: WalletContact[]; error: string | null } {
+  const target = contacts.find((c) => c.id === id);
+  if (!target) return { contacts, error: null };
+  if (!target.starred && contacts.filter((c) => c.starred).length >= MAX_STARRED) return { contacts, error: `You can star up to ${MAX_STARRED} contacts.` };
+  return { contacts: contacts.map((c) => (c.id === id ? (c.starred ? (({ starred: _s, ...rest }) => rest)(c) : { ...c, starred: true }) : c)), error: null };
 }
 
 /**
