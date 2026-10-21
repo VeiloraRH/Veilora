@@ -1,6 +1,7 @@
-import { formatUnits } from "viem";
+import { formatUnits, getAddress, isAddress } from "viem";
 import { query } from "./db/index";
 import { RULE_ASSETS } from "./rules/spec";
+import { ROBINHOOD_TOKEN_REGISTRY } from "./tokens";
 
 /**
  * Read-only lookups behind Veily's wallet tools. Nothing here signs, approves
@@ -29,5 +30,46 @@ export async function pendingReviews(wallet: string) {
       expiresAt: row.expires_at.toISOString(),
     })),
     howToApprove: "Approve or decline each run in Rules. Approving still needs your device key and Veilora's co-signer; Veily cannot approve anything.",
+  };
+}
+
+type ExplorerItem = { from?: { hash?: string } | null; to?: { hash?: string } | null; timestamp?: string };
+
+/** Well-known addresses where anything sent is lost (kept in step with the app's recipient check). */
+const BURN = new Set([
+  "0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead",
+  "0xdead000000000000000042069420694206942069", "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  ...Array.from({ length: 9 }, (_, i) => `0x${(i + 1).toString(16).padStart(40, "0")}`),
+]);
+const TOKENS = new Map(Object.values(ROBINHOOD_TOKEN_REGISTRY).map((t) => [t.address.toLowerCase(), t.symbol]));
+
+/**
+ * Public facts about an address from this wallet's point of view. The owner's
+ * contacts, blocklist and approved list stay on their device; the app adds
+ * those checks itself, so they never reach the AI provider.
+ */
+export function addressFacts(walletAddress: string, address: string, code: string | null, items: ExplorerItem[]) {
+  if (!isAddress(address)) return { error: "That is not a valid address" };
+  const wallet = walletAddress.toLowerCase();
+  const target = address.toLowerCase();
+  let sent = 0, received = 0, first: string | null = null, last: string | null = null;
+  for (const item of items) {
+    const from = item.from?.hash?.toLowerCase(); const to = item.to?.hash?.toLowerCase();
+    const outgoing = from === wallet && to === target; const incoming = from === target && to === wallet;
+    if (!outgoing && !incoming) continue;
+    if (outgoing) sent += 1; else received += 1;
+    if (item.timestamp) { if (!first || item.timestamp < first) first = item.timestamp; if (!last || item.timestamp > last) last = item.timestamp; }
+  }
+  return {
+    address: getAddress(address),
+    isYourAccount: target === wallet,
+    burnAddress: BURN.has(target),
+    tokenContract: TOKENS.get(target) ?? null,
+    isContract: code == null ? null : code !== "0x",
+    transfersSentToIt: sent,
+    transfersReceivedFromIt: received,
+    firstSeen: first,
+    lastSeen: last,
+    note: "Counts cover the explorer's latest transfers for this wallet. Your contacts, blocklist and approved list are checked in the app, on your device.",
   };
 }

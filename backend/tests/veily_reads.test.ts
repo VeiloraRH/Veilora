@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { query } from "../src/db/index";
-import { pendingReviews } from "../src/veilyReads";
+import { addressFacts, pendingReviews } from "../src/veilyReads";
 
 const wallet = "0x8888888888888888888888888888888888888888";
 
@@ -33,5 +33,19 @@ describe("Veily read-only wallet lookups", () => {
     expect(result.pending.map((p) => p.amount)).toEqual(["25 USDG", "650 USDG"]);
     expect(result.pending[0]).toMatchObject({ rule: "Rent to Maya", steps: 1, trigger: "schedule" });
     expect(result.howToApprove).toContain("cannot approve");
+  });
+
+  test("address facts count transfers both ways and flag burn and token addresses", () => {
+    const other = "0x2222222222222222222222222222222222222222";
+    const items = [
+      { from: { hash: wallet }, to: { hash: other }, timestamp: "2026-10-01T00:00:00Z" },
+      { from: { hash: wallet }, to: { hash: other }, timestamp: "2026-10-09T00:00:00Z" },
+      { from: { hash: other }, to: { hash: wallet }, timestamp: "2026-10-05T00:00:00Z" },
+      { from: { hash: wallet }, to: { hash: "0x3333333333333333333333333333333333333333" } },
+    ];
+    expect(addressFacts(wallet, other, "0x", items)).toMatchObject({ isContract: false, burnAddress: false, transfersSentToIt: 2, transfersReceivedFromIt: 1, firstSeen: "2026-10-01T00:00:00Z", lastSeen: "2026-10-09T00:00:00Z" });
+    expect(addressFacts(wallet, "0x000000000000000000000000000000000000dEaD", null, []).burnAddress).toBe(true);
+    expect(addressFacts(wallet, "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168", "0x60", []).tokenContract).toBe("USDG");
+    expect(addressFacts(wallet, "0x12", null, [])).toEqual({ error: "That is not a valid address" });
   });
 });
