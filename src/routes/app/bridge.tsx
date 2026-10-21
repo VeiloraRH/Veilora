@@ -1,3 +1,5 @@
+import { checkPaste, type PasteCheck } from '@/lib/clipboardGuard';
+import { PasteNotice } from '@/components/wallet/PasteNotice';
 import { createFileRoute } from '@tanstack/react-router';
 import { Private } from '@/components/wallet/Private';
 import { useEffect, useMemo, useState } from 'react';
@@ -142,6 +144,7 @@ function BridgeScreen() {
   const recipientBlocked = isBlockedRecipient(recipientCheck);
   const recipientNeedsAck = (recipientCheck?.level === 'danger' || recipientCheck?.level === 'warn') && !recipientBlocked;
   const [recipientAck, setRecipientAck] = useState(false);
+  const [pasteCheck, setPasteCheck] = useState<PasteCheck | null>(null);
   useEffect(() => setRecipientAck(false), [recipient, destinationChainId]);
 
   function createFreshDestinationWallet() {
@@ -349,7 +352,8 @@ function BridgeScreen() {
           <div className="wallet-bridge-heading"><button className="wallet-icon-button" aria-label="Back" onClick={() => setStep(1)}><ArrowLeft size={17} /></button><div><h2>Where should it arrive?</h2><p className="wallet-bridge-intro">Enter an address that can receive the selected asset.</p></div></div>
           <label className="wallet-bridge-field"><span>Destination network</span><select className="wallet-select" value={destinationChainId} onChange={(event) => setDestinationChainId(Number(event.target.value))}>{DESTINATIONS.map((chain) => <option key={chain.chainId} value={chain.chainId}>{chain.name}</option>)}</select></label>
           <div className="wallet-bridge-field"><span>Receive asset</span><button type="button" className="wallet-token-button wallet-bridge-token-choice" aria-label="Choose destination asset" onClick={() => setPicker('destination')}><TokenIcon token={destinationTokens.find((token) => token.symbol === destinationSymbol)!} size={25}/>{destinationSymbol}<ChevronDown size={14}/></button></div>
-          <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onChange={(event) => setRecipient(event.target.value.trim())} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
+          <label className="wallet-bridge-field"><span>Destination address</span><input className="wallet-bridge-address" value={recipient} onPaste={(event) => { const c = checkPaste(event.clipboardData.getData('text')); if (!c.value) return; event.preventDefault(); setRecipient(c.value); setPasteCheck(c); }} onChange={(event) => { setRecipient(event.target.value.trim()); setPasteCheck(null); }} placeholder="0x…" autoComplete="off" spellCheck={false} aria-invalid={!!recipient && !validRecipient} /></label>
+          <div className="mt-3"><PasteNotice check={pasteCheck}/></div>
           <div className="mt-3"><ContactBook wallet={walletAddress} address={recipient} onSelect={setRecipient} /></div>
           <div className="mt-3">
             <button type="button" className="wallet-bridge-fresh-button" onClick={createFreshDestinationWallet}><KeyRound size={14}/> Create a fresh destination wallet</button>
