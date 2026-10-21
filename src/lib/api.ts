@@ -81,7 +81,8 @@ export async function getHealth() {
 export type VeilyMode = "hosted" | "byok";
 export type VeilyProvider = "groq" | "openai" | "anthropic";
 export type VeilyAction = { screen: "dashboard" | "market" | "swap" | "bridge" | "history" | "rules"; token?: string; sourceAsset?: "ETH" | "USDG"; destinationChainId?: number; destinationAsset?: string; amount?: string; recipient?: string };
-export interface VeilyMessage { role: "user" | "assistant"; content: string; actions?: VeilyAction[]; receipt?: VeilyReceipt }
+/** `content` is what Veily received; `display` is what the user typed when contact names were swapped for addresses on the device. */
+export interface VeilyMessage { role: "user" | "assistant"; content: string; display?: string; actions?: VeilyAction[]; receipt?: VeilyReceipt }
 
 export async function askVeily(payload: {
   walletAddress: string;

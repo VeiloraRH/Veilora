@@ -62,3 +62,14 @@ export function labelAddresses(text: string, contacts: WalletContact[]): string 
     return name ? `${name} (${address.slice(0, 6)}…${address.slice(-4)})` : address;
   });
 }
+
+/**
+ * Replace saved contact names in a question with their addresses, so an AI
+ * assistant can look them up without ever learning the names. Whole words
+ * only, longest names first; names shorter than 3 characters are left alone.
+ */
+export function substituteContactNames(text: string, contacts: WalletContact[]): string {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [...contacts].filter((c) => c.name.trim().length >= 3).sort((a, b) => b.name.length - a.name.length)
+    .reduce((out, c) => out.replace(new RegExp(`(?<![\\p{L}\\p{N}_])${escape(c.name.trim())}(?![\\p{L}\\p{N}_])`, 'giu'), c.address), text);
+}

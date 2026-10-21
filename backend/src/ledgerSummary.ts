@@ -28,7 +28,7 @@ function movements(wallet: string, transactions: ExplorerTransfer[], tokenTransf
   return out;
 }
 
-export function summarizeLedger(walletAddress: string, transactions: ExplorerTransfer[], tokenTransfers: ExplorerTransfer[], days: number, now = Date.now()) {
+export function summarizeLedger(walletAddress: string, transactions: ExplorerTransfer[], tokenTransfers: ExplorerTransfer[], days: number, now = Date.now(), counterparty?: string) {
   const wallet = walletAddress.toLowerCase();
   const since = now - days * 86_400_000;
   const inWindow = movements(wallet, transactions, tokenTransfers).filter((m) => m.at >= since && m.at <= now);
@@ -45,6 +45,21 @@ export function summarizeLedger(walletAddress: string, transactions: ExplorerTra
     } else t.received += m.raw;
     totals.set(m.asset, t);
   }
+  const other = counterparty && isAddress(counterparty) ? counterparty.toLowerCase() : null;
+  const withCounterparty = other ? (() => {
+    const sent = new Map<string, { decimals: number; raw: bigint; transfers: number }>();
+    const received = new Map<string, { decimals: number; raw: bigint; transfers: number }>();
+    let last: number | null = null;
+    for (const m of inWindow) {
+      const bucket = m.from === wallet && m.to === other ? sent : m.from === other && m.to === wallet ? received : null;
+      if (!bucket) continue;
+      const t = bucket.get(m.asset) ?? { decimals: m.decimals, raw: 0n, transfers: 0 };
+      t.raw += m.raw; t.transfers += 1; bucket.set(m.asset, t);
+      last = last == null || m.at > last ? m.at : last;
+    }
+    const list = (map: typeof sent) => [...map].map(([asset, t]) => ({ asset, amount: formatUnits(t.raw, t.decimals), transfers: t.transfers }));
+    return { address: getAddress(other), sent: list(sent), received: list(received), lastTransfer: last == null ? null : new Date(last).toISOString() };
+  })() : undefined;
   const oldest = transactions.length || tokenTransfers.length ? Math.min(...[...transactions, ...tokenTransfers].map((i) => Date.parse(i.timestamp ?? "")).filter((n) => !Number.isNaN(n))) : null;
   return {
     periodDays: days,
@@ -55,6 +70,7 @@ export function summarizeLedger(walletAddress: string, transactions: ExplorerTra
     coverage: oldest != null && oldest > since
       ? `Only history back to ${new Date(oldest).toISOString().slice(0, 10)} was available, so totals may be incomplete for the full period.`
       : "Covers the full period from the explorer's latest transfers.",
+    ...(withCounterparty ? { withCounterparty } : {}),
     source: "Robinhood Chain Blockscout",
   };
 }

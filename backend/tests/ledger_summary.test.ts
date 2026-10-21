@@ -31,3 +31,16 @@ describe("Veily ledger summary", () => {
     expect(summarizeLedger(me, [], [], 30, now).totals).toEqual([]);
   });
 });
+
+describe("Veily ledger summary for one address", () => {
+  test("totals both directions with that address only", () => {
+    const summary = summarizeLedger(me, [eth(me, maya, "20000000000000000", 1)], [usdg(me, maya, "1200000000", 2), usdg(maya, me, "50000000", 3), usdg(me, studio, "80000000", 5)], 30, now, maya);
+    expect(summary.withCounterparty).toEqual({
+      address: "0x4444444444444444444444444444444444444444",
+      sent: [{ asset: "ETH", amount: "0.02", transfers: 1 }, { asset: "USDG", amount: "1200", transfers: 1 }],
+      received: [{ asset: "USDG", amount: "50", transfers: 1 }],
+      lastTransfer: day(1),
+    });
+    expect(summarizeLedger(me, [], [], 30, now).withCounterparty).toBeUndefined();
+  });
+});

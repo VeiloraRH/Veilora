@@ -66,3 +66,14 @@ describe('starred contacts', async () => {
     expect(c.getWalletContacts(wallet).map(x => x.starred)).toEqual([undefined, true]);
   });
 });
+
+describe('contact names in questions', async () => {
+  const { substituteContactNames } = await import('../src/lib/contacts');
+  const maya = '0x4444444444444444444444444444444444444444' as const;
+  const book = [{ id: '1', name: 'Maya', address: maya }, { id: '2', name: 'Maya Studio', address: '0x2222222222222222222222222222222222222222' as const }, { id: '3', name: 'Al', address: '0x3333333333333333333333333333333333333333' as const }];
+  test('swaps whole-word contact names for addresses, longest first', () => {
+    expect(substituteContactNames('How much did I send to maya this month?', book)).toBe(`How much did I send to ${maya} this month?`);
+    expect(substituteContactNames('Paid Maya Studio?', book)).toBe('Paid 0x2222222222222222222222222222222222222222?');
+    expect(substituteContactNames('Mayan art and Al', book)).toBe('Mayan art and Al');
+  });
+});

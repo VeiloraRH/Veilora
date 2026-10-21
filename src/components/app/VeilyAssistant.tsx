@@ -9,7 +9,7 @@ import { encryptDeviceKey, decryptDeviceKey } from "@/lib/deviceKeyVault";
 import { useWallet } from "@/lib/walletContext";
 import { useHoldings } from "@/lib/walletQueries";
 import { downloadReceipt, type VeilyReceipt } from "@/lib/veilyReceipt";
-import { getWalletContacts, labelAddresses } from "@/lib/contacts";
+import { getWalletContacts, labelAddresses, substituteContactNames } from "@/lib/contacts";
 import { VeilyReceiptPanel } from "./VeilyReceiptPanel";
 import { VeilyAddressCheck, addressIn } from "./VeilyAddressCheck";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -164,7 +164,8 @@ export function VeilyAssistant() {
   function updateConversation(conversationId: string, permissionId: string | null, nextMessages: VeilyMessage[]) {
     setConversations(current => {
       const existing = current.find(conversation => conversation.id === conversationId);
-      const firstUserMessage = nextMessages.find(message => message.role === "user")?.content.trim();
+      const first = nextMessages.find(message => message.role === "user");
+      const firstUserMessage = (first?.display ?? first?.content)?.trim();
       const title = existing?.title !== "New conversation" ? existing?.title : firstUserMessage?.slice(0, 48) || "New conversation";
       const updated: VeilyConversation = { id: conversationId, title: title ?? "New conversation", updatedAt: Date.now(), permissionId, messages: nextMessages.slice(-24) };
       return [updated, ...current.filter(conversation => conversation.id !== conversationId)].slice(0, MAX_CONVERSATIONS);
@@ -272,14 +273,16 @@ export function VeilyAssistant() {
       setConversations(current => [fresh, ...current].slice(0, MAX_CONVERSATIONS));
       setActiveConversationId(conversationId);
     }
-    const userMessage: VeilyMessage = { role: "user", content: text };
+    // Contact names stay on this device: Veily receives their addresses instead.
+    const outgoing = substituteContactNames(text, getWalletContacts(walletAddress));
+    const userMessage: VeilyMessage = { role: "user", content: outgoing, ...(outgoing !== text ? { display: text } : {}) };
     const next: VeilyMessage[] = [...conversation, userMessage].slice(-24);
     setMessages(next);
     updateConversation(conversationId, permissionKey, next);
     const payload: Omit<Parameters<typeof askVeily>[0], "shardASignature"> = {
       walletAddress: getAddress(walletAddress), requestId: crypto.randomUUID(), timestamp: Math.floor(Date.now() / 1000),
       ...(permission ? { permissionId: permission.id } : {}),
-      mode, messages: next.map(({ receipt: _receipt, ...m }) => m), context: permission?.scopes.includes("wallet:read") ? walletContext : "",
+      mode, messages: next.map(({ receipt: _receipt, display: _display, ...m }) => m), context: permission?.scopes.includes("wallet:read") ? walletContext : "",
       ...(mode === "byok" ? { provider, model: model.trim(), apiKey } : {}),
     };
     const canonical = JSON.stringify(payload);
@@ -368,7 +371,7 @@ export function VeilyAssistant() {
         {activeConversation&&!conversationCanContinue&&<p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">This conversation used a different or expired permission. Your next message starts fresh.</p>}
         <div className="flex-1 space-y-4 overflow-y-auto p-4" aria-live="polite">
           {messages.length===1&&<div className="mb-5 mt-4"><p className="mb-1 text-lg font-medium text-slate-900 dark:text-cream">What can I help with?</p><p className="mb-4 text-xs leading-relaxed text-slate-500 dark:text-mist">Ask about your wallet, activity, spending limits, or where to find something.</p><div className="flex flex-wrap gap-2">{shortcuts.map(prompt=><button key={prompt} className="rounded-full border border-slate-200 px-3 py-2 text-[10px] text-slate-600 transition-colors hover:border-[#f0ac5e] hover:bg-[#f0ac5e]/10 dark:border-ink-700 dark:text-mist" onClick={()=>setDraft(prompt)}>{prompt}</button>)}</div></div>}
-          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<Suspense fallback={<span className="whitespace-pre-wrap">{labelAddresses(message.content, contacts)}</span>}><VeilyMarkdown content={labelAddresses(message.content, contacts)}/></Suspense>:message.content}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}{message.role==="assistant"&&index>0&&messages[index-1].role==="user"&&addressIn(messages[index-1].content)&&<VeilyAddressCheck address={addressIn(messages[index-1].content)!}/>}{message.receipt&&<button className="mt-2 flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 dark:text-mist dark:hover:text-cream" onClick={()=>setReceiptView(message.receipt!)}><ShieldCheck size={12}/>Answer receipt</button>}</div></div>)}
+          {messages.map((message,index)=><div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role==="user"?"flex-row-reverse":""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${message.role==="assistant"?"bg-[#f0ac5e]/15 text-[#bb762e]":"bg-slate-100 text-slate-600 dark:bg-ink-800 dark:text-mist"}`}>{message.role==="assistant"?<Bot size={14}/>:<MessageSquare size={13}/>}</span><div className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role==="assistant"?"bg-slate-50 text-slate-800 dark:bg-ink-850 dark:text-cream-dim":"whitespace-pre-wrap bg-[#f0ac5e]/15 text-slate-900 dark:text-cream"}`}>{message.role==="assistant"?<Suspense fallback={<span className="whitespace-pre-wrap">{labelAddresses(message.content, contacts)}</span>}><VeilyMarkdown content={labelAddresses(message.content, contacts)}/></Suspense>:(message.display??message.content)}{message.actions?.map((action,actionIndex)=><button key={`${action.screen}-${actionIndex}`} className="wallet-soft-button mt-2 mr-2" onClick={()=>openAction(action)}>{action.screen==="bridge"?`Prepare bridge${action.amount?` · ${action.amount} ${action.sourceAsset??"ETH"}`:""}${action.destinationChainId?` to ${bridgeChainNames[action.destinationChainId]??"destination"}`:""}${action.destinationAsset?` · ${action.destinationAsset}`:""}`:`Open ${action.screen}${action.token?` · ${action.token}`:""}`}<ArrowUpRight size={13}/></button>)}{message.role==="assistant"&&index>0&&messages[index-1].role==="user"&&addressIn(messages[index-1].content)&&<VeilyAddressCheck address={addressIn(messages[index-1].content)!}/>}{message.receipt&&<button className="mt-2 flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 dark:text-mist dark:hover:text-cream" onClick={()=>setReceiptView(message.receipt!)}><ShieldCheck size={12}/>Answer receipt</button>}</div></div>)}
           {busy&&<div className="flex items-center gap-2 text-xs text-slate-500 dark:text-mist"><LoaderCircle className="animate-spin" size={15}/>Checking that with Veily…</div>}
         </div>
         {error&&<p role="alert" className="px-4 pb-2 text-xs text-rose-600">{error}</p>}
