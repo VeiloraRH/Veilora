@@ -27,6 +27,7 @@ export const BACKUP_SECTIONS: Section[] = [
  { id: 'bridge', label: 'Bridge history', key: w('bridge:tracking') },
  { id: 'bridge-notifications', label: 'Bridge notifications', key: w('bridge:notifications') },
  { id: 'tags', label: 'Transaction tags', key: w('transaction-tags') },
+ { id: 'send-drafts', label: 'Send drafts', key: w('send-drafts') },
  { id: 'payment-links', label: 'Payment link keys (encrypted to your device key)', key: w('payment-links') },
  { id: 'veily', label: 'Veily conversations', key: w('veily:history') },
  { id: 'market-watchlist', label: 'Market watchlist', key: device('market:watchlist') },
