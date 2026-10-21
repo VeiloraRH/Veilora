@@ -1,0 +1,37 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { query } from "../src/db/index";
+import { pendingReviews } from "../src/veilyReads";
+
+const wallet = "0x8888888888888888888888888888888888888888";
+
+describe("Veily read-only wallet lookups", () => {
+  beforeAll(async () => {
+    await query(
+      `INSERT INTO wallets (address, factory_address, chain_id, shard_a_address, shard_b_address, shard_b_encrypted, shard_c_address, api_key_hash)
+       VALUES ($1, $2, 4663, $1, $1, 'test', $1, 'test') ON CONFLICT (address) DO NOTHING`,
+      [wallet, "0xf86bea538ea756048f8df9be4bcd88aeb4d65376"],
+    );
+    const rule = await query<{ id: string }>(
+      `INSERT INTO wallet_rules (wallet_address, name, spec, spec_hash, mode, trigger_type, expires_at)
+       VALUES ($1, 'Rent to Maya', '{}', $2, 'approval', 'schedule', now() + interval '30 days') RETURNING id::text`,
+      [wallet, `0x${"ab".repeat(32)}`],
+    );
+    const insert = (ref: string, status: string, total: string, expires: string) => query(
+      `INSERT INTO wallet_rule_executions (rule_id, wallet_address, status, trigger_ref, trigger_detail, source_asset, total_raw, legs, expires_at)
+       VALUES ($1, $2, $3, $4, '{"type":"schedule"}', 'USDG', $5, '[{"to":"x"}]', now() + $6::interval)`,
+      [rule.rows[0].id, wallet, status, ref, total, expires],
+    );
+    await insert("later", "pending", "650000000", "2 days");
+    await insert("soon", "pending", "25000000", "1 hour");
+    await insert("expired", "pending", "1000000", "-1 hour");
+    await insert("done", "executed", "1000000", "1 day");
+  });
+  afterAll(async () => { await query("DELETE FROM wallets WHERE address = $1", [wallet]); });
+
+  test("pending reviews lists only live pending runs, soonest expiry first", async () => {
+    const result = await pendingReviews(wallet);
+    expect(result.pending.map((p) => p.amount)).toEqual(["25 USDG", "650 USDG"]);
+    expect(result.pending[0]).toMatchObject({ rule: "Rent to Maya", steps: 1, trigger: "schedule" });
+    expect(result.howToApprove).toContain("cannot approve");
+  });
+});
