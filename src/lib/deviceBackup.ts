@@ -20,6 +20,7 @@ const device = (key: string) => () => `veilora:${key}`;
 export const BACKUP_SECTIONS: Section[] = [
  { id: 'contacts', label: 'Contacts, notes and stars', key: w('contacts') },
  { id: 'blocklist', label: 'Blocked addresses', key: w('address-blocklist') },
+ { id: 'blocklist-reasons', label: 'Reasons for blocked addresses', key: w('address-blocklist-reasons') },
  { id: 'approved', label: 'Approved recipients', key: w('approved-recipients') },
  { id: 'approved-policy', label: 'Approved-recipient mode', key: w('approved-recipients-policy') },
  { id: 'watch', label: 'Watched addresses', key: w('watch') },

@@ -4,7 +4,7 @@ import { isAddress, type Address } from 'viem';
 import { useWallet } from '@/lib/walletContext';
 import { useTransactions } from '@/lib/walletQueries';
 import { getWalletContacts } from '@/lib/contacts';
-import { useWalletBlocklist } from '@/lib/addressBlocklist';
+import { getBlockReasons, useWalletBlocklist } from '@/lib/addressBlocklist';
 import { useWalletApprovedRecipients } from '@/lib/approvedRecipients';
 import { WALLET_TOKENS } from '@/lib/tokens';
 import { chainClient } from '@/lib/walletChain';
@@ -29,13 +29,13 @@ export function useRecipientAssessment(recipient: string): { assessment: Recipie
   return () => { active = false; };
  }, [recipient, valid]);
  const assessment = useMemo(() => valid && walletAddress ? assessRecipient({
-  recipient, wallet: walletAddress, contacts: getWalletContacts(walletAddress), history: history.data ?? [], tokenContracts: TOKEN_CONTRACTS, blockedAddresses, approvedAddresses: approvedRecipients.entries.map(entry => entry.address), requireApprovedRecipient: approvedRecipients.policy.requireApproval, code,
+  recipient, wallet: walletAddress, contacts: getWalletContacts(walletAddress), history: history.data ?? [], tokenContracts: TOKEN_CONTRACTS, blockedAddresses, blockReasons: getBlockReasons(walletAddress), approvedAddresses: approvedRecipients.entries.map(entry => entry.address), requireApprovedRecipient: approvedRecipients.policy.requireApproval, code,
  }) : null, [recipient, valid, walletAddress, history.data, blockedAddresses, approvedRecipients, code]);
  return { assessment, loading: valid && (history.isPending || code === undefined) };
 }
 
 /** Recipients that must never receive a send: your own account or a token contract. */
-export const isBlockedRecipient = (a: RecipientAssessment | null) => !!a?.items.some(i => i.code === 'self' || i.code === 'token-contract' || i.code === 'user-blocked' || i.code === 'recipient-not-approved');
+export const isBlockedRecipient = (a: RecipientAssessment | null) => !!a?.items.some(i => i.code === 'self' || i.code === 'token-contract' || i.code === 'burn-address' || i.code === 'user-blocked' || i.code === 'recipient-not-approved');
 
 export function RecipientCheck({ recipient, assessment, loading, showAddress = false }: { recipient: string; assessment: RecipientAssessment | null; loading: boolean; showAddress?: boolean }) {
  if (!assessment) return null;

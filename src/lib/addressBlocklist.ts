@@ -3,6 +3,20 @@ import { getAddress, isAddress, zeroAddress } from 'viem';
 
 const eventName = 'veilora:address-blocklist:changed';
 const keyFor = (wallet: string) => `veilora:address-blocklist:${wallet.toLowerCase()}`;
+const reasonsKey = (wallet: string) => `veilora:address-blocklist-reasons:${wallet.toLowerCase()}`;
+export const MAX_BLOCK_REASON = 80;
+
+/** Why each address was blocked, keyed by lowercase address. Stored only on this device. */
+export function getBlockReasons(wallet: string): Record<string, string> {
+  if (!wallet) return {};
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(reasonsKey(wallet)) || '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+    return Object.fromEntries(Object.entries(stored).filter(([k, v]) => isAddress(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k.toLowerCase(), (v as string).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, MAX_BLOCK_REASON)]));
+  } catch {
+    return {};
+  }
+}
 
 export function notifyBlocklistChanged(wallet: string) {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(eventName, { detail: { wallet: wallet.toLowerCase() } }));
@@ -25,12 +39,24 @@ export function saveBlockedAddresses(wallet: string, addresses: string[]) {
   const normalized = [...new Set(addresses.filter((address) => isAddress(address) && address.toLowerCase() !== zeroAddress).map((address) => getAddress(address)))];
   if (normalized.length > 100) throw new Error('You can block up to 100 addresses per wallet.');
   localStorage.setItem(keyFor(wallet), JSON.stringify(normalized));
+  const kept = new Set(normalized.map((address) => address.toLowerCase()));
+  const reasons = Object.fromEntries(Object.entries(getBlockReasons(wallet)).filter(([address]) => kept.has(address)));
+  localStorage.setItem(reasonsKey(wallet), JSON.stringify(reasons));
+  notifyBlocklistChanged(wallet);
+}
+
+export function saveBlockReason(wallet: string, address: string, reason: string) {
+  const clean = reason.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, MAX_BLOCK_REASON);
+  const reasons = { ...getBlockReasons(wallet) };
+  if (clean) reasons[address.toLowerCase()] = clean; else delete reasons[address.toLowerCase()];
+  localStorage.setItem(reasonsKey(wallet), JSON.stringify(reasons));
   notifyBlocklistChanged(wallet);
 }
 
 export function clearBlockedAddresses(wallet: string) {
   if (!wallet) return;
   localStorage.removeItem(keyFor(wallet));
+  localStorage.removeItem(reasonsKey(wallet));
   notifyBlocklistChanged(wallet);
 }
 

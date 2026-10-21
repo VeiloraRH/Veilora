@@ -23,11 +23,21 @@ export type RecipientInputs = {
  /** "bridge" checks a destination on another chain, where your Veilora account does not exist. */
  mode?: 'send' | 'bridge';
  chainName?: string;
+ blockReasons?: Record<string, string>;
 };
 
 const RANK: Record<CheckLevel, number> = { ok: 0, info: 1, warn: 2, danger: 3 };
 const lower = (a: string) => a.toLowerCase();
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+/** Well-known addresses where anything sent is lost: burn sinks, EVM precompiles and the native-token placeholder. */
+export const BURN_ADDRESSES: Record<string, string> = {
+ '0x0000000000000000000000000000000000000000': 'the zero address',
+ '0x000000000000000000000000000000000000dead': 'a well-known burn address',
+ '0xdead000000000000000042069420694206942069': 'a well-known burn address',
+ '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': 'the placeholder apps use for native ETH, not a wallet',
+ ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`0x${(i + 1).toString(16).padStart(40, '0')}`, 'a built-in EVM contract (precompile), not a wallet'])),
+};
 const hex = (a: string) => lower(a).replace(/^0x/, '');
 
 /** Shares the first and last `n` hex characters but is a different address. */
@@ -36,7 +46,7 @@ export function looksAlike(a: string, b: string, n: number): boolean {
  return x !== y && x.slice(0, n) === y.slice(0, n) && x.slice(-n) === y.slice(-n);
 }
 
-export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, blockedAddresses, approvedAddresses, requireApprovedRecipient, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
+export function assessRecipient({ recipient, wallet, contacts, history, tokenContracts, blockedAddresses, blockReasons, approvedAddresses, requireApprovedRecipient, code, mode = 'send', chainName = 'the destination chain' }: RecipientInputs): RecipientAssessment {
  const bridge = mode === 'bridge';
  const verb = bridge ? 'bridged' : 'sent';
  const r = lower(recipient);
@@ -50,7 +60,8 @@ export function assessRecipient({ recipient, wallet, contacts, history, tokenCon
   : 'This is your own account. Sending here does nothing.' });
  const token = tokenContracts.find(t => lower(t.address) === r);
  if (token) items.push({ level: 'danger', code: 'token-contract', text: `This is the ${token.symbol} token contract${bridge ? ` on ${chainName}` : ''}, not a wallet. Tokens sent here are usually lost for good.` });
- if (blockedAddresses?.some(address => lower(address) === r)) items.push({ level: 'danger', code: 'user-blocked', text: 'This address is on your device’s blocklist. Remove it in Quorum & recovery before sending or bridging here.' });
+ if (BURN_ADDRESSES[r]) items.push({ level: 'danger', code: 'burn-address', text: `This is ${BURN_ADDRESSES[r]}. Anything sent here is gone for good.` });
+ if (blockedAddresses?.some(address => lower(address) === r)) items.push({ level: 'danger', code: 'user-blocked', text: `This address is on your device’s blocklist${blockReasons?.[r] ? ` (“${blockReasons[r]}”)` : ''}. Remove it in Quorum & recovery before sending or bridging here.` });
  const approved = approvedAddresses?.some(address => lower(address) === r) ?? false;
  if (requireApprovedRecipient && !approved) items.push({ level: 'danger', code: 'recipient-not-approved', text: 'This device requires an approved recipient. Add this address in Quorum & recovery before sending or bridging.' });
  else if (requireApprovedRecipient && approved) items.push({ level: 'ok', code: 'approved-recipient', text: 'This destination is on your device’s approved-recipient list.' });
